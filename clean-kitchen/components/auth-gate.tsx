@@ -1,19 +1,48 @@
 "use client";
 
-import { useEffect } from "react";
+import { ReactNode, useEffect, useState } from "react";
+import { onAuthStateChanged, User } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { initAuthListener, useAuthStore } from "@/lib/auth";
+import { auth } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
-export default function AuthGate({ children }: { children: React.ReactNode }) {
+export default function AuthGate({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const user = useAuthStore((s) => s.user);
+  const [checking, setChecking] = useState(true);
 
-  useEffect(() => { initAuthListener(); }, []);
   useEffect(() => {
-    if (user === null) router.replace("/login");
-  }, [user, router]);
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      if (!u) {
+        setChecking(false);
+        router.replace("/auth/login");
+        return;
+      }
 
-  if (user === undefined) return <div className="p-6">Loading...</div>;
-  if (user === null) return null;
+      // Ja Email/Password un nav verificēts => /auth/verify
+      const isPasswordProvider = u.providerData.some(p => p.providerId === "password");
+      if (isPasswordProvider && !u.emailVerified) {
+        setChecking(false);
+        router.replace("/auth/verify");
+        return;
+      }
+
+      // Pārbaudām, vai ir onboarding pabeigts (users/{uid} ar username)
+      const ref = doc(db, "users", u.uid);
+      const snap = await getDoc(ref);
+      const hasProfile = snap.exists() && !!snap.data()?.username;
+
+      if (!hasProfile) {
+        setChecking(false);
+        router.replace("/onboarding");
+        return;
+      }
+
+      setChecking(false);
+    });
+    return () => unsub();
+  }, [router]);
+
+  if (checking) return <div className="p-6 text-gray-600">Loading…</div>;
   return <>{children}</>;
 }
