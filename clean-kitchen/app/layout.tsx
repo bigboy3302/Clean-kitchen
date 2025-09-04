@@ -1,23 +1,27 @@
-import "styles/globals.css";
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import Navbar from "@/components/navbar";
+// app/layout.tsx
+import "@/styles/globals.css";
+import "@/components/ui/button.css"; // if you kept this file; OK to remove if merged into globals
+import type { ReactNode } from "react";
 
-const inter = Inter({ subsets: ["latin"] });
+export const metadata = { title: "Clean-Kitchen" };
 
-export const metadata: Metadata = {
-  title: "Clean-Kitchen",
-  description: "Smart kitchen assistant",
-};
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="lv" className={inter.className}>
+    <html lang="en">
       <body>
-        <Navbar />
-        <div className="mx-auto max-w-6xl px-4 py-6">
-          {children}
-        </div>
+        <header className="navbar">
+          <div className="navbar-inner">
+            <div className="nav-brand">Clean-Kitchen</div>
+            <nav className="nav-links">
+              <a className="nav-link" href="/dashboard">Dashboard</a>
+              <a className="nav-link" href="/pantry">Pantry</a>
+              <a className="nav-link" href="/recipes">Recipes</a>
+              <a className="nav-link" href="/fitness">Fitness</a>
+              <a className="nav-link" href="/profile">Profile</a>
+            </nav>
+          </div>
+        </header>
+        {children}
       </body>
     </html>
   );

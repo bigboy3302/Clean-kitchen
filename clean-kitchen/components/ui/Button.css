@@ -1,0 +1,40 @@
+.btn-base {
+  font-weight: 600;
+  border-radius: 12px;
+  transition: transform .02s ease, opacity .15s ease, box-shadow .15s ease, background .15s ease, border-color .15s ease;
+  outline: none;
+  border: 1px solid transparent;
+}
+.btn--full { width: 100%; }
+.btn--md { padding: 10px 16px; font-size: 14px; }
+.btn--sm { padding: 8px 12px; font-size: 13px; }
+
+/* Variants */
+.btn--primary {
+  background: var(--brand);
+  color: #fff;
+}
+.btn--primary:hover { opacity: .95; }
+.btn--primary:focus-visible { box-shadow: 0 0 0 6px var(--ring); }
+
+.btn--secondary {
+  background: #fff;
+  color: var(--text);
+  border-color: var(--border);
+}
+.btn--secondary:hover { background: #f8fafc; }
+.btn--secondary:focus-visible { box-shadow: 0 0 0 6px var(--ring); }
+
+.btn--ghost {
+  background: transparent;
+  color: var(--text);
+}
+.btn--ghost:hover { background: #f3f4f6; }
+.btn--ghost:focus-visible { box-shadow: 0 0 0 6px var(--ring); }
+
+.btn--destructive {
+  background: #ef4444;
+  color: #fff;
+}
+.btn--destructive:hover { background: #dc2626; }
+.btn--destructive:focus-visible { box-shadow: 0 0 0 6px rgba(239,68,68,.18); }

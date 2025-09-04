@@ -1,0 +1,24 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, #0b1020, transparent 65%);
+  display: grid;
+  place-items: center;
+  z-index: 50;
+}
+
+.box {
+  width: min(520px, 92vw);
+  background: #fff;
+  border: 1px solid #e7e7ef;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow:
+    0 15px 60px rgba(28, 27, 35, 0.18),
+    0 2px 8px rgba(28, 27, 35, 0.08);
+}
+
+.title {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+}

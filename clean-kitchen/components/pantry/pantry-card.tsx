@@ -1,4 +1,4 @@
-import { Card } from "@/components/ui/card";
+import Card from "@/components/ui/Card";
 import { PantryItem } from "@/lib/types";
 import { isExpiringSoon } from "@/lib/utils";
 

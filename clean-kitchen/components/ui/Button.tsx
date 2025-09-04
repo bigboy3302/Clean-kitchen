@@ -2,7 +2,7 @@
 import React, { ButtonHTMLAttributes, forwardRef } from "react";
 import clsx from "clsx";
 
-type Variant = "primary" | "secondary" | "ghost";
+type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "md" | "sm";
 
 type Props = {
@@ -13,27 +13,27 @@ type Props = {
 } & ButtonHTMLAttributes<HTMLButtonElement>;
 
 const variants: Record<Variant, string> = {
-  primary:   "bg-gray-900 text-white hover:opacity-95 disabled:opacity-50",
-  secondary: "border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50",
-  ghost:     "text-gray-700 hover:bg-gray-100 disabled:opacity-50",
-};
-const sizes: Record<Size, string> = {
-  md: "px-4 py-2.5 text-sm rounded-xl",
-  sm: "px-3 py-2 text-sm rounded-lg",
+  primary:   "btn btnPrimary",
+  secondary: "btn btnSecondary",
+  ghost:     "btn btnGhost",
+  danger:    "btn btnDanger",
 };
 
-const Button = forwardRef<HTMLButtonElement, Props>(function Button(
+export default forwardRef<HTMLButtonElement, Props>(function Button(
   { variant = "primary", size = "md", className, full = true, children, ...rest },
   ref
 ) {
+  // map "danger" -> "destructive" (keeps old usages working)
+  const resolved = variant === "danger" ? "destructive" : variant;
+
   return (
     <button
       ref={ref}
       className={clsx(
-        "font-medium transition shadow-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-gray-900/10",
-        variants[variant],
-        sizes[size],
-        full && "w-full",
+        "btn-base",
+        variants[resolved as keyof typeof variants],
+        size === "sm" ? "btn--sm" : "btn--md",
+        full && "btn--full",
         className
       )}
       {...rest}
@@ -42,5 +42,3 @@ const Button = forwardRef<HTMLButtonElement, Props>(function Button(
     </button>
   );
 });
-
-export default Button;

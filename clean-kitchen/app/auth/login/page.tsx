@@ -3,16 +3,12 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  signInWithEmailAndPassword,
-  GoogleAuthProvider,
-  signInWithPopup,
-} from "firebase/auth";
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import AuthShell from "@/components/auth/AuthShell";
 import Input from "@/components/ui/Input";
-import Button from "@/components/ui/button";
+import Button from "@/components/ui/Button";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -55,7 +51,8 @@ export default function LoginPage() {
     <AuthShell
       title="Welcome back"
       subtitle="Sign in to access your pantry and recipes"
-      footer={<span>Nav konta? <Link className="underline" href="/auth/register">Izveidot kontu</Link></span>}
+      footer={<span>Nav konta?{" "}
+        <Link className="underline" href="/auth/register">Izveidot kontu</Link></span>}
     >
       <form onSubmit={onSubmit} className="space-y-4">
         <Input
@@ -88,8 +85,9 @@ export default function LoginPage() {
         <div className="h-px flex-1 bg-gray-200" />
       </div>
 
-      <Button onClick={signInWithGoogle} variant="secondary" disabled={busy} className="!w-full">
-        <span className="inline-flex items-center justify-center gap-2">
+      <Button onClick={signInWithGoogle} variant="secondary">
+        <span className="inline-flex w-full items-center justify-center gap-2">
+          {/* Google ikona */}
           <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden>
             <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.8 32.6 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.8 6.1 29.7 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c10.4 0 19-8.4 19-19 0-1.3-.1-2.2-.4-3.5z"/>
             <path fill="#FF3D00" d="M6.3 14.7l6.6 4.9C14.7 16.3 18.9 14 24 14c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.8 6.1 29.7 4 24 4 16 4 9.2 8.5 6.3 14.7z"/>

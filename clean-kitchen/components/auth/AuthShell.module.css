@@ -1,0 +1,32 @@
+.wrap {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(900px 400px at 10% -10%, rgba(15,23,42,.06), transparent 60%),
+    radial-gradient(900px 400px at 110% 110%, rgba(15,23,42,.06), transparent 60%),
+    var(--bg);
+}
+
+.card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(15,23,42,.08);
+  overflow: hidden;
+}
+
+.header { padding: 24px 24px 8px; }
+.header h1 { font-size: 22px; font-weight: 700; margin: 0; }
+.subtitle { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+
+.body { padding: 16px 24px 8px; }
+.footer {
+  padding: 16px 24px 24px;
+  border-top: 1px dashed var(--border);
+  color: var(--muted);
+  font-size: 14px;
+}
