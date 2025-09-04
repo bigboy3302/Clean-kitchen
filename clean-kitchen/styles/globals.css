@@ -2,6 +2,66 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Fona smalka režģa “layer” */
+:root {
+  --grid: radial-gradient(circle at 1px 1px, #eaeaea 1px, transparent 0);
+}
 
 html, body, #__next { height: 100%; }
-body { background: #fafafa; color: #111827; }
+body {
+  @apply bg-[radial-gradient(1000px_500px_at_-20%_-10%,#eff2ff_0%,transparent_40%),radial-gradient(800px_400px_at_120%_110%,#f5f7ff_0%,transparent_35%)] text-gray-900;
+  background-image:
+    var(--grid),
+    radial-gradient(1000px 500px at -20% -10%, #eff2ff 0%, transparent 40%),
+    radial-gradient(800px 400px at 120% 110%, #f5f7ff 0%, transparent 35%);
+  background-size:
+    18px 18px, /* grid */
+    auto,
+    auto;
+  background-position:
+    center,
+    center,
+    center;
+}
+
+/* Komponentu utilities */
+@layer components {
+  .card {
+    @apply rounded-2xl border border-gray-200/80 bg-white/70 shadow-soft backdrop-blur p-6;
+  }
+
+  .link {
+    @apply text-brand-700 hover:text-brand-600 underline-offset-2 hover:underline;
+  }
+
+  .field {
+    @apply w-full rounded-xl border border-gray-300/90 bg-white/80 px-3 py-2 text-sm outline-none transition placeholder:text-gray-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:shadow-ring disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-gray-900 text-white hover:opacity-95;
+  }
+  .btn-secondary {
+    @apply btn border bg-white hover:bg-gray-50;
+  }
+  .btn-ghost {
+    @apply btn hover:bg-gray-100;
+  }
+
+  .muted {
+    @apply text-sm text-gray-500;
+  }
+}
+html, body, #__next { height: 100%; }
+body {
+  color: #111827;
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(17,24,39,.06), transparent 60%),
+    radial-gradient(900px 500px at -10% 10%, rgba(17,24,39,.05), transparent 55%),
+    linear-gradient(180deg, #fcfcfc, #f6f7fb);
+}
+
+input, button, a { outline: none; }

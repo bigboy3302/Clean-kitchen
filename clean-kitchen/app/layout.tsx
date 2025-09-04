@@ -1,20 +1,23 @@
-import "@/styles/globals.css";
+import "styles/globals.css";
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import Navbar from "@/components/navbar";
 
-export const metadata = {
-  title: {
-    default: "Clean-Kitchen",
-    template: "%s • Clean-Kitchen",
-  },
-  description: "Smart kitchen assistant (pantry, recipes, expiry).",
+const inter = Inter({ subsets: ["latin"] });
+
+export const metadata: Metadata = {
+  title: "Clean-Kitchen",
+  description: "Smart kitchen assistant",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="lv">
-      <body className="bg-gray-50 text-gray-900">
+    <html lang="lv" className={inter.className}>
+      <body>
         <Navbar />
-        <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+        <div className="mx-auto max-w-6xl px-4 py-6">
+          {children}
+        </div>
       </body>
     </html>
   );

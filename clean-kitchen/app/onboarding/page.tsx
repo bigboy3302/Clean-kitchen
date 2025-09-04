@@ -5,16 +5,19 @@ import { auth, db } from "@/lib/firebase";
 import { doc, getDoc, runTransaction, serverTimestamp } from "firebase/firestore";
 import { updateProfile } from "firebase/auth";
 import { useRouter } from "next/navigation";
+import AuthShell from "@/components/auth/AuthShell";
+import Input from "@/components/ui/Input";
+import Button from "@/components/ui/button";
 
 /** Noņem diakritiskās zīmes, liekos simbolus, atstāj a-z0-9_ . */
 function slugifyName(s: string) {
   return s
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // no diakritikas
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/[^a-z0-9\._]+/g, " ") // svešie simboli -> space
+    .replace(/[^a-z0-9\._]+/g, " ")
     .trim()
-    .replace(/\s+/g, "_"); // spaces -> _
+    .replace(/\s+/g, "_");
 }
 
 /** Izveido kandidātus no vārda/uzvārda + random sufiksiem */
@@ -31,18 +34,14 @@ function makeUsernameCandidates(first: string, last: string, max = 12) {
     base.push(l, `${l}1`, `${l}01`);
   }
 
-  // unikāli random varianti
   const extras = new Set<string>();
   while (extras.size < max) {
-    const n = Math.floor(Math.random() * 9999)
-      .toString()
-      .padStart(2, "0");
+    const n = Math.floor(Math.random() * 9999).toString().padStart(2, "0");
     const pick = f || l || "user";
     extras.add(`${pick}${n}`);
   }
 
   const all = [...base, ...extras];
-  // filtrē garumu (3..20)
   return all.filter((x) => x.length >= 3 && x.length <= 20).slice(0, max);
 }
 
@@ -67,7 +66,7 @@ export default function OnboardingPage() {
 
   const initialisedRef = useRef(false);
 
-  // 1) Aizpilda laukus automātiski no localStorage vai displayName
+  // auto-fill no localStorage/displayName
   useEffect(() => {
     if (!u) {
       router.replace("/auth/login");
@@ -76,7 +75,6 @@ export default function OnboardingPage() {
     if (initialisedRef.current) return;
     initialisedRef.current = true;
 
-    // localStorage
     try {
       const raw = localStorage.getItem("ck_pending_profile");
       if (raw) {
@@ -86,7 +84,6 @@ export default function OnboardingPage() {
       }
     } catch {}
 
-    // ja nav localStorage, mēģina displayName “Vārds Uzvārds”
     if ((!first || !last) && u.displayName) {
       const parts = u.displayName.split(" ").filter(Boolean);
       if (parts.length >= 2) {
@@ -99,62 +96,45 @@ export default function OnboardingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [u, router]);
 
-  // 2) ģenerē kandidātus un mēģina atlasīt brīvu automātiski
+  // ģenerē kandidātus + atlasa pirmo brīvo
   useEffect(() => {
     const list = makeUsernameCandidates(first, last, 12);
     setSuggestions(list);
 
-    // automātiski iestata pirmo brīvo
     let cancelled = false;
     async function pickFirstFree() {
       setChecking(true);
       for (const cand of list) {
         const free = await isUsernameFree(cand);
         if (cancelled) return;
-        if (free) {
-          setUsername(cand);
-          break;
-        }
+        if (free) { setUsername(cand); break; }
       }
       setChecking(false);
     }
     if (first || last) pickFirstFree();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [first, last]);
 
-  // 3) “Shuffle” — atjauno priekšlikumus un atrod nākamo brīvo
   async function shuffle() {
     const list = makeUsernameCandidates(first, last, 12);
     setSuggestions(list);
     setChecking(true);
     for (const cand of list) {
       const free = await isUsernameFree(cand);
-      if (free) {
-        setUsername(cand);
-        break;
-      }
+      if (free) { setUsername(cand); break; }
     }
     setChecking(false);
   }
 
-  // 4) klikšķis uz ieteikuma pogas — pārbauda pieejamību un iestata
   async function adoptSuggestion(s: string) {
     setChecking(true);
     const free = await isUsernameFree(s);
-    if (free) {
-      setUsername(s);
-      setErr(null);
-    } else {
-      setErr("Šis username tikko tika aizņemts. Pamēģini citu.");
-    }
+    if (free) { setUsername(s); setErr(null); }
+    else { setErr("Šis username tikko tika aizņemts. Pamēģini citu."); }
     setChecking(false);
   }
 
-  // 5) saglabā transakcijā + updateProfile + notīra localStorage
-  async function save(e: FormEvent) {
+  async function save(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!u) return;
     setErr(null);
@@ -187,14 +167,10 @@ export default function OnboardingPage() {
         );
       });
 
-      const displayName =
-        uname || [first.trim(), last.trim()].filter(Boolean).join(" ");
-      if (displayName) {
-        await updateProfile(u, { displayName });
-      }
+      const displayName = uname || [first.trim(), last.trim()].filter(Boolean).join(" ");
+      if (displayName) await updateProfile(u, { displayName });
 
       try { localStorage.removeItem("ck_pending_profile"); } catch {}
-
       router.replace("/dashboard");
     } catch (e: any) {
       setErr(e?.message ?? "Failed to save profile.");
@@ -203,58 +179,40 @@ export default function OnboardingPage() {
     }
   }
 
-  const canSubmit = useMemo(() => {
-    return first.trim() && last.trim() && username.trim() && !checking && !busy;
-  }, [first, last, username, checking, busy]);
+  const canSubmit = useMemo(
+    () => first.trim() && last.trim() && username.trim() && !checking && !busy,
+    [first, last, username, checking, busy]
+  );
 
   return (
-    <main className="mx-auto max-w-md p-6">
-      <h1 className="mb-4 text-2xl font-semibold">Complete your profile</h1>
-
+    <AuthShell title="Complete your profile" subtitle="Choose your public username">
       <form onSubmit={save} className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-sm">Vārds</label>
-            <input
-              className="w-full rounded-lg border px-3 py-2"
-              value={first}
-              onChange={(e) => setFirst(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm">Uzvārds</label>
-            <input
-              className="w-full rounded-lg border px-3 py-2"
-              value={last}
-              onChange={(e) => setLast(e.target.value)}
-              required
-            />
-          </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Input
+            label="Vārds"
+            value={first}
+            onChange={(e) => setFirst((e.target as HTMLInputElement).value)}
+            required
+          />
+          <Input
+            label="Uzvārds"
+            value={last}
+            onChange={(e) => setLast((e.target as HTMLInputElement).value)}
+            required
+          />
         </div>
 
         <div>
-          <label className="mb-1 block text-sm">Username (publiski redzams)</label>
-          <div className="flex gap-2">
-            <input
-              className="w-full rounded-lg border px-3 py-2"
-              value={username}
-              onChange={(e) => setUsername(slugifyName(e.target.value))}
-              placeholder="piem., janis_k"
-              required
-            />
-            <button
-              type="button"
-              onClick={shuffle}
-              disabled={checking || busy}
-              className="shrink-0 rounded-lg border px-3 py-2 hover:bg-gray-50 disabled:opacity-50"
-              title="Cits ieteikums"
-            >
-              Shuffle
-            </button>
-          </div>
+          <Input
+            label="Username (publiski redzams)"
+            value={username}
+            onChange={(e) => setUsername(slugifyName((e.target as HTMLInputElement).value))}
+            placeholder="piem., janis_k"
+            required
+          />
           <p className="mt-1 text-xs text-gray-500">
-            Atļauts: a–z, 0–9, “_” un “.” (3–20 simboli). Latviešu vārds tiks pārveidots: “Ģirts Bērziņš” → {`"girts.berzins"`}
+            Atļauts: a–z, 0–9, “_” un “.” (3–20 simboli). Latviešu vārds tiks pārveidots:
+            “Ģirts Bērziņš” → <code>girts.berzins</code>
           </p>
 
           {!!suggestions.length && (
@@ -265,7 +223,7 @@ export default function OnboardingPage() {
                   type="button"
                   onClick={() => adoptSuggestion(s)}
                   disabled={checking || busy}
-                  className="rounded-full border px-3 py-1 text-sm hover:bg-gray-50 disabled:opacity-50"
+                  className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50"
                 >
                   {s}
                 </button>
@@ -276,14 +234,10 @@ export default function OnboardingPage() {
 
         {err && <p className="rounded-md bg-red-50 p-2 text-sm text-red-700">{err}</p>}
 
-        <button
-          type="submit"
-          disabled={!canSubmit}
-          className="w-full rounded-lg bg-gray-900 px-4 py-2 font-medium text-white hover:opacity-95 disabled:opacity-50"
-        >
+        <Button type="submit" disabled={!canSubmit}>
           {busy ? "Saving…" : "Save & continue"}
-        </button>
+        </Button>
       </form>
-    </main>
+    </AuthShell>
   );
 }
