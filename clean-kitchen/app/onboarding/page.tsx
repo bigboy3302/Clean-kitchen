@@ -320,18 +320,21 @@ export default function OnboardingPage() {
         <div>
           <label className="mb-1 block text-sm">Dzimums</label>
           <div className="flex gap-4 text-sm">
+          
             <label className="inline-flex items-center gap-2">
-              <input
+            Male
+              <input 
                 type="radio"
                 name="sex"
                 checked={sex === "male"}
                 onChange={() => setSex("male")}
                 className="accent-gray-900"
                 required
+                
               />
-              Male
             </label>
-            <label className="inline-flex items-center gap-2">
+            Female
+            <label className="inline-flex items-center gap-2" > 
               <input
                 type="radio"
                 name="sex"
@@ -339,7 +342,7 @@ export default function OnboardingPage() {
                 onChange={() => setSex("female")}
                 className="accent-gray-900"
               />
-              Female
+              
             </label>
           </div>
         </div>

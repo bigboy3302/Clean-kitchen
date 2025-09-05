@@ -1,189 +1,152 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { auth, db, storage } from "@/lib/firebase";
-import { doc, getDoc, updateDoc, serverTimestamp, Timestamp } from "firebase/firestore";
-import { updateProfile, sendPasswordResetEmail, deleteUser, signOut } from "firebase/auth";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useRouter } from "next/navigation";
+import { auth, db, storage } from "@/lib/firebase";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { onAuthStateChanged, sendPasswordResetEmail, updateProfile } from "firebase/auth";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 
-type ProfileData = {
+type UserDoc = {
   uid: string;
   email: string;
-  username: string;
-  firstName: string;
-  lastName: string;
+  username?: string;
+  firstName?: string;
+  lastName?: string;
   photoURL?: string;
-  lastUsernameChange?: Timestamp; // <-- svarīgi
 };
 
 export default function ProfilePage() {
-  const [profile, setProfile] = useState<ProfileData | null>(null);
-  const [username, setUsername] = useState("");
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
   const router = useRouter();
-
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [userDoc, setUserDoc] = useState<UserDoc | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    async function load() {
-      const u = auth.currentUser;
-      if (!u) return router.replace("/auth/login");
-
+    const stop = onAuthStateChanged(auth, async (u) => {
+      if (!u) { router.replace("/auth/login"); return; }
       const snap = await getDoc(doc(db, "users", u.uid));
       if (snap.exists()) {
-        const d = snap.data() as ProfileData;
-        setProfile(d);
-        setUsername(d.username);
+        setUserDoc(snap.data() as UserDoc);
+      } else {
+        // ja nav user dokuments, aizved uz onboarding vai dashboard
+        setUserDoc({
+          uid: u.uid,
+          email: u.email || "",
+          photoURL: u.photoURL || undefined,
+        });
       }
-    }
-    load();
+      setLoading(false);
+    });
+    return () => stop();
   }, [router]);
 
-  async function updatePhoto() {
-    if (!photoFile || !profile) return;
+  async function uploadAvatar() {
+    if (!file || !userDoc) return;
     setBusy(true);
+    setErr(null); setMsg(null);
     try {
-      const storageRef = ref(storage, `avatars/${profile.uid}`);
-      await uploadBytes(storageRef, photoFile);
+      const u = auth.currentUser!;
+      const storageRef = ref(storage, `avatars/${u.uid}`);
+      await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
-      await updateProfile(auth.currentUser!, { photoURL: url });
-      await updateDoc(doc(db, "users", profile.uid), { photoURL: url });
-      setProfile({ ...profile, photoURL: url });
-      setMsg("Profila bilde atjaunota!");
+
+      await updateProfile(u, { photoURL: url });
+      await updateDoc(doc(db, "users", u.uid), { photoURL: url });
+
+      setUserDoc({ ...userDoc, photoURL: url });
+      setFile(null);
+      if (fileRef.current) fileRef.current.value = "";
+      setMsg("Profile photo updated!");
     } catch (e: any) {
-      setMsg(e.message ?? "Neizdevās atjaunot bildi.");
+      setErr(e?.message ?? "Failed to update avatar.");
     } finally {
       setBusy(false);
     }
   }
 
-  async function changeUsername() {
-    if (!profile) return;
-    if (username === profile.username) return;
-
-    // 1x nedēļā
-    const lastChangeSec = profile.lastUsernameChange
-      ? Math.floor(profile.lastUsernameChange.toMillis() / 1000)
-      : 0;
-    const oneWeek = 7 * 24 * 60 * 60;
-    const now = Math.floor(Date.now() / 1000);
-    if (now - lastChangeSec < oneWeek) {
-      setMsg("Username var mainīt tikai 1x nedēļā.");
-      return;
-    }
-
-    setBusy(true);
+  async function sendReset() {
+    setErr(null); setMsg(null);
     try {
-      await updateDoc(doc(db, "users", profile.uid), {
-        username,
-        lastUsernameChange: serverTimestamp(),
-      });
-      await updateProfile(auth.currentUser!, { displayName: username });
-      setProfile({ ...profile, username, lastUsernameChange: Timestamp.fromDate(new Date()) });
-      setMsg("Username veiksmīgi nomainīts!");
+      const email = auth.currentUser?.email;
+      if (!email) { setErr("No email on account."); return; }
+      await sendPasswordResetEmail(auth, email);
+      setMsg("Password reset link sent to email.");
     } catch (e: any) {
-      setMsg(e.message ?? "Neizdevās nomainīt username.");
-    } finally {
-      setBusy(false);
+      setErr(e?.message ?? "Failed to send reset email.");
     }
   }
 
-  async function resetPassword() {
-    if (!profile?.email) return;
-    try {
-      await sendPasswordResetEmail(auth, profile.email);
-      setMsg("Paroles maiņas links nosūtīts uz e-pastu!");
-    } catch (e: any) {
-      setMsg(e.message ?? "Neizdevās nosūtīt linku.");
-    }
-  }
-
-  async function removeAccount() {
-    if (!confirm("Vai tiešām dzēst kontu?")) return;
-    try {
-      await deleteUser(auth.currentUser!);
-      setMsg("Konts dzēsts.");
-      router.replace("/auth/register");
-    } catch (e: any) {
-      setMsg(e.message ?? "Neizdevās dzēst kontu.");
-    }
-  }
-
-  async function logout() {
-    await signOut(auth);
-    router.replace("/auth/login");
-  }
-
-  if (!profile) return <div className="p-6">Loading…</div>;
+  if (loading) return <div className="p">Loading…</div>;
+  if (!userDoc) return null;
 
   return (
-    <main className="mx-auto max-w-2xl space-y-8 p-6">
-      <h1 className="text-2xl font-bold">My Profile</h1>
+    <main className="wrap">
+      <h1 className="title">My Profile</h1>
 
-      {msg && <p className="rounded-lg bg-green-50 p-2 text-sm text-green-700">{msg}</p>}
+      {msg && <p className="ok">{msg}</p>}
+      {err && <p className="bad">{err}</p>}
 
-      {/* Profila bilde */}
-      <section className="space-y-4">
-        <h2 className="font-semibold">Profila bilde</h2>
-        <div className="flex items-center gap-4">
+      <Card className="section">
+        <h2 className="h2">Avatar</h2>
+        <div className="row">
           <img
-            src={profile.photoURL || "/default-avatar.png"}
+            src={userDoc.photoURL || "/default-avatar.png"}
             alt="avatar"
-            className="h-20 w-20 rounded-full border object-cover"
+            className="avatar"
           />
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
-          />
-          <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
-            Upload
-          </Button>
-          {photoFile && (
-            <Button onClick={updatePhoto} disabled={busy}>
-              {busy ? "Uploading…" : "Save"}
-            </Button>
-          )}
+          <div className="col">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
+            />
+            <div className="actions">
+              <Button variant="secondary" onClick={() => fileRef.current?.click()}>
+                Choose
+              </Button>
+              <Button onClick={uploadAvatar} disabled={!file || busy}>
+                {busy ? "Uploading…" : "Save"}
+              </Button>
+            </div>
+          </div>
         </div>
-      </section>
+      </Card>
 
-      {/* Username */}
-      <section className="space-y-4">
-        <h2 className="font-semibold">Username</h2>
-        <div className="flex gap-3">
-          <Input value={username} onChange={(e) => setUsername((e.target as HTMLInputElement).value)} />
-          <Button onClick={changeUsername} disabled={busy}>
-            Change
-          </Button>
+      <Card className="section">
+        <h2 className="h2">Account</h2>
+        <div className="grid">
+          <Input label="Email" value={userDoc.email} readOnly />
+          <Input label="Username" value={userDoc.username || ""} readOnly />
         </div>
-      </section>
-
-      {/* Parole */}
-      <section className="space-y-4">
-        <h2 className="font-semibold">Password</h2>
-        <Button variant="secondary" onClick={resetPassword}>
-          Send reset link to email
-        </Button>
-      </section>
-
-      {/* Settings */}
-      <section className="space-y-4">
-        <h2 className="font-semibold">Settings</h2>
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <Button onClick={logout} className="sm:flex-1">Logout</Button>
-          <Button variant="danger" onClick={removeAccount}>
-  Delete account
-</Button>
-
+        <div className="actions">
+          <Button variant="secondary" onClick={sendReset}>Send password reset email</Button>
         </div>
-      </section>
+      </Card>
+
+      <style jsx>{`
+        .wrap { max-width: 960px; margin: 0 auto; padding: 24px; }
+        .title { font-size: 28px; font-weight: 700; margin-bottom: 16px; }
+        .section { margin-bottom: 20px; }
+        .h2 { font-size: 18px; font-weight: 600; margin-bottom: 12px; }
+        .row { display: flex; align-items: center; gap: 16px; }
+        .col { display: flex; flex-direction: column; gap: 10px; }
+        .actions { display: flex; gap: 10px; }
+        .avatar { width: 96px; height: 96px; border-radius: 999px; object-fit: cover; border: 1px solid #e5e7eb; }
+        .p { padding: 16px; }
+        .ok { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; border-radius: 8px; padding: 8px 10px; font-size: 13px; margin-bottom: 10px; }
+        .bad { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 8px; padding: 8px 10px; font-size: 13px; margin-bottom: 10px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+        @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+      `}</style>
     </main>
   );
 }

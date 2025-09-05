@@ -12,13 +12,14 @@ import {
   query,
   serverTimestamp,
   Timestamp,
+  updateDoc,
   where,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
-import PantryCard from "@/components/pantry/PantryCard";
+import PantryCard, { PantryCardItem } from "@/components/pantry/PantryCard";
 
 type PantryItem = {
   id: string;
@@ -28,6 +29,14 @@ type PantryItem = {
   createdAt?: Timestamp | null;
   expiresAt?: Timestamp | null;
 };
+
+function todayStr() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
 
 export default function PantryPage() {
   const router = useRouter();
@@ -41,11 +50,12 @@ export default function PantryPage() {
 
   // data
   const [items, setItems] = useState<PantryItem[]>([]);
-  const unsubRef = useRef<(() => void) | null>(null); // init to null
+  const unsubRef = useRef<(() => void) | null>(null); // listener cleanup
+
+  const minDate = todayStr();
 
   useEffect(() => {
     const stopAuth = onAuthStateChanged(auth, (u) => {
-      // detach previous pantry listener if any
       if (unsubRef.current) {
         unsubRef.current();
         unsubRef.current = null;
@@ -81,7 +91,6 @@ export default function PantryPage() {
       unsubRef.current = stopPantry;
     });
 
-    // Always return a cleanup function
     return () => {
       if (unsubRef.current) {
         unsubRef.current();
@@ -91,19 +100,19 @@ export default function PantryPage() {
     };
   }, [router]);
 
+  function isPastDate(s: string) {
+    if (!s) return false;
+    return s < minDate;
+  }
+
   async function addItem() {
     setErr(null);
     setBusy(true);
     try {
       const u = auth.currentUser;
-      if (!u) {
-        setErr("Please sign in to add items.");
-        return;
-      }
-      if (!name.trim()) {
-        setErr("Please enter product name.");
-        return;
-      }
+      if (!u) { setErr("Please sign in to add items."); return; }
+      if (!name.trim()) { setErr("Please enter product name."); return; }
+      if (date && isPastDate(date)) { setErr("Expiry date cannot be in the past."); return; }
 
       const expiresAt =
         date && !Number.isNaN(Date.parse(date))
@@ -111,7 +120,7 @@ export default function PantryPage() {
           : null;
 
       await addDoc(collection(db, "pantryItems"), {
-        uid: u.uid, // required by your Firestore rules
+        uid: u.uid,              // rules require ownership
         name: name.trim(),
         quantity: Number(qty) || 1,
         createdAt: serverTimestamp(),
@@ -129,13 +138,54 @@ export default function PantryPage() {
     }
   }
 
+  async function saveItem(id: string, patch: { name: string; quantity: number; expiresAt: any }) {
+    setErr(null);
+    try {
+      const toWrite: any = {
+        name: patch.name,
+        quantity: patch.quantity,
+        expiresAt: null as any,
+      };
+
+      if (patch.expiresAt) {
+        // ja saņēmām TS-like {seconds,nanoseconds}
+        if (typeof patch.expiresAt.seconds === "number") {
+          toWrite.expiresAt = Timestamp.fromDate(
+            new Date(patch.expiresAt.seconds * 1000)
+          );
+        }
+        // ja saņēmām Timestamp
+        if (typeof patch.expiresAt.toDate === "function") {
+          toWrite.expiresAt = patch.expiresAt;
+        }
+        // ja drošības pēc nāk string
+        if (typeof patch.expiresAt === "string" && !Number.isNaN(Date.parse(patch.expiresAt))) {
+          toWrite.expiresAt = Timestamp.fromDate(new Date(patch.expiresAt + "T00:00:00"));
+        }
+      }
+
+      await updateDoc(doc(db, "pantryItems", id), toWrite);
+    } catch (e: any) {
+      console.error("Update failed:", e);
+      setErr(e?.message ?? "Failed to save changes.");
+      throw e;
+    }
+  }
+
   async function removeItem(id: string) {
     setErr(null);
     try {
-      await deleteDoc(doc(db, "pantryItems", id)); // allowed if doc.uid === current user
+      await deleteDoc(doc(db, "pantryItems", id)); // works if doc.uid == auth.uid
     } catch (e: any) {
-      console.error(e);
-      setErr(e?.message ?? "Failed to delete.");
+      console.error("Delete failed:", e);
+      const msg = String(e?.code || e?.message || e) as string;
+      if (msg.includes("permission-denied")) {
+        setErr(
+          "You can only delete items you own. If this is an older item without a 'uid' field, delete it once in Firebase Console."
+        );
+      } else {
+        setErr(e?.message ?? "Failed to delete.");
+      }
     }
   }
 
@@ -164,6 +214,7 @@ export default function PantryPage() {
             <input
               className="textInput"
               type="date"
+              min={minDate}                   
               value={date}
               onChange={(e) => setDate((e.target as HTMLInputElement).value)}
             />
@@ -185,7 +236,12 @@ export default function PantryPage() {
         ) : (
           <div className="gridCards">
             {items.map((it) => (
-              <PantryCard key={it.id} item={it} onDelete={() => removeItem(it.id)} />
+              <PantryCard
+                key={it.id}
+                item={it as unknown as PantryCardItem}
+                onDelete={() => removeItem(it.id)}
+                onSave={(patch) => saveItem(it.id, patch)}
+              />
             ))}
           </div>
         )}
@@ -194,21 +250,33 @@ export default function PantryPage() {
       <style jsx>{`
         .container { max-width: 960px; margin: 0 auto; padding: 24px; }
         .pageTitle { font-size: 28px; font-weight: 700; margin-bottom: 16px; }
-        .card { border: 1px solid #e5e7eb; background: #fff; border-radius: 16px; padding: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.04); }
+
+        .card { border: 1px solid #e5e7eb; background: #fff; border-radius: 16px; padding: 16px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.04); }
         .addCard { margin-bottom: 24px; }
         .cardTitle { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
-        .grid2 { display: grid; grid-template-columns: 1fr 160px; gap: 12px 16px; align-items: end; }
-        @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+
+        .grid2 { display: grid; grid-template-columns: 1fr 160px 200px; gap: 12px 16px; align-items: end; }
+        @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+        @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
+
         .label { display: block; margin-bottom: 6px; font-size: .9rem; color: #111827; font-weight: 500; }
-        .textInput { width: 100%; border: 1px solid #d1d5db; border-radius: 12px; padding: 10px 12px; font-size: 14px; transition: box-shadow .15s, border-color .15s; }
+        .textInput { width: 100%; border: 1px solid #d1d5db; border-radius: 12px; padding: 10px 12px;
+                     font-size: 14px; transition: box-shadow .15s, border-color .15s; }
         .textInput:focus { outline: none; border-color: #9ca3af; box-shadow: 0 0 0 4px rgba(17,24,39,.08); }
+
         .actions { margin-top: 10px; display: flex; gap: 12px; justify-content: flex-end; }
         .list { margin-top: 8px; }
+
         .gridCards { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; }
         @media (max-width: 900px) { .gridCards { grid-template-columns: repeat(2, minmax(0,1fr)); } }
         @media (max-width: 600px) { .gridCards { grid-template-columns: 1fr; } }
-        .empty { color: #6b7280; font-size: 14px; padding: 16px; text-align: center; border: 1px dashed #e5e7eb; border-radius: 12px; background: #fafafa; }
-        .error { margin-top: 8px; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+
+        .empty { color: #6b7280; font-size: 14px; padding: 16px; text-align: center;
+                 border: 1px dashed #e5e7eb; border-radius: 12px; background: #fafafa; }
+
+        .error { margin-top: 8px; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca;
+                 border-radius: 8px; padding: 8px 10px; font-size: 13px; }
       `}</style>
     </main>
   );
