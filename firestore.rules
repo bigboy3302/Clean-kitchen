@@ -53,38 +53,43 @@ service cloud.firestore {
     }
 
     /* ---------- recipes/{id} ---------- */
-    // Public read; any signed-in user may create their own clean recipe
+    // Everyone can READ; only owner can write
     match /recipes/{id} {
       allow read: if true;
-
-      allow create: if creatingAsSelf()
-        && ('title' in request.resource.data) && request.resource.data.title is string
-        && (size(request.resource.data.title) > 0) && (size(request.resource.data.title) <= 120)
-        && cleanOptional('title')
-        && cleanOptional('description')
-        && cleanOptional('steps');
-
-      allow update, delete: if isSignedIn()
-                            && resource.data.uid == request.auth.uid
-                            && ownershipUnchanged()
-                            && cleanOptional('title')
-                            && cleanOptional('description')
-                            && cleanOptional('steps');
+      allow create: if creatingAsSelf();
+      allow update, delete: if isOwnerField() && ownershipUnchanged();
     }
 
-    /* ---------- posts/{id} ---------- */
-    // Public read; any signed-in user can create their own clean post
-    match /posts/{id} {
-      allow read: if true;
+/* ---------- posts/{postId} and subcollections ---------- */
+match /posts/{postId} {
+  allow read: if true; // publiski
+  allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
+  allow update, delete: if request.auth != null && resource.data.uid == request.auth.uid;
 
-      allow create: if creatingAsSelf()
-        && cleanOptional('text');
+  // likes (toggle per user)
+  match /likes/{uid} {
+    allow read: if true;
+    allow create, delete: if request.auth != null && request.auth.uid == uid;
+    allow update: if false;
+  }
 
-      allow update, delete: if isSignedIn()
-                            && resource.data.uid == request.auth.uid
-                            && ownershipUnchanged()
-                            && cleanOptional('text');
-    }
+  // reposts (toggle per user) — bez jauna posta veidošanas
+  match /reposts/{uid} {
+    allow read: if true;
+    allow create, delete: if request.auth != null && request.auth.uid == uid;
+    allow update: if false;
+  }
+
+  // comments
+  match /comments/{cid} {
+    allow read: if true;
+    // var komentu izveidot tikai pats autors
+    allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
+    // dzēst/rediģēt – vai nu pats autors, vai posta īpašnieks
+    allow update, delete: if request.auth != null &&
+      (request.auth.uid == resource.data.uid || request.auth.uid == get(/databases/$(database)/documents/posts/$(postId)).data.uid);
+  }
+}
 
     /* ---------- usernames/{uname} ---------- */
     match /usernames/{uname} {

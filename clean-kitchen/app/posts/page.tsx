@@ -1,25 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { collection, onSnapshot, orderBy, query, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import Card from "@/components/ui/Card";
 
-type Post = {
+type PostDoc = {
   id: string;
-  uid: string;
-  text: string | null;
+  uid?: string | null;
+  text?: string | null;
   imageURL?: string | null;
-  createdAt?: any;
+  createdAt?: Timestamp | { seconds: number; nanoseconds: number } | null;
 };
 
 export default function PostsPage() {
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [posts, setPosts] = useState<PostDoc[]>([]);
 
   useEffect(() => {
     const qy = query(collection(db, "posts"), orderBy("createdAt", "desc"));
     const stop = onSnapshot(qy, (snap) => {
-      const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as Post[];
+      const rows: PostDoc[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<PostDoc, "id">) }));
       setPosts(rows);
     });
     return () => stop();
@@ -33,8 +33,8 @@ export default function PostsPage() {
         {posts.map((p) => (
           <Card key={p.id}>
             <div className="post">
-              {p.text && <p className="text">{p.text}</p>}
-              {p.imageURL && <img className="img" src={p.imageURL} alt="" />}
+              {p.text ? <p className="text">{p.text}</p> : null}
+              {p.imageURL ? <img className="img" src={p.imageURL} alt="" /> : null}
             </div>
           </Card>
         ))}
