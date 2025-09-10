@@ -35,7 +35,7 @@
     "**/*.tsx",
     "next-env.d.ts",
     ".next/types/**/*.ts"
-  ],
+, "app/recipes/[id]/page.jsx"  ],
   "exclude": [
     "node_modules",
     "tailwind.config.*",

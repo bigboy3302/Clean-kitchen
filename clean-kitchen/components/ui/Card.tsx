@@ -1,6 +1,18 @@
 // components/ui/Card.tsx
-import { ReactNode } from "react";
+import React from "react";
 
-export default function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <section className={`card ${className}`}>{children}</section>;
+type CardProps = React.HTMLAttributes<HTMLDivElement> & {
+  className?: string;
+  children: React.ReactNode;
+};
+
+export default function Card({ className, children, ...rest }: CardProps) {
+  return (
+    <div className={`card ${className || ""}`} {...rest}>
+      {children}
+      <style jsx>{`
+        .card { border:1px solid #e5e7eb; border-radius:16px; background:#fff; padding:12px; }
+      `}</style>
+    </div>
+  );
 }

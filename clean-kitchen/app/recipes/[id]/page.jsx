@@ -1,28 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 
-export default function RecipeDetailPage() {
-  const { id } = useParams(); // recipe id from URL
-  const router = useRouter();
+import dynamic from "next/dynamic";
+const RecipePhotos = dynamic(() => import("@/components/recipes/RecipePhotos"), { ssr: false });
 
+export default function RecipeDetailPage() {
+  const { id } = useParams(); // ✅ available on /recipes/[id]
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
   const [recipe, setRecipe] = useState(null);
   const [err, setErr] = useState(null);
 
-  // who am I (for showing Edit button only to owner)
   useEffect(() => {
     const stop = onAuthStateChanged(auth, (u) => setMe(u || null));
     return () => stop();
   }, []);
 
-  // live recipe doc
   useEffect(() => {
     if (!id) return;
     const ref = doc(db, "recipes", String(id));
@@ -51,7 +50,7 @@ export default function RecipeDetailPage() {
     if (typeof ts.toDate === "function") return ts.toDate();
     if (typeof ts.seconds === "number") return new Date(ts.seconds * 1000);
     return null;
-    }
+  }
 
   if (loading) {
     return (
@@ -82,6 +81,8 @@ export default function RecipeDetailPage() {
 
   const created = toDateSafe(recipe.createdAt);
   const isOwner = me && recipe.uid === me.uid;
+
+  // Prefer username/displayName saved on the recipe when created.
   const author = recipe.author || {};
   const authorName =
     author.username || author.displayName || recipe.uid?.slice(0, 6) || "Unknown";
@@ -89,7 +90,6 @@ export default function RecipeDetailPage() {
   return (
     <main className="wrap">
       <article className="recipe">
-        {/* Header */}
         <header className="head">
           <h1 className="title">{recipe.title || "Untitled recipe"}</h1>
           <div className="meta">
@@ -97,12 +97,15 @@ export default function RecipeDetailPage() {
               {author.avatarURL ? (
                 <img className="avatar" src={author.avatarURL} alt="" />
               ) : (
-                <div className="avatar fallback">{authorName[0]?.toUpperCase() || "U"}</div>
+                <div className="avatar fallback">
+                  {(authorName?.[0] || "U").toUpperCase()}
+                </div>
               )}
               <span>
                 by <strong>{authorName}</strong>
                 {created ? (
-                  <> • {created.toLocaleDateString()} {created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</>
+                  <> • {created.toLocaleDateString()}{" "}
+                  {created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</>
                 ) : null}
               </span>
             </div>
@@ -118,14 +121,12 @@ export default function RecipeDetailPage() {
           </div>
         </header>
 
-        {/* Image */}
         {recipe.imageURL && (
           <div className="imgWrap">
             <img className="img" src={recipe.imageURL} alt={recipe.title || ""} />
           </div>
         )}
 
-        {/* Description */}
         {recipe.description && (
           <section className="section">
             <h2 className="h2">Description</h2>
@@ -133,7 +134,6 @@ export default function RecipeDetailPage() {
           </section>
         )}
 
-        {/* Ingredients */}
         {Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0 && (
           <section className="section">
             <h2 className="h2">Ingredients</h2>
@@ -146,9 +146,7 @@ export default function RecipeDetailPage() {
                   <li key={i}>
                     <span className="dot" />
                     <span>
-                      {name}
-                      {qty ? ` — ${qty}` : ""}
-                      {unit ? ` ${unit}` : ""}
+                      {name}{qty ? ` — ${qty}` : ""}{unit ? ` ${unit}` : ""}
                     </span>
                   </li>
                 );
@@ -157,18 +155,13 @@ export default function RecipeDetailPage() {
           </section>
         )}
 
-        {/* Steps */}
         {recipe.steps && (
           <section className="section">
             <h2 className="h2">Steps</h2>
             <div className="steps">
-              {String(recipe.steps)
-                .split("\n")
-                .map((line, i) => (
-                  <p key={i} className="stepLine">
-                    {line.trim()}
-                  </p>
-                ))}
+              {String(recipe.steps).split("\n").map((line, i) => (
+                <p key={i} className="stepLine">{line.trim()}</p>
+              ))}
             </div>
           </section>
         )}

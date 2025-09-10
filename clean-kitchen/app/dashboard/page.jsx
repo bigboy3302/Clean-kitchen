@@ -7,7 +7,7 @@ import { auth, db, storage } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   addDoc, collection, onSnapshot, query, where, orderBy, serverTimestamp,
-  updateDoc, doc as fsDoc, getDoc
+  updateDoc, doc as fsDoc
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import Card from "@/components/ui/Card";
@@ -15,9 +15,45 @@ import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import PostCard from "@/components/posts/PostCard";
 
-/* --- simple client profanity guard --- */
+/* --- super-simple client profanity guard --- */
 const BAD_WORDS = ["fuck","shit","bitch","asshole","cunt","nigger","faggot"];
 const clean = (t) => !t || !BAD_WORDS.some((w) => String(t).toLowerCase().includes(w));
+
+/* --- strip undefined deeply (arrays & objects) --- */
+function stripUndefinedDeep(value) {
+  if (Array.isArray(value)) {
+    return value.map(stripUndefinedDeep).filter((v) => v !== undefined);
+  }
+  if (value && typeof value === "object") {
+    const out = {};
+    Object.entries(value).forEach(([k, v]) => {
+      const cleaned = stripUndefinedDeep(v);
+      if (cleaned !== undefined) out[k] = cleaned;
+    });
+    return out;
+  }
+  return value === undefined ? undefined : value;
+}
+
+/* --- build ingredients without undefined keys --- */
+function parseIngr(src) {
+  return src
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const parts = line.split("|").map((x) => x.trim());
+      const rawName = parts[0] || "";
+      const rawQty  = parts[1] || "";
+      const rawUnit = parts[2] || "";
+
+      const item = { name: rawName };
+      const qtyNum = Number(rawQty);
+      if (rawQty !== "" && !Number.isNaN(qtyNum)) item.qty = qtyNum;
+      if (rawUnit) item.unit = rawUnit;
+      return item; // no undefined fields
+    });
+}
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -91,18 +127,6 @@ export default function DashboardPage() {
 
     setBusyPost(true);
     try {
-      // 1) pull author info from users/{uid}
-      const uref = fsDoc(db, "users", uid);
-      const usnap = await getDoc(uref);
-      const prof  = usnap.exists() ? (usnap.data() || {}) : {};
-      const author = {
-        uid,
-        username: prof.username ?? null,
-        displayName: prof.displayName ?? null,
-        avatarURL: prof.avatarURL ?? prof.photoURL ?? null,
-      };
-
-      // 2) optional image
       let imageURL = null;
       if (pFile) {
         const storageRef = ref(storage, `posts/${uid}/${Date.now()}`);
@@ -110,15 +134,16 @@ export default function DashboardPage() {
         imageURL = await getDownloadURL(storageRef);
       }
 
-      // 3) write post with author embedded
-      await addDoc(collection(db, "posts"), {
+      const base = {
         uid,
-        author,                     // ← stored here
-        text: pText.trim() || null,
-        imageURL,
+        text: pText.trim() ? pText.trim() : null,
+        imageURL: imageURL ?? null,           // use null, never undefined
         createdAt: serverTimestamp(),
         isRepost: false,
-      });
+      };
+
+      const payload = stripUndefinedDeep(base);
+      await addDoc(collection(db, "posts"), payload);
 
       setOk("Post published!");
       setPText(""); setPFile(null);
@@ -138,12 +163,6 @@ export default function DashboardPage() {
   const [rFile, setRFile]   = useState(null);
   const [busyRecipe, setBusyRecipe] = useState(false);
 
-  const parseIngr = (src) =>
-    src.split("\n").map(s=>s.trim()).filter(Boolean).map(line=>{
-      const [name, qty, unit] = line.split("|").map(x=>x.trim());
-      return { name, qty: qty?Number(qty):undefined, unit: unit||undefined };
-    });
-
   async function createRecipe() {
     setErr(null); setOk(null);
     if (!uid) return;
@@ -152,30 +171,19 @@ export default function DashboardPage() {
 
     setBusyRecipe(true);
     try {
-      // 1) author from users/{uid}
-      const uref = fsDoc(db, "users", uid);
-      const usnap = await getDoc(uref);
-      const prof  = usnap.exists() ? (usnap.data() || {}) : {};
-      const author = {
+      const base = {
         uid,
-        username: prof.username ?? null,
-        displayName: prof.displayName ?? null,
-        avatarURL: prof.avatarURL ?? prof.photoURL ?? null,
+        title: rTitle.trim(),
+        description: rDesc.trim() ? rDesc.trim() : null, // never undefined
+        steps: rSteps.trim() ? rSteps.trim() : null,     // never undefined
+        ingredients: parseIngr(rIngr),                   // objects without undefined keys
+        // omit imageURL here; add only if we have a file
+        createdAt: serverTimestamp(),
       };
 
-      // 2) create recipe draft (with author)
-      const draft = await addDoc(collection(db,"recipes"),{
-        uid,
-        author,                   // ← store author on recipe too
-        title: rTitle.trim(),
-        description: rDesc.trim() || null,
-        steps: rSteps.trim() || null,
-        ingredients: parseIngr(rIngr),
-        imageURL: null,
-        createdAt: serverTimestamp(),
-      });
+      const payload = stripUndefinedDeep(base);
+      const draft = await addDoc(collection(db,"recipes"), payload);
 
-      // 3) optional image
       if (rFile) {
         const sref = ref(storage, `recipeImages/${uid}/${draft.id}`);
         await uploadBytes(sref, rFile);
