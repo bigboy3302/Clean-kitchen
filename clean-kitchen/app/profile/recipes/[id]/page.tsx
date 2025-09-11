@@ -5,17 +5,12 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { auth, db, storage } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
-import {
-  doc,
-  onSnapshot,
-  updateDoc,
-  serverTimestamp,
-  getDoc,
-} from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import dynamic from "next/dynamic";
-const RecipePhotos = dynamic(() => import("@/components/recipes/RecipePhotos"), { ssr: false });
 
+// Use ONLY the dynamic import (no direct import)
+const RecipePhotos = dynamic(() => import("@/components/recipes/RecipePhotos"), { ssr: false });
 
 type Ingredient = { name: string; qty?: number | null; unit?: string | null };
 type Author = { username?: string; displayName?: string; avatarURL?: string | null } | null;
@@ -39,7 +34,6 @@ function toDateSafe(ts: any): Date | null {
   return null;
 }
 
-/** Parse textarea → Ingredient[] (“Name | qty | unit” per line) */
 function parseIngredients(src: string): Ingredient[] {
   return src
     .split("\n")
@@ -54,7 +48,6 @@ function parseIngredients(src: string): Ingredient[] {
     });
 }
 
-/** Format Ingredient[] → textarea */
 function formatIngredients(list?: Ingredient[] | null): string {
   if (!Array.isArray(list)) return "";
   return list
@@ -90,7 +83,6 @@ export default function RecipeEditPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  // Load auth
   useEffect(() => {
     const stop = onAuthStateChanged(auth, (u) => {
       setMe(u || null);
@@ -99,7 +91,6 @@ export default function RecipeEditPage() {
     return () => stop();
   }, []);
 
-  // Live recipe doc
   useEffect(() => {
     if (!id) return;
     const refDoc = doc(db, "recipes", String(id));
@@ -114,7 +105,6 @@ export default function RecipeEditPage() {
         }
         const data = { id: snap.id, ...(snap.data() as any) } as Recipe;
         setRecipe(data);
-        // Populate form (only first time or when doc changes externally)
         setTitle(data.title || "");
         setDesc(data.description || "");
         setSteps(data.steps || "");
@@ -129,15 +119,11 @@ export default function RecipeEditPage() {
     return () => stop();
   }, [id]);
 
-  // If not owner, redirect to public view
+  // Owner-gate: redirect non-owners to public page (also prevents flash)
   useEffect(() => {
     if (loadingAuth || loadingDoc) return;
     if (!recipe) return;
-    if (!me) {
-      router.replace(`/recipes/${id}`);
-      return;
-    }
-    if (recipe.uid !== me.uid) {
+    if (!me || recipe.uid !== me.uid) {
       router.replace(`/recipes/${id}`);
     }
   }, [loadingAuth, loadingDoc, me, recipe, id, router]);
@@ -153,25 +139,18 @@ export default function RecipeEditPage() {
     setErr(null);
     setMsg(null);
 
-    // Very basic validation
     if (!title.trim()) {
       setErr("Please add a title.");
       return;
     }
 
-    // Build safe payload: avoid undefined; keep uid immutable; don’t touch author
     const payload: any = {
       title: title.trim(),
       description: desc.trim() || null,
       steps: steps.trim() || null,
-      ingredients: parseIngredients(ings),
+      ingredients: parseIngredients(ings).filter(i => (i?.name || "").trim().length > 0),
       updatedAt: serverTimestamp(),
-      // NEVER write uid here (rules prevent changing). If you include it, ensure same value:
-      // uid: recipe.uid
     };
-
-    // Clean ingredients: no empty names → filter
-    payload.ingredients = (payload.ingredients as Ingredient[]).filter((i) => (i?.name || "").trim().length > 0);
 
     setBusy(true);
     try {
@@ -189,6 +168,7 @@ export default function RecipeEditPage() {
     setErr(null); setMsg(null);
     setBusy(true);
     try {
+      // Cover image path (not gallery)
       const path = `recipeImages/${recipe.uid}/${recipe.id}`;
       const sref = ref(storage, path);
       await uploadBytes(sref, file);
@@ -209,11 +189,8 @@ export default function RecipeEditPage() {
     setErr(null); setMsg(null);
     setBusy(true);
     try {
-      // Delete storage object if it exists at our conventional path; ignore errors
       const path = `recipeImages/${recipe.uid}/${recipe.id}`;
-      try {
-        await deleteObject(ref(storage, path));
-      } catch {}
+      try { await deleteObject(ref(storage, path)); } catch {}
       await updateDoc(doc(db, "recipes", recipe.id), { imageURL: null, updatedAt: serverTimestamp() });
       setMsg("Image removed.");
     } catch (e: any) {
@@ -224,23 +201,9 @@ export default function RecipeEditPage() {
   }
 
   if (loadingAuth || loadingDoc) {
-    return (
-      <main className="wrap">
-        <div className="card">Loading…</div>
-      </main>
-    );
+    return <main className="wrap"><div className="card">Loading…</div></main>;
   }
-  if (!recipe) {
-    return (
-      <main className="wrap">
-        <div className="card">Recipe not found.</div>
-      </main>
-    );
-  }
-  if (!me || recipe.uid !== me.uid) {
-    // Defensive (the redirect runs in effect; this prevents flash)
-    return null;
-  }
+  if (!recipe || !me || recipe.uid !== me.uid) return null;
 
   return (
     <main className="wrap">
@@ -260,11 +223,7 @@ export default function RecipeEditPage() {
               )}
               <span>
                 by <strong>{authorName}</strong>
-                {created ? (
-                  <> • {created.toLocaleDateString()}{" "}
-                    {created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                  </>
-                ) : null}
+                {created ? <> • {created.toLocaleDateString()} {created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</> : null}
               </span>
             </div>
             <div className="actions">
@@ -274,53 +233,32 @@ export default function RecipeEditPage() {
           </div>
         </header>
 
-        {/* Form */}
         <div className="grid">
           <div className="full">
             <label className="label">Title</label>
-            <input
-              className="textInput"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Best pasta ever"
-            />
+            <input className="textInput" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Best pasta ever" />
           </div>
 
           <div className="full">
             <label className="label">Short description</label>
-            <textarea
-              className="textArea"
-              rows={3}
-              value={desc}
-              onChange={(e) => setDesc(e.target.value)}
-              placeholder="A quick, rich tomato pasta…"
-            />
+            <textarea className="textArea" rows={3} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="A quick, rich tomato pasta…" />
           </div>
 
           <div className="full">
             <label className="label">Ingredients (one per line — “Name | qty | unit”)</label>
-            <textarea
-              className="textArea mono"
-              rows={6}
-              value={ings}
-              onChange={(e) => setIngs(e.target.value)}
-              placeholder={"Tomato | 2 | pcs\nOlive oil | 1 | tbsp\nSalt"}
-            />
+            <textarea className="textArea mono" rows={6} value={ings} onChange={(e) => setIngs(e.target.value)} placeholder={"Tomato | 2 | pcs\nOlive oil | 1 | tbsp\nSalt"} />
           </div>
 
           <div className="full">
             <label className="label">Steps</label>
-            <textarea
-              className="textArea"
-              rows={6}
-              value={steps}
-              onChange={(e) => setSteps(e.target.value)}
-              placeholder={"1) Chop tomatoes\n2) Heat oil\n3) Add salt…"}
-            />
+            <textarea className="textArea" rows={6} value={steps} onChange={(e) => setSteps(e.target.value)} placeholder={"1) Chop tomatoes\n2) Heat oil\n3) Add salt…"} />
           </div>
 
           <div className="full">
             <label className="label">Image</label>
+
+            {/* Gallery (owner can add/remove) */}
+            <RecipePhotos recipeId={recipe.id} recipeUid={recipe.uid} canEdit={true} />
 
             {recipe.imageURL ? (
               <div className="imgRow">
@@ -337,9 +275,7 @@ export default function RecipeEditPage() {
                         onChange={(e) => setFile(e.target.files?.[0] || null)}
                       />
                     </label>
-                    <button className="btn danger" onClick={removeImage} disabled={busy}>
-                      Remove image
-                    </button>
+                    <button className="btn danger" onClick={removeImage} disabled={busy}>Remove image</button>
                     <button className="btn primary" onClick={replaceImage} disabled={!file || busy}>
                       {busy ? "Uploading…" : "Replace image"}
                     </button>
@@ -379,37 +315,27 @@ export default function RecipeEditPage() {
       <style jsx>{`
         .wrap { max-width: 960px; margin: 0 auto; padding: 24px; }
         .title { font-size: 28px; font-weight: 800; margin-bottom: 12px; }
-
         .ok  { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; border-radius:8px; padding:8px 10px; font-size:13px; margin-bottom:10px; }
         .bad { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:8px 10px; font-size:13px; margin-bottom:10px; }
-
         .card { border:1px solid #e5e7eb; background:#fff; border-radius:16px; padding:16px; box-shadow:0 10px 30px rgba(2,6,23,.04); }
         .head { padding-bottom:10px; border-bottom:1px solid #eef2f7; margin-bottom:12px; }
-
         .meta { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
         .author { display:flex; align-items:center; gap:10px; color:#475569; }
         .avatar { width:34px; height:34px; border-radius:999px; object-fit:cover; border:1px solid #e2e8f0; }
         .avatar.fallback { width:34px; height:34px; border-radius:999px; display:grid; place-items:center; background:#f1f5f9; color:#0f172a; font-weight:700; border:1px solid #e2e8f0; }
-
         .grid { display:grid; grid-template-columns: 1fr 1fr; gap:12px 16px; }
         .full { grid-column: 1 / -1; }
         @media (max-width: 860px){ .grid { grid-template-columns: 1fr; } }
-
         .label { display:block; margin-bottom:6px; font-weight:600; color:#0f172a; }
-        .textInput, .textArea {
-          width:100%; border:1px solid #d1d5db; border-radius:12px; padding:10px 12px; background:#fff; font-size:14px;
-        }
+        .textInput, .textArea { width:100%; border:1px solid #d1d5db; border-radius:12px; padding:10px 12px; background:#fff; font-size:14px; }
         .textArea { min-height: 100px; }
         .textArea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
-
         .imgRow { display:flex; gap:12px; align-items:flex-start; }
         .thumb { width:220px; height:160px; object-fit:cover; border:1px solid #e5e7eb; border-radius:12px; }
         .col { display:flex; flex-direction:column; gap:8px; }
         .rowBtns { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-
         .actions { display:flex; gap:10px; }
         .actions.end { justify-content:flex-end; }
-
         .btn { border:1px solid #e5e7eb; border-radius:10px; padding:8px 12px; background:#fff; cursor:pointer; }
         .btn:hover { background:#f8fafc; }
         .btn.primary { background:#0f172a; color:#fff; border-color:#0f172a; }

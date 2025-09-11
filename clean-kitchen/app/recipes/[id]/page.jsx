@@ -109,6 +109,8 @@ export default function RecipeDetailPage() {
                 ) : null}
               </span>
             </div>
+{/* Photo gallery (read-only for visitors) */}
+<RecipePhotos recipeId={recipe.id} recipeUid={recipe.uid} canEdit={false} />
 
             <div className="actions">
               <Link className="btn" href="/recipes">All recipes</Link>

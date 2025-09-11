@@ -11,5 +11,32 @@ service firebase.storage {
       allow read: if true;
       allow write: if request.auth != null;
     }
+  // Cover image (single file)
+    match /recipeImages/{uid}/{recipeId} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.auth.uid == uid
+        && exists(/databases/(default)/documents/recipes/$(recipeId))
+        && get(/databases/(default)/documents/recipes/$(recipeId)).data.uid == uid;
+    }
+
+    // Gallery images
+    match /recipeImages/{uid}/{recipeId}/gallery/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.auth.uid == uid
+        && exists(/databases/(default)/documents/recipes/$(recipeId))
+        && get(/databases/(default)/documents/recipes/$(recipeId)).data.uid == uid;
+    }
+    // Avatars are stored at avatars/{uid}/avatar.jpg (or any filename).
+    match /avatars/{uid}/{allPaths=**} {
+      // Owner can read/write.
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // (Optional) if you already have other public folders, keep them here.
+    // getDownloadURL() returns a tokenized URL that works publicly once generated.
+    // You only need read access above to obtain that URL at upload time.
   }
 }
+

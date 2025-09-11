@@ -1,274 +1,255 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { auth, db } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
 import {
-  doc, getDoc, onSnapshot, collection, addDoc, serverTimestamp,
-  setDoc, deleteDoc, updateDoc, increment, query, orderBy, where, getDocs
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
 } from "firebase/firestore";
-import Button from "@/components/ui/Button";
-import Card from "@/components/ui/Card";
-import Input from "@/components/ui/Input";
+import { onAuthStateChanged } from "firebase/auth";
 
+type Author = { username?: string | null; displayName?: string | null; avatarURL?: string | null } | null;
 type Post = {
   id: string;
   uid: string;
   text?: string | null;
   imageURL?: string | null;
   createdAt?: any;
-  likesCount?: number;
-  commentsCount?: number;
-  repostsCount?: number;
-  isRepost?: boolean;     // oriģināli postiem: false
-  originalId?: string;    // vairs nelietojam (ja agrāk bija)
+  author?: Author;
 };
 
-export default function PostDetailPage() {
-  const router = useRouter();
-  const params = useParams();
-  const id = Array.isArray(params?.id) ? params?.id[0] : (params?.id as string | undefined);
+type Comment = {
+  id: string;
+  uid: string;
+  text: string;
+  createdAt?: any;
+};
 
-  const [uid, setUid] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
+const BAD = ["fuck","shit","bitch","asshole","cunt","nigger","faggot"];
+const clean = (t:string) => !t || !BAD.some(w => t.toLowerCase().includes(w));
+
+export default function PostThreadPage() {
+  const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+
+  const [me, setMe] = useState<any>(null);
+  const [post, setPost] = useState<Post | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [cmt, setCmt] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    const stop = onAuthStateChanged(auth, (u) => {
-      setUid(u?.uid ?? null);
-      setReady(true);
-    });
-    return () => stop();
+    const stopAuth = onAuthStateChanged(auth, (u) => setMe(u || null));
+    return () => stopAuth();
   }, []);
 
-  const [post, setPost] = useState<Post | null>(null);
-  const [liked, setLiked] = useState(false);
-  const [reposted, setReposted] = useState(false);
-  const [busyLike, setBusyLike] = useState(false);
-  const [busyRepost, setBusyRepost] = useState(false);
-
-  // load post + live like/repost state
+  // load post
   useEffect(() => {
     if (!id) return;
-    const stop = onSnapshot(doc(db, "posts", id), (snap) => {
-      if (!snap.exists()) { setPost(null); return; }
-      setPost({ id: snap.id, ...(snap.data() as any) });
-    });
+    const ref = doc(db, "posts", id);
+    const stop = onSnapshot(
+      ref,
+      (snap) => {
+        setLoading(false);
+        if (!snap.exists()) { setPost(null); setErr("Post not found."); return; }
+        setPost({ id: snap.id, ...(snap.data() as any) });
+        setErr(null);
+      },
+      (e) => { setLoading(false); setErr(e?.message ?? "Failed to load post."); }
+    );
     return () => stop();
   }, [id]);
 
-  useEffect(() => {
-    if (!id || !uid) return;
-    // like mark
-    const stopL = onSnapshot(doc(db, "posts", id, "likes", uid), (s) => {
-      setLiked(s.exists());
-    });
-    // repost mark
-    const stopR = onSnapshot(doc(db, "posts", id, "reposts", uid), (s) => {
-      setReposted(s.exists());
-    });
-    return () => { stopL(); stopR(); };
-  }, [id, uid]);
-
-  const isOwner = useMemo(() => !!uid && !!post?.uid && uid === post?.uid, [uid, post?.uid]);
-
-  // LIKE toggle
-  async function toggleLike() {
-    if (!uid || !id) return;
-    setBusyLike(true);
-    try {
-      const likeRef = doc(db, "posts", id, "likes", uid);
-      if (liked) {
-        await deleteDoc(likeRef);
-        await updateDoc(doc(db, "posts", id), { likesCount: increment(-1) });
-      } else {
-        await setDoc(likeRef, { uid, createdAt: serverTimestamp() });
-        await updateDoc(doc(db, "posts", id), { likesCount: increment(1) });
-      }
-    } finally {
-      setBusyLike(false);
-    }
-  }
-
-  // REPOST toggle — **bez jauna posta veidošanas**
-  async function toggleRepost() {
-    if (!uid || !id) return;
-    setBusyRepost(true);
-    try {
-      const repRef = doc(db, "posts", id, "reposts", uid);
-
-      if (reposted) {
-        // UNREPOST
-        await deleteDoc(repRef);
-        await updateDoc(doc(db, "posts", id), { repostsCount: increment(-1) });
-
-        // (neobligāti) ja kādreiz veidoji atsevišķus “repost postus” → iztīri
-        const mineSnap = await getDocs(query(collection(db, "posts"), where("uid","==", uid)));
-        const old = mineSnap.docs.filter(d => {
-          const v = d.data() || {};
-          return v.isRepost === true && v.originalId === id;
-        });
-        await Promise.all(old.map(d => deleteDoc(doc(db, "posts", d.id))));
-      } else {
-        // REPOST – tikai subkolekcijā
-        await setDoc(repRef, { uid, createdAt: serverTimestamp() });
-        await updateDoc(doc(db, "posts", id), { repostsCount: increment(1) });
-      }
-    } finally {
-      setBusyRepost(false);
-    }
-  }
-
-  // COMMENTS
-  const [comment, setComment] = useState("");
-  const [busyC, setBusyC] = useState(false);
-  const [comments, setComments] = useState<any[]>([]);
-
+  // load comments (new → old like X)
   useEffect(() => {
     if (!id) return;
-    const q = query(collection(db, "posts", id, "comments"), orderBy("createdAt", "asc"));
-    const stop = onSnapshot(q, (snap) => {
-      setComments(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })));
-    });
+    const q = query(collection(db, "posts", id, "comments"), orderBy("createdAt", "desc"));
+    const stop = onSnapshot(
+      q,
+      (snap) => setComments(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }))),
+      (e) => setErr(e?.message ?? "Failed to load comments.")
+    );
     return () => stop();
   }, [id]);
+
+  const created = useMemo(() => {
+    const ts: any = post?.createdAt;
+    if (!ts) return null;
+    if (typeof ts.toDate === "function") return ts.toDate();
+    if (typeof ts.seconds === "number") return new Date(ts.seconds * 1000);
+    return null;
+  }, [post?.createdAt]);
+
+  const authorName =
+    post?.author?.username ||
+    post?.author?.displayName ||
+    (post?.uid ? post.uid.slice(0, 6) : "Unknown");
 
   async function addComment() {
-    if (!uid || !id) return;
-    if (!comment.trim()) return;
-    setBusyC(true);
+    setErr(null);
+    if (!me) { setErr("Please sign in to comment."); return; }
+    const text = cmt.trim();
+    if (!text) return;
+    if (!clean(text)) { setErr("Please avoid offensive words."); return; }
+    setBusy(true);
     try {
-      await addDoc(collection(db, "posts", id, "comments"), {
-        uid, text: comment.trim(), createdAt: serverTimestamp()
+      await addDoc(collection(db, "posts", String(id), "comments"), {
+        uid: me.uid,
+        text,
+        createdAt: serverTimestamp(),
       });
-      await updateDoc(doc(db, "posts", id), { commentsCount: increment(1) });
-      setComment("");
+      setCmt("");
+    } catch (e: any) {
+      setErr(e?.message ?? "Failed to add comment.");
     } finally {
-      setBusyC(false);
+      setBusy(false);
     }
   }
 
-  // EDIT/DELETE for owner
-  const [editing, setEditing] = useState(false);
-  const [newText, setNewText] = useState("");
-
-  useEffect(() => {
-    setNewText(post?.text || "");
-  }, [post?.text]);
-
-  async function saveEdit() {
-    if (!id || !isOwner) return;
-    await updateDoc(doc(db, "posts", id), { text: newText.trim() || null });
-    setEditing(false);
+  async function deleteComment(cid: string, ownerUid: string) {
+    setErr(null);
+    try {
+      // Firestore rules allow: comment owner OR post owner
+      if (!me) throw new Error("Not signed in.");
+      await deleteDoc(doc(db, "posts", String(id), "comments", cid));
+    } catch (e: any) {
+      setErr(e?.message ?? "Failed to delete comment.");
+    }
   }
 
-  async function removePost() {
-    if (!id || !isOwner) return;
-    if (!confirm("Delete this post permanently?")) return;
-    await deleteDoc(doc(db, "posts", id));
-    router.replace("/dashboard");
-  }
-
-  if (!ready) return null;
-  if (!post) return <main className="wrap"><p>Post not found.</p></main>;
+  if (loading) return <main className="wrap"><div className="card">Loading…</div></main>;
+  if (err) return <main className="wrap"><div className="card bad">{err}</div></main>;
+  if (!post) return <main className="wrap"><div className="card">Post not found.</div></main>;
 
   return (
     <main className="wrap">
-      <Card className="detail">
-        <div className="header">
-          <Link href="/dashboard" className="back">← Back</Link>
-          <div className="meta">
-            <span>Author: <strong>{post.uid}</strong></span>
-            {post.createdAt?.seconds && (
-              <span> • {new Date(post.createdAt.seconds*1000).toLocaleString()}</span>
+      <article className="thread">
+        <header className="head">
+          <div className="who">
+            {post.author?.avatarURL ? (
+              <img className="avatar" src={post.author.avatarURL} alt="" />
+            ) : (
+              <div className="avatar ph">{authorName[0]?.toUpperCase() || "U"}</div>
             )}
-          </div>
-        </div>
-
-        {post.imageURL && (
-          <img className="heroImg" src={post.imageURL} alt="" />
-        )}
-
-        {!editing ? (
-          <p className="text">{post.text || <em>No text</em>}</p>
-        ) : (
-          <div className="field">
-            <label className="label">Edit text</label>
-            <textarea className="ta" rows={4} value={newText} onChange={(e)=>setNewText(e.target.value)} />
-            <div className="row">
-              <Button variant="secondary" onClick={()=>setEditing(false)}>Cancel</Button>
-              <Button onClick={saveEdit}>Save</Button>
+            <div className="names">
+              <div className="name">{authorName}</div>
+              {created && (
+                <div className="time">
+                  {created.toLocaleDateString()}{" "}
+                  {created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </div>
+              )}
             </div>
           </div>
-        )}
+          <div className="actions">
+            <Link className="btn" href="/">Home</Link>
+          </div>
+        </header>
 
-        <div className="row">
-          <Button size="sm" onClick={toggleLike} disabled={busyLike}>
-            {liked ? "♥ Liked" : "♡ Like"} {post.likesCount ? `(${post.likesCount})` : ""}
-          </Button>
-          <Button size="sm" onClick={toggleRepost} disabled={busyRepost}>
-            {reposted ? "Unrepost" : "Repost"} {post.repostsCount ? `(${post.repostsCount})` : ""}
-          </Button>
-          {isOwner && !editing && (
-            <>
-              <Button size="sm" variant="secondary" onClick={()=>setEditing(true)}>Edit</Button>
-              <Button size="sm" variant="danger" onClick={removePost}>Delete</Button>
-            </>
+        {post.text ? <p className="text">{post.text}</p> : null}
+        {post.imageURL ? (
+          <div className="imgWrap">
+            <img className="img" src={post.imageURL} alt="" />
+          </div>
+        ) : null}
+
+        {/* composer */}
+        <section className="compose">
+          <textarea
+            className="ta"
+            rows={3}
+            value={cmt}
+            onChange={(e) => setCmt(e.target.value)}
+            placeholder={me ? "Write a reply…" : "Sign in to reply"}
+            disabled={!me || busy}
+          />
+          <div className="row end">
+            <button className="btn primary" onClick={addComment} disabled={!me || !cmt.trim() || busy}>
+              {busy ? "Sending…" : "Reply"}
+            </button>
+          </div>
+          {err && <p className="bad">{err}</p>}
+        </section>
+
+        {/* comments */}
+        <section className="comments">
+          {comments.length === 0 ? (
+            <p className="muted">No replies yet.</p>
+          ) : (
+            <ul className="list">
+              {comments.map(cm => {
+                const ts: any = cm.createdAt;
+                const d =
+                  ts && typeof ts.toDate === "function" ? ts.toDate() :
+                  ts && typeof ts.seconds === "number" ? new Date(ts.seconds * 1000) : null;
+                const canDelete = me && (me.uid === cm.uid || me.uid === post.uid);
+                return (
+                  <li key={cm.id} className="cmt">
+                    <div className="cmtHead">
+                      <span className="cmtWho">{cm.uid?.slice(0,6) || "user"}</span>
+                      <span className="dot">•</span>
+                      <span className="cmtTime">{d ? d.toLocaleString() : ""}</span>
+                      {canDelete && (
+                        <button className="link danger" onClick={() => deleteComment(cm.id, cm.uid)}>
+                          delete
+                        </button>
+                      )}
+                    </div>
+                    <p className="cmtText">{cm.text}</p>
+                  </li>
+                );
+              })}
+            </ul>
           )}
-        </div>
-
-        {/* Comments */}
-        <div className="comments">
-          <h3 className="h3">Comments {post.commentsCount ? `(${post.commentsCount})` : ""}</h3>
-
-          <div className="addC">
-            <Input
-              placeholder="Write a comment…"
-              value={comment}
-              onChange={(e)=>setComment((e.target as HTMLInputElement).value)}
-            />
-            <Button onClick={addComment} disabled={busyC || !comment.trim()}>
-              Comment
-            </Button>
-          </div>
-
-          <div className="list">
-            {comments.map(c => (
-              <div key={c.id} className="cItem">
-                <div className="cHead">
-                  <span className="cUid">{c.uid}</span>
-                  {c.createdAt?.seconds && (
-                    <span className="cTime">{new Date(c.createdAt.seconds*1000).toLocaleString()}</span>
-                  )}
-                </div>
-                <div className="cText">{c.text}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </Card>
+        </section>
+      </article>
 
       <style jsx>{`
-        .wrap { max-width: 900px; margin: 0 auto; padding: 24px; }
-        .detail { padding: 16px; border:1px solid #e5e7eb; border-radius:16px; background:#fff; }
-        .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
-        .back { text-decoration:none; color:#0f172a; }
-        .meta { color:#6b7280; font-size:14px; }
-        .heroImg { width:100%; border-radius:12px; border:1px solid #e5e7eb; margin: 8px 0 12px; object-fit:cover; }
-        .text { font-size:16px; color:#0f172a; margin: 6px 0 10px; }
-        .row { display:flex; gap:10px; align-items:center; margin: 8px 0; }
-        .comments { margin-top: 16px; }
-        .h3 { font-size:16px; font-weight:700; margin: 0 0 8px; }
-        .addC { display:grid; grid-template-columns: 1fr auto; gap:8px; align-items:center; margin-bottom: 10px; }
-        .list { display:grid; gap:8px; }
-        .cItem { border:1px solid #e5e7eb; border-radius:12px; padding:10px; background:#fff; }
-        .cHead { display:flex; gap:8px; color:#6b7280; font-size:13px; }
-        .cUid { font-weight:600; color:#111827; }
-        .cTime { color:#6b7280; }
-        .field { margin: 8px 0; }
-        .label { display:block; margin-bottom:6px; font-weight:600; color:#0f172a; }
-        .ta { width:100%; border:1px solid #d1d5db; border-radius:12px; padding:10px 12px; background:#fff; font-size:14px; }
+        .wrap { max-width: 800px; margin: 0 auto; padding: 24px; }
+        .card { border:1px solid #e5e7eb; background:#fff; border-radius:12px; padding:12px; }
+        .bad { background:#fef2f2; color:#991b1b; border-color:#fecaca; }
+
+        .thread { border:1px solid #e5e7eb; background:#fff; border-radius:12px; padding:12px; }
+        .head { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+        .who { display:flex; gap:10px; align-items:center; }
+        .avatar { width:40px; height:40px; border-radius:999px; object-fit:cover; border:1px solid #e5e7eb; }
+        .avatar.ph { width:40px; height:40px; border-radius:999px; display:grid; place-items:center; background:#f1f5f9; color:#0f172a; font-weight:700; border:1px solid #e2e8f0; }
+        .name { font-weight:700; color:#0f172a; }
+        .time { font-size:12px; color:#6b7280; }
+        .actions .btn { border:1px solid #e5e7eb; border-radius:10px; padding:6px 10px; background:#fff; }
+
+        .text { margin:8px 0; color:#0f172a; white-space:pre-wrap; }
+        .imgWrap { border:1px solid #eef2f7; border-radius:10px; overflow:hidden; margin:10px 0; }
+        .img { width:100%; display:block; object-fit:cover; }
+
+        .compose { margin-top:8px; }
+        .ta { width:100%; border:1px solid #d1d5db; border-radius:10px; padding:10px; background:#fff; }
+        .row { display:flex; gap:8px; margin-top:8px; }
+        .row.end { justify-content:flex-end; }
+        .btn.primary { background:#0f172a; color:#fff; border:1px solid #0f172a; border-radius:10px; padding:6px 12px; }
+        .bad { margin-top:6px; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:6px 8px; font-size:12px; }
+
+        .comments { margin-top:12px; }
+        .muted { color:#6b7280; }
+        .list { list-style:none; padding:0; margin:0; display:grid; gap:10px; }
+        .cmt { border-top:1px solid #f1f5f9; padding-top:10px; }
+        .cmtHead { display:flex; align-items:center; gap:6px; font-size:13px; color:#334155; }
+        .cmtWho { font-weight:600; color:#0f172a; }
+        .dot { color:#94a3b8; }
+        .link { background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; }
+        .link.danger { color:#b91c1c; }
+        .cmtText { margin:4px 0 0; white-space:pre-wrap; color:#0f172a; }
       `}</style>
     </main>
   );

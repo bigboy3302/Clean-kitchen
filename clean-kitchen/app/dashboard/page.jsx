@@ -6,8 +6,16 @@ import Link from "next/link";
 import { auth, db, storage } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import {
-  addDoc, collection, onSnapshot, query, where, orderBy, serverTimestamp,
-  updateDoc, doc as fsDoc
+  addDoc,
+  collection,
+  onSnapshot,
+  query,
+  where,
+  orderBy,
+  serverTimestamp,
+  updateDoc,
+  doc as fsDoc,
+  getDoc, // ← needed to read users/{uid} for author info
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import Card from "@/components/ui/Card";
@@ -127,6 +135,23 @@ export default function DashboardPage() {
 
     setBusyPost(true);
     try {
+      // 1) fetch my user profile to embed author info
+      let author = { username: null, displayName: null, avatarURL: null };
+      try {
+        const snap = await getDoc(fsDoc(db, "users", uid));
+        if (snap.exists()) {
+          const u = snap.data() || {};
+          author = {
+            username: u.username || null,
+            displayName: u.firstName
+              ? `${u.firstName}${u.lastName ? " " + u.lastName : ""}`
+              : null,
+            avatarURL: u.photoURL || null,
+          };
+        }
+      } catch (_) {}
+
+      // 2) optionally upload image
       let imageURL = null;
       if (pFile) {
         const storageRef = ref(storage, `posts/${uid}/${Date.now()}`);
@@ -134,14 +159,15 @@ export default function DashboardPage() {
         imageURL = await getDownloadURL(storageRef);
       }
 
+      // 3) create post with embedded author, never write undefined
       const base = {
         uid,
         text: pText.trim() ? pText.trim() : null,
-        imageURL: imageURL ?? null,           // use null, never undefined
+        imageURL: imageURL ?? null,
+        author, // ← embed so PostCard can show name + avatar
         createdAt: serverTimestamp(),
         isRepost: false,
       };
-
       const payload = stripUndefinedDeep(base);
       await addDoc(collection(db, "posts"), payload);
 
@@ -155,7 +181,7 @@ export default function DashboardPage() {
     }
   }
 
-  // create recipe
+  // create recipe (unchanged, but keeps the undefined-safe pattern)
   const [rTitle, setRTitle] = useState("");
   const [rDesc, setRDesc]   = useState("");
   const [rSteps, setRSteps] = useState("");
@@ -174,13 +200,11 @@ export default function DashboardPage() {
       const base = {
         uid,
         title: rTitle.trim(),
-        description: rDesc.trim() ? rDesc.trim() : null, // never undefined
-        steps: rSteps.trim() ? rSteps.trim() : null,     // never undefined
-        ingredients: parseIngr(rIngr),                   // objects without undefined keys
-        // omit imageURL here; add only if we have a file
+        description: rDesc.trim() ? rDesc.trim() : null,
+        steps: rSteps.trim() ? rSteps.trim() : null,
+        ingredients: parseIngr(rIngr),
         createdAt: serverTimestamp(),
       };
-
       const payload = stripUndefinedDeep(base);
       const draft = await addDoc(collection(db,"recipes"), payload);
 
@@ -220,7 +244,8 @@ export default function DashboardPage() {
           <h2 className="h2">Recent Posts</h2>
           <div className="list">
             {recentPosts.map((p) => (
-              <PostCard key={p.id} post={p} />
+              <PostCard key={p.id} post={p} meUid={uid} />
+
             ))}
           </div>
         </section>
