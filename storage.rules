@@ -1,17 +1,13 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Tikai pats lietotājs var lasīt/rakstīt savus failus
-    match /user_uploads/{uid}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+    // Posts media: posts/{uid}/{postId}/{fileName}
+    match /posts/{uid}/{postId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
     }
 
-    // Publiski attēli (ja vajag)
-    match /public/{allPaths=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-  // Cover image (single file)
+    // Recipe cover: recipeImages/{uid}/{recipeId}
     match /recipeImages/{uid}/{recipeId} {
       allow read: if true;
       allow write: if request.auth != null
@@ -20,7 +16,7 @@ service firebase.storage {
         && get(/databases/(default)/documents/recipes/$(recipeId)).data.uid == uid;
     }
 
-    // Gallery images
+    // (optional) gallery files: recipeImages/{uid}/{recipeId}/gallery/{fileName}
     match /recipeImages/{uid}/{recipeId}/gallery/{fileName} {
       allow read: if true;
       allow write: if request.auth != null
@@ -28,15 +24,32 @@ service firebase.storage {
         && exists(/databases/(default)/documents/recipes/$(recipeId))
         && get(/databases/(default)/documents/recipes/$(recipeId)).data.uid == uid;
     }
-    // Avatars are stored at avatars/{uid}/avatar.jpg (or any filename).
-    match /avatars/{uid}/{allPaths=**} {
-      // Owner can read/write.
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+    // Public read for post media, only owner can write
+    match /posts/{uid}/{postId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
     }
 
-    // (Optional) if you already have other public folders, keep them here.
-    // getDownloadURL() returns a tokenized URL that works publicly once generated.
-    // You only need read access above to obtain that URL at upload time.
+    // Public read for recipe images, only owner can write
+    match /recipeImages/{uid}/{rid} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+     // Public read of uploaded media (optional; you can restrict if you want)
+    match /posts/{uid}/{postId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    match /recipeImages/{uid}/{recipeId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Fallback: deny everything else
+    match /{allPaths=**} {
+      allow read: if false;
+      allow write: if false;
+    }
   }
 }
-

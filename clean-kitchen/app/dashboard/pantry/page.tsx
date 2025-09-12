@@ -74,7 +74,7 @@ export default function PantryPage() {
       {msg && <p className="alert-error" style={{ marginTop: 12 }}>{msg}</p>}
 
       <Card className="grid grid-2" >
-        <Input label="Product" value={name} onChange={(e) => setName((e.target as HTMLInputElement).value)} />
+        <Input label="Product"  value={name} onChange={(e) => setName((e.target as HTMLInputElement).value)} />
         <Input label="Quantity" type="number" min={1} value={qty} onChange={(e) => setQty(Number((e.target as HTMLInputElement).value))} />
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-800">Expires at</label>
@@ -94,7 +94,7 @@ export default function PantryPage() {
                 <div className="badge" style={{ marginTop: 6 }}>Qty: {it.qty}</div>
                 {it.expiresAt && <div style={{ marginTop: 6, color: "var(--muted)", fontSize: 13 }}>Expires: {it.expiresAt}</div>}
               </div>
-              {/* TODO: add edit/delete actions if needed */}
+              
             </div>
           </Card>
         ))}

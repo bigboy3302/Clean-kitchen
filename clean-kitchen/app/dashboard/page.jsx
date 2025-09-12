@@ -1,3 +1,4 @@
+// app/dashboard/page.jsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -15,15 +16,15 @@ import {
   serverTimestamp,
   updateDoc,
   doc as fsDoc,
-  getDoc, // ← needed to read users/{uid} for author info
+  getDoc,
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import PostCard from "@/components/posts/PostCard";
 
-/* --- super-simple client profanity guard --- */
+/* --- super-simple profanity guard --- */
 const BAD_WORDS = ["fuck","shit","bitch","asshole","cunt","nigger","faggot"];
 const clean = (t) => !t || !BAD_WORDS.some((w) => String(t).toLowerCase().includes(w));
 
@@ -54,13 +55,34 @@ function parseIngr(src) {
       const rawName = parts[0] || "";
       const rawQty  = parts[1] || "";
       const rawUnit = parts[2] || "";
-
       const item = { name: rawName };
       const qtyNum = Number(rawQty);
       if (rawQty !== "" && !Number.isNaN(qtyNum)) item.qty = qtyNum;
       if (rawUnit) item.unit = rawUnit;
-      return item; // no undefined fields
+      return item;
     });
+}
+
+/* ---- helpers: get image/video dimensions (optional) ---- */
+function getImageDims(file) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => res({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = rej;
+    img.src = URL.createObjectURL(file);
+  });
+}
+function getVideoDims(file) {
+  return new Promise((res, rej) => {
+    const v = document.createElement("video");
+    v.preload = "metadata";
+    v.onloadedmetadata = () => {
+      res({ w: v.videoWidth, h: v.videoHeight, duration: v.duration });
+      URL.revokeObjectURL(v.src);
+    };
+    v.onerror = rej;
+    v.src = URL.createObjectURL(file);
+  });
 }
 
 export default function DashboardPage() {
@@ -86,7 +108,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!uid) return;
 
-    // My posts (hide reposts, sort client-side)
+    // My posts
     const qp = query(collection(db, "posts"), where("uid", "==", uid));
     const stopP = onSnapshot(qp, (snap) => {
       const list = snap.docs
@@ -96,7 +118,7 @@ export default function DashboardPage() {
       setMyPosts(list);
     });
 
-    // My recipes (sort client-side)
+    // My recipes
     const qr = query(collection(db, "recipes"), where("uid", "==", uid));
     const stopR = onSnapshot(qr, (snap) => {
       const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) }));
@@ -104,7 +126,7 @@ export default function DashboardPage() {
       setMyRecipes(list);
     });
 
-    // Recent posts (hide reposts)
+    // Recent posts
     const qAll = query(collection(db, "posts"), orderBy("createdAt", "desc"));
     const stopAll = onSnapshot(qAll, (snap) => {
       const list = snap.docs
@@ -122,20 +144,51 @@ export default function DashboardPage() {
   const [err, setErr]   = useState(null);
   const [ok, setOk]     = useState(null);
 
-  // create post
+  // create post (media support)
   const [pText, setPText] = useState("");
-  const [pFile, setPFile] = useState(null);
+  const [pFiles, setPFiles] = useState([]);
+  const [pPreviews, setPPreviews] = useState([]); // [{url,type}]
   const [busyPost, setBusyPost] = useState(false);
+
+  function onPickPostFiles(e) {
+    const files = Array.from(e.target.files || []);
+    const limited = files.slice(0, 4); // X limit
+    setPFiles(limited);
+    setPPreviews(
+      limited.map((f) => ({
+        url: URL.createObjectURL(f),
+        type: f.type.startsWith("video") ? "video" : "image",
+      }))
+    );
+  }
+
+  async function uploadWithProgress(storageRef, file) {
+    const task = uploadBytesResumable(storageRef, file);
+    return new Promise((resolve, reject) => {
+      task.on(
+        "state_changed",
+        null,
+        (err) => {
+          console.error("UPLOAD ERROR:", err?.code, err?.message);
+          reject(err ?? new Error("upload failed"));
+        },
+        async () => {
+          const url = await getDownloadURL(storageRef);
+          resolve(url);
+        }
+      );
+    });
+  }
 
   async function createPost() {
     setErr(null); setOk(null);
     if (!uid) return;
-    if (!pText.trim() && !pFile) { setErr("Nothing to publish."); return; }
+    if (!pText.trim() && pFiles.length === 0) { setErr("Nothing to publish."); return; }
     if (!clean(pText)) { setErr("Please avoid offensive words in your post."); return; }
 
     setBusyPost(true);
     try {
-      // 1) fetch my user profile to embed author info
+      // embed author info
       let author = { username: null, displayName: null, avatarURL: null };
       try {
         const snap = await getDoc(fsDoc(db, "users", uid));
@@ -143,45 +196,73 @@ export default function DashboardPage() {
           const u = snap.data() || {};
           author = {
             username: u.username || null,
-            displayName: u.firstName
-              ? `${u.firstName}${u.lastName ? " " + u.lastName : ""}`
-              : null,
+            displayName: u.firstName ? `${u.firstName}${u.lastName ? " " + u.lastName : ""}` : null,
             avatarURL: u.photoURL || null,
           };
         }
       } catch (_) {}
 
-      // 2) optionally upload image
-      let imageURL = null;
-      if (pFile) {
-        const storageRef = ref(storage, `posts/${uid}/${Date.now()}`);
-        await uploadBytes(storageRef, pFile);
-        imageURL = await getDownloadURL(storageRef);
-      }
-
-      // 3) create post with embedded author, never write undefined
-      const base = {
+      // draft post
+      const draftRef = await addDoc(collection(db, "posts"), stripUndefinedDeep({
         uid,
         text: pText.trim() ? pText.trim() : null,
-        imageURL: imageURL ?? null,
-        author, // ← embed so PostCard can show name + avatar
+        media: [],
         createdAt: serverTimestamp(),
         isRepost: false,
-      };
-      const payload = stripUndefinedDeep(base);
-      await addDoc(collection(db, "posts"), payload);
+        author,
+      }));
+
+      // upload media
+      const uploaded = [];
+      for (const file of pFiles) {
+        const isVideo = file.type.startsWith("video");
+        let w = 0, h = 0, duration;
+
+        try {
+          if (isVideo) {
+            const dim = await getVideoDims(file);
+            w = dim.w; h = dim.h; duration = dim.duration;
+          } else {
+            const dim = await getImageDims(file);
+            w = dim.w; h = dim.h;
+          }
+        } catch {}
+
+        const safeName = `${Date.now()}-${file.name}`.replace(/\s+/g, "_");
+        const storagePath = `posts/${uid}/${draftRef.id}/${safeName}`;
+        const sref = ref(storage, storagePath);
+        const url = await uploadWithProgress(sref, file);
+
+        uploaded.push({
+          type: isVideo ? "video" : "image",
+          url,
+          storagePath,
+          w, h,
+          aspect: h ? w / h : undefined,
+          ...(isVideo ? { duration } : {}),
+        });
+      }
+
+      if (uploaded.length > 0) {
+        await updateDoc(draftRef, { media: uploaded });
+      }
 
       setOk("Post published!");
-      setPText(""); setPFile(null);
+      setPText(""); setPFiles([]); setPPreviews([]);
       setOpen(false);
     } catch (e) {
-      setErr(e?.message ?? "Failed to publish post.");
+      const msg = e?.message || String(e);
+      setErr(
+        msg.includes("preflight") || msg.includes("CORS") || msg.includes("appCheck")
+          ? "Upload blocked by App Check (or CORS symptom). Check App Check setup & debug token."
+          : msg
+      );
     } finally {
       setBusyPost(false);
     }
   }
 
-  // create recipe (unchanged, but keeps the undefined-safe pattern)
+  // recipe
   const [rTitle, setRTitle] = useState("");
   const [rDesc, setRDesc]   = useState("");
   const [rSteps, setRSteps] = useState("");
@@ -197,21 +278,18 @@ export default function DashboardPage() {
 
     setBusyRecipe(true);
     try {
-      const base = {
+      const draft = await addDoc(collection(db,"recipes"), stripUndefinedDeep({
         uid,
         title: rTitle.trim(),
         description: rDesc.trim() ? rDesc.trim() : null,
         steps: rSteps.trim() ? rSteps.trim() : null,
         ingredients: parseIngr(rIngr),
         createdAt: serverTimestamp(),
-      };
-      const payload = stripUndefinedDeep(base);
-      const draft = await addDoc(collection(db,"recipes"), payload);
+      }));
 
       if (rFile) {
         const sref = ref(storage, `recipeImages/${uid}/${draft.id}`);
-        await uploadBytes(sref, rFile);
-        const url = await getDownloadURL(sref);
+        const url = await uploadWithProgress(sref, rFile);
         await updateDoc(fsDoc(db,"recipes",draft.id), { imageURL: url });
       }
 
@@ -229,7 +307,6 @@ export default function DashboardPage() {
 
   return (
     <main className="wrap">
-      {/* WELCOME CARD */}
       <Card className="hero">
         <h1 className="heroTitle">Hello 👋 Welcome to <span className="brand">Clean-Kitchen</span></h1>
         <p className="heroText">
@@ -238,20 +315,17 @@ export default function DashboardPage() {
         </p>
       </Card>
 
-      {/* Recent Posts */}
       {recentPosts.length > 0 && (
         <section className="feed">
           <h2 className="h2">Recent Posts</h2>
           <div className="list">
             {recentPosts.map((p) => (
               <PostCard key={p.id} post={p} meUid={uid} />
-
             ))}
           </div>
         </section>
       )}
 
-      {/* My Stuff */}
       {(myPosts.length > 0 || myRecipes.length > 0) && (
         <section className="feed two">
           {myPosts.length > 0 && (
@@ -259,7 +333,7 @@ export default function DashboardPage() {
               <h2 className="h3">My Posts</h2>
               <div className="list">
                 {myPosts.map((p) => (
-                  <PostCard key={p.id} post={p} />
+                  <PostCard key={p.id} post={p} meUid={uid} />
                 ))}
               </div>
             </div>
@@ -283,12 +357,10 @@ export default function DashboardPage() {
         </section>
       )}
 
-      {/* Floating + button */}
       <button className="fab" onClick={() => { setTab("post"); setOpen(true); }} aria-label="Create">
         <span>+</span>
       </button>
 
-      {/* Modal (post/recipe) */}
       {open && (
         <div className="overlay" onClick={() => setOpen(false)}>
           <div className="modal" onClick={(e)=>e.stopPropagation()}>
@@ -308,8 +380,21 @@ export default function DashboardPage() {
                   <textarea className="ta" rows={4} value={pText} onChange={(e)=>setPText(e.target.value)} />
                 </div>
                 <div className="field">
-                  <label className="label">Image (optional)</label>
-                  <input type="file" accept="image/*" onChange={(e)=>setPFile(e.target.files?.[0] || null)} />
+                  <label className="label">Media (up to 4): images or videos</label>
+                  <input type="file" accept="image/*,video/*" multiple onChange={onPickPostFiles}/>
+                  {pPreviews.length > 0 && (
+                    <div className={`mediaPreview mcount-${pPreviews.length}`}>
+                      {pPreviews.map((m, i) => (
+                        <div key={i} className="mCell">
+                          {m.type === "video" ? (
+                            <video src={m.url} controls muted playsInline />
+                          ) : (
+                            <img src={m.url} alt="" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="actions end">
                   <Button variant="secondary" onClick={()=>setOpen(false)}>Cancel</Button>
@@ -393,6 +478,18 @@ export default function DashboardPage() {
 
         .ok  { margin:10px 0 0; background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; border-radius:8px; padding:8px 10px; font-size:13px; }
         .bad { margin:10px 0 0; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:8px 10px; font-size:13px; }
+
+        /* compact preview grid like X (smaller cells) */
+        .mediaPreview { display: grid; gap: 6px; margin-top: 8px; }
+        .mediaPreview img, .mediaPreview video {
+          width: 100%; height: 100%; display: block; object-fit: cover;
+          border-radius: 10px; border: 1px solid #e5e7eb; background:#000;
+        }
+        .mediaPreview.mcount-1 { grid-template-columns: 1fr; grid-auto-rows: 160px; }
+        .mediaPreview.mcount-2 { grid-template-columns: 1fr 1fr; grid-auto-rows: 130px; }
+        .mediaPreview.mcount-3 { grid-template-columns: 2fr 1fr; grid-auto-rows: 110px; }
+        .mediaPreview.mcount-3 .mCell:nth-child(1){ grid-row: 1 / span 2; height: 226px; }
+        .mediaPreview.mcount-4 { grid-template-columns: 1fr 1fr; grid-auto-rows: 110px; }
       `}</style>
     </main>
   );

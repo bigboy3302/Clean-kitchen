@@ -96,7 +96,6 @@ service cloud.firestore {
       allow create, delete: if isSignedIn() && request.auth.uid == uid;
       allow update: if false;
     }
-
     /* ---------- posts/{postId} and subcollections ---------- */
     match /posts/{postId} {
       allow read: if true; // public

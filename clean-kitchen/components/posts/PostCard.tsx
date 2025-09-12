@@ -1,3 +1,4 @@
+// components/posts/PostCard.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -12,6 +13,7 @@ import {
   setDoc,
   updateDoc,
 } from "firebase/firestore";
+import { hardDeletePost } from "@/lib/hardDelete";
 
 type Author = {
   username?: string | null;
@@ -19,11 +21,22 @@ type Author = {
   avatarURL?: string | null;
 };
 
+type MediaItem = {
+  type: "image" | "video";
+  url: string;
+  storagePath?: string;
+  w?: number;
+  h?: number;
+  aspect?: number;
+  duration?: number;
+};
+
 type Post = {
   id: string;
   uid: string;
   text?: string | null;
-  imageURL?: string | null;
+  imageURL?: string | null; // legacy
+  media?: MediaItem[];      // new
   createdAt?: any;
   author?: Author | null;
   isRepost?: boolean;
@@ -57,55 +70,26 @@ export default function PostCard({ post, meUid }: Props) {
   const meUidLocal = meUid ?? auth.currentUser?.uid ?? null;
   const isOwner = meUidLocal === post.uid;
 
-  // live counts
   useEffect(() => {
-    const stopLikes = onSnapshot(
-      collection(db, "posts", post.id, "likes"),
-      (snap) => setLikes(snap.size)
-    );
-    const stopReposts = onSnapshot(
-      collection(db, "posts", post.id, "reposts"),
-      (snap) => setReposts(snap.size)
-    );
-    const stopComments = onSnapshot(
-      collection(db, "posts", post.id, "comments"),
-      (snap) => setComments(snap.size)
-    );
-    return () => {
-      stopLikes();
-      stopReposts();
-      stopComments();
-    };
+    const stopLikes = onSnapshot(collection(db, "posts", post.id, "likes"), (snap) => setLikes(snap.size));
+    const stopReposts = onSnapshot(collection(db, "posts", post.id, "reposts"), (snap) => setReposts(snap.size));
+    const stopComments = onSnapshot(collection(db, "posts", post.id, "comments"), (snap) => setComments(snap.size));
+    return () => { stopLikes(); stopReposts(); stopComments(); };
   }, [post.id]);
 
-  // live “my state”
   useEffect(() => {
-    if (!meUidLocal) {
-      setILiked(false);
-      setIReposted(false);
-      return;
-    }
+    if (!meUidLocal) { setILiked(false); setIReposted(false); return; }
     const likeDocRef = doc(db, "posts", post.id, "likes", meUidLocal);
     const repostDocRef = doc(db, "posts", post.id, "reposts", meUidLocal);
-
     const stop1 = onSnapshot(likeDocRef, (snap) => setILiked(snap.exists()));
-    const stop2 = onSnapshot(repostDocRef, (snap) =>
-      setIReposted(snap.exists())
-    );
-    return () => {
-      stop1();
-      stop2();
-    };
+    const stop2 = onSnapshot(repostDocRef, (snap) => setIReposted(snap.exists()));
+    return () => { stop1(); stop2(); };
   }, [post.id, meUidLocal]);
 
   async function toggleLike(e?: React.MouseEvent) {
     e?.stopPropagation();
-    if (!meUidLocal) {
-      setErr("Please sign in to like.");
-      return;
-    }
-    setErr(null);
-    setBusyLike(true);
+    if (!meUidLocal) { setErr("Please sign in to like."); return; }
+    setErr(null); setBusyLike(true);
     try {
       const ref = doc(db, "posts", post.id, "likes", meUidLocal);
       if (iLiked) await deleteDoc(ref);
@@ -119,12 +103,8 @@ export default function PostCard({ post, meUid }: Props) {
 
   async function toggleRepost(e?: React.MouseEvent) {
     e?.stopPropagation();
-    if (!meUidLocal) {
-      setErr("Please sign in to repost.");
-      return;
-    }
-    setErr(null);
-    setBusyRepost(true);
+    if (!meUidLocal) { setErr("Please sign in to repost."); return; }
+    setErr(null); setBusyRepost(true);
     try {
       const ref = doc(db, "posts", post.id, "reposts", meUidLocal);
       if (iReposted) await deleteDoc(ref);
@@ -136,7 +116,6 @@ export default function PostCard({ post, meUid }: Props) {
     }
   }
 
-  // confirm delete modal
   function deletePost(e?: React.MouseEvent) {
     e?.stopPropagation();
     setErr(null);
@@ -144,15 +123,8 @@ export default function PostCard({ post, meUid }: Props) {
   }
 
   async function confirmDelete() {
-    if (!meUidLocal) {
-      setErr("Please sign in.");
-      return;
-    }
-    if (meUidLocal !== post.uid) {
-      setErr("Only the author can delete this post.");
-      return;
-    }
-
+    if (!meUidLocal) { setErr("Please sign in."); return; }
+    if (meUidLocal !== post.uid) { setErr("Only the author can delete this post."); return; }
     setBusyDelete(true);
     try {
       await deleteDoc(doc(db, "posts", post.id));
@@ -165,7 +137,7 @@ export default function PostCard({ post, meUid }: Props) {
   }
 
   async function saveEdit() {
-    if (!meUidLocal || meUidLocal !== post.uid) return;
+    if (!isOwner) return;
     try {
       await updateDoc(doc(db, "posts", post.id), {
         text: textDraft.trim() || null,
@@ -194,34 +166,45 @@ export default function PostCard({ post, meUid }: Props) {
     router.push(`/posts/${post.id}`);
   }
 
+  const media: MediaItem[] = Array.isArray(post.media) && post.media.length > 0
+    ? post.media.slice(0, 4)
+    : (post.imageURL ? [{ type: "image", url: post.imageURL }] as MediaItem[] : []);
+
+    async function confirmDelete() {
+      if (!meUidLocal) { setErr("Please sign in."); return; }
+      if (meUidLocal !== post.uid) { setErr("Only the author can delete this post."); return; }
+      setBusyDelete(true);
+      try {
+        await hardDeletePost(post.id, post.uid, post.media);
+        setShowConfirm(false);
+      } catch (e: any) {
+        setErr(e?.message ?? "Failed to delete.");
+      } finally {
+        setBusyDelete(false);
+      }
+    }
+
   return (
     <article
       className="card"
       role="button"
       tabIndex={0}
       onClick={openThread}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") openThread();
-      }}
+      onKeyDown={(e) => { if (e.key === "Enter") openThread(); }}
     >
       <header className="head" onClick={(e) => e.stopPropagation()}>
         <div className="who">
           {post.author?.avatarURL ? (
             <img className="avatar" src={post.author.avatarURL} alt="" />
           ) : (
-            <div className="avatar ph">
-              {authorName[0]?.toUpperCase() || "U"}
-            </div>
+            <div className="avatar ph">{(authorName[0] || "U").toUpperCase()}</div>
           )}
           <div className="names">
             <div className="name">{authorName}</div>
             {created ? (
               <div className="time">
                 {created.toLocaleDateString()}{" "}
-                {created.toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
+                {created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               </div>
             ) : null}
           </div>
@@ -248,263 +231,101 @@ export default function PostCard({ post, meUid }: Props) {
 
       {editing ? (
         <div className="editWrap" onClick={(e) => e.stopPropagation()}>
-          <textarea
-            className="ta"
-            rows={3}
-            value={textDraft}
-            onChange={(e) => setTextDraft(e.target.value)}
-          />
+          <textarea className="ta" rows={3} value={textDraft} onChange={(e) => setTextDraft(e.target.value)} />
           <div className="bar">
-            <button className="btn" onClick={() => setEditing(false)}>
-              Cancel
-            </button>
-            <button className="btn primary" onClick={saveEdit}>
-              Save
-            </button>
+            <button className="btn" onClick={() => setEditing(false)}>Cancel</button>
+            <button className="btn primary" onClick={saveEdit}>Save</button>
           </div>
         </div>
       ) : (
         <>
           {post.text ? <p className="text">{post.text}</p> : null}
-          {post.imageURL ? (
-            <div className="imgWrap">
-              <img className="img" src={post.imageURL} alt="" />
+
+          {media.length > 0 && (
+            <div className={`media grid-${Math.min(4, media.length)}`} onClick={(e)=>e.stopPropagation()}>
+              {media.map((m, i) => (
+                <div key={i} className="mCell">
+                  {m.type === "video" ? (
+                    <video src={m.url} controls playsInline preload="metadata" />
+                  ) : (
+                    <img src={m.url} alt="" />
+                  )}
+                </div>
+              ))}
             </div>
-          ) : null}
+          )}
         </>
       )}
 
-      {err ? (
-        <p className="bad" onClick={(e) => e.stopPropagation()}>
-          {err}
-        </p>
-      ) : null}
+      {err ? <p className="bad" onClick={(e) => e.stopPropagation()}>{err}</p> : null}
 
-      <footer className="bar" onClick={(e) => e.stopPropagation()}>
-        <button className="btn" onClick={openThread} title="Open thread">
-          💬 {comments}
-        </button>
-        <button
-          className={`btn ${iLiked ? "active" : ""}`}
-          onClick={toggleLike}
-          disabled={busyLike}
-          aria-pressed={iLiked}
-          title="Like"
-        >
+      <footer className="bar" onClick={(e)=>e.stopPropagation()}>
+        <button className="btn" onClick={openThread} title="Open thread">💬 {comments}</button>
+        <button className={`btn ${iLiked ? "active" : ""}`} onClick={toggleLike} disabled={busyLike} aria-pressed={iLiked} title="Like">
           ❤️ {likes}
         </button>
-        <button
-          className={`btn ${iReposted ? "active" : ""}`}
-          onClick={toggleRepost}
-          disabled={busyRepost}
-          aria-pressed={iReposted}
-          title="Repost"
-        >
+        <button className={`btn ${iReposted ? "active" : ""}`} onClick={toggleRepost} disabled={busyRepost} aria-pressed={iReposted} title="Repost">
           🔁 {reposts}
         </button>
       </footer>
 
-      {/* Confirm Delete Modal */}
       {showConfirm && (
-        <div
-          className="overlay"
-          role="dialog"
-          aria-modal="true"
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowConfirm(false);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setShowConfirm(false);
-          }}
-        >
+        <div className="overlay" role="dialog" aria-modal="true"
+             onClick={(e) => { e.stopPropagation(); setShowConfirm(false); }}
+             onKeyDown={(e) => { if (e.key === "Escape") setShowConfirm(false); }}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h3 className="modalTitle">Delete post?</h3>
             <p className="modalText">This action can’t be undone.</p>
             <div className="modalRow">
-              <button
-                className="btn"
-                onClick={() => setShowConfirm(false)}
-                disabled={busyDelete}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn danger"
-                onClick={confirmDelete}
-                disabled={busyDelete}
-                autoFocus
-              >
+              <button className="btn" onClick={() => setShowConfirm(false)} disabled={busyDelete}>Cancel</button>
+              <button className="btn danger" onClick={confirmDelete} disabled={busyDelete} autoFocus>
                 {busyDelete ? "Deleting…" : "Delete"}
               </button>
+              
             </div>
           </div>
         </div>
       )}
 
       <style jsx>{`
-        .card {
-          border: 1px solid #e5e7eb;
-          background: #fff;
-          border-radius: 12px;
-          padding: 12px;
-          cursor: pointer;
-        }
-        .card:focus {
-          outline: 2px solid #0f172a;
-          outline-offset: 2px;
-        }
-        .head {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 8px;
-        }
-        .who {
-          display: flex;
-          gap: 10px;
-          align-items: center;
-        }
-        .avatar {
-          width: 36px;
-          height: 36px;
-          border-radius: 999px;
-          object-fit: cover;
-          border: 1px solid #e5e7eb;
-        }
-        .avatar.ph {
-          width: 36px;
-          height: 36px;
-          border-radius: 999px;
-          display: grid;
-          place-items: center;
-          background: #f1f5f9;
-          color: #0f172a;
-          font-weight: 700;
-          border: 1px solid #e2e8f0;
-        }
-        .names {
-          line-height: 1.2;
-        }
-        .name {
-          font-weight: 600;
-          color: #0f172a;
-        }
-        .time {
-          font-size: 12px;
-          color: #6b7280;
-        }
-        .text {
-          margin: 8px 0;
-          color: #0f172a;
-          white-space: pre-wrap;
-        }
-        .imgWrap {
-          border: 1px solid #eef2f7;
-          border-radius: 10px;
-          overflow: hidden;
-          margin-top: 8px;
-        }
-        .img {
-          width: 100%;
-          display: block;
-          object-fit: cover;
-        }
+        .card { border:1px solid #e5e7eb; background:#fff; border-radius:12px; padding:12px; cursor:pointer; }
+        .card:focus { outline: 2px solid #0f172a; outline-offset: 2px; }
+        .head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+        .who { display:flex; gap:10px; align-items:center; }
+        .avatar { width:36px; height:36px; border-radius:999px; object-fit:cover; border:1px solid #e5e7eb; }
+        .avatar.ph { width:36px; height:36px; border-radius:999px; display:grid; place-items:center; background:#f1f5f9; color:#0f172a; font-weight:700; border:1px solid #e2e8f0; }
+        .names { line-height:1.2; }
+        .name { font-weight:600; color:#0f172a; }
+        .time { font-size:12px; color:#6b7280; }
+        .text { margin:8px 0; color:#0f172a; white-space:pre-wrap; }
 
-        .ownerActions {
-          display: flex;
-          gap: 8px;
-        }
-        .editWrap {
-          display: grid;
-          gap: 8px;
-          margin-top: 6px;
-        }
-        .ta {
-          width: 100%;
-          border: 1px solid #d1d5db;
-          border-radius: 10px;
-          padding: 8px 10px;
-        }
+        /* media like X */
+        .media { margin-top:8px; display:grid; gap:8px; }
+        .media img, .media video { width:100%; height:100%; object-fit:cover; display:block; border-radius:10px; border:1px solid #eef2f7; background:#000; }
+        .media.grid-1 { grid-template-columns: 1fr; }
+        .media.grid-2 { grid-template-columns: 1fr 1fr; }
+        .media.grid-3 { grid-template-columns: 2fr 1fr; grid-auto-rows: 180px; }
+        .media.grid-3 .mCell:nth-child(1){ grid-row: 1 / span 2; }
+        .media.grid-4 { grid-template-columns: 1fr 1fr; grid-auto-rows: 160px; }
 
-        .bar {
-          display: flex;
-          gap: 8px;
-          margin-top: 10px;
-        }
-        .btn {
-          border: 1px solid #e5e7eb;
-          background: #fff;
-          border-radius: 10px;
-          padding: 6px 10px;
-          cursor: pointer;
-        }
-        .btn:hover {
-          background: #f8fafc;
-        }
-        .btn.active {
-          background: #0f172a;
-          color: #fff;
-          border-color: #0f172a;
-        }
-        .btn.primary {
-          background: #0f172a;
-          color: #fff;
-          border-color: #0f172a;
-        }
-        .btn.primary:hover {
-          opacity: 0.95;
-        }
-        .btn.danger {
-          background: #fee2e2;
-          color: #991b1b;
-          border-color: #fecaca;
-        }
+        .ownerActions { display:flex; gap:8px; }
+        .editWrap { display:grid; gap:8px; margin-top:6px; }
+        .ta { width:100%; border:1px solid #d1d5db; border-radius:10px; padding:8px 10px; }
 
-        .bad {
-          margin-top: 8px;
-          background: #fef2f2;
-          color: #991b1b;
-          border: 1px solid #fecaca;
-          border-radius: 8px;
-          padding: 6px 8px;
-          font-size: 12px;
-        }
+        .bar { display:flex; gap:8px; margin-top:10px; }
+        .btn { border:1px solid #e5e7eb; background:#fff; border-radius:10px; padding:6px 10px; cursor:pointer; }
+        .btn:hover { background:#f8fafc; }
+        .btn.active, .btn.primary { background:#0f172a; color:#fff; border-color:#0f172a; }
+        .btn.primary:hover { opacity:.95; }
+        .btn.danger { background:#fee2e2; color:#991b1b; border-color:#fecaca; }
 
-        /* modal styles */
-        .overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(2, 6, 23, 0.45);
-          display: grid;
-          place-items: center;
-          padding: 16px;
-          z-index: 1000;
-        }
-        .modal {
-          width: 100%;
-          max-width: 420px;
-          background: #fff;
-          border-radius: 14px;
-          border: 1px solid #e5e7eb;
-          box-shadow: 0 24px 60px rgba(0, 0, 0, 0.2);
-          padding: 16px;
-        }
-        .modalTitle {
-          margin: 0 0 6px;
-          font-size: 18px;
-          font-weight: 800;
-          color: #0f172a;
-        }
-        .modalText {
-          margin: 0 0 12px;
-          color: #475569;
-        }
-        .modalRow {
-          display: flex;
-          gap: 10px;
-          justify-content: flex-end;
-        }
+        .bad { margin-top:8px; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:6px 8px; font-size:12px; }
+
+        .overlay { position:fixed; inset:0; background:rgba(2,6,23,.45); display:grid; place-items:center; padding:16px; z-index:1000; }
+        .modal { width:100%; max-width:420px; background:#fff; border-radius:14px; border:1px solid #e5e7eb; box-shadow:0 24px 60px rgba(0,0,0,.2); padding:16px; }
+        .modalTitle { margin:0 0 6px; font-size:18px; font-weight:800; color:#0f172a; }
+        .modalText { margin:0 0 12px; color:#475569; }
+        .modalRow { display:flex; gap:10px; justify-content:flex-end; }
       `}</style>
     </article>
   );
