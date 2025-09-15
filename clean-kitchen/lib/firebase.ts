@@ -1,14 +1,11 @@
 // lib/firebase.ts
-import { initializeApp, getApps, getApp } from "firebase/app";
+import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-import {
-  initializeAppCheck,
-  ReCaptchaV3Provider,
-  // If you actually registered Enterprise, switch to:
-  // ReCaptchaEnterpriseProvider,
-} from "firebase/app-check";
+import { initializeAppCheck, ReCaptchaV3Provider, AppCheck } from "firebase/app-check";
+// (Optional – harmless if unused)
+import { getFunctions } from "firebase/functions";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
@@ -20,28 +17,39 @@ const firebaseConfig = {
 };
 
 if (Object.values(firebaseConfig).some((v) => !v)) {
-  console.error("Missing Firebase env vars:", firebaseConfig);
   throw new Error("Missing Firebase env vars (.env.local)");
 }
 
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+declare global {
+  // eslint-disable-next-line no-var
+  var _firebaseApp: FirebaseApp | undefined;
+  // eslint-disable-next-line no-var
+  var _appCheck: AppCheck | undefined;
+}
 
-// ---- App Check (client only) ----
-if (typeof window !== "undefined") {
-  // Enable a debug token on localhost to avoid reCAPTCHA blocks while developing.
-  // You’ll see a token in DevTools on first load — add it in Firebase Console → App Check → Debug tokens.
-  // For easy dev, you can leave `true` (don’t ship to production).
-  // @ts-ignore
-  if (process.env.NODE_ENV !== "production") self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+const app = global._firebaseApp ?? (getApps().length ? getApp() : initializeApp(firebaseConfig));
+global._firebaseApp = app;
 
-  initializeAppCheck(app, {
-    provider: new ReCaptchaV3Provider(process.env.NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY!),
-    // If you registered Enterprise instead, use:
-    // provider: new ReCaptchaEnterpriseProvider(process.env.NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY!),
+// App Check – client only
+if (typeof window !== "undefined" && !global._appCheck) {
+  const pinned = process.env.NEXT_PUBLIC_APPCHECK_DEBUG_TOKEN; // optional
+  if (process.env.NODE_ENV !== "production") {
+    // If you don't have a token yet, set to true so the SDK prints one in DevTools.
+    // @ts-ignore
+    self.FIREBASE_APPCHECK_DEBUG_TOKEN = pinned || true;
+  }
+
+  const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY!;
+  global._appCheck = initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider(siteKey),
     isTokenAutoRefreshEnabled: true,
   });
 }
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export const storage = getStorage(app, "gs://clean-kitchen-de925.appspot.com");
+export const storage = getStorage(app);
+// (Optional – harmless if you don't use Functions in Option A)
+export const functions = getFunctions(app);
+
+export default app;

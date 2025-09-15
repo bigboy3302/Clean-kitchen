@@ -1,37 +1,46 @@
 // lib/hardDelete.ts
 import { db, storage } from "@/lib/firebase";
 import {
-  deleteDoc, doc, collection, getDocs,
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  writeBatch,
 } from "firebase/firestore";
-import { deleteObject, ref as sref, listAll } from "firebase/storage";
+import { ref as sref, deleteObject } from "firebase/storage";
 
-type MediaItem = {
-  storagePath?: string;
-};
+type MediaItem = { storagePath?: string };
 
+/**
+ * Fast client-side delete:
+ * - batch delete subcollections (likes/reposts/comments)
+ * - delete only recorded media files (skip slow listAll sweep)
+ * - delete post doc last
+ */
 export async function hardDeletePost(postId: string, uid: string, media?: MediaItem[]) {
-  // 1) delete subcollections
-  for (const sub of ["likes", "reposts", "comments"]) {
-    const snap = await getDocs(collection(db, "posts", postId, sub));
-    await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
-  }
+  // 1) read all subcollections in parallel
+  const [likesSnap, repostsSnap, commentsSnap] = await Promise.all([
+    getDocs(collection(db, "posts", postId, "likes")),
+    getDocs(collection(db, "posts", postId, "reposts")),
+    getDocs(collection(db, "posts", postId, "comments")),
+  ]);
 
-  // 2) delete media files (by recorded storagePath)
-  if (Array.isArray(media)) {
-    await Promise.all(
-      media
-        .filter(m => m?.storagePath)
-        .map(m => deleteObject(sref(storage, m!.storagePath!)))
-    );
-  }
+  // 2) single writeBatch commit for all subcollection docs
+  const batch = writeBatch(db);
+  likesSnap.forEach((d) => batch.delete(d.ref));
+  repostsSnap.forEach((d) => batch.delete(d.ref));
+  commentsSnap.forEach((d) => batch.delete(d.ref));
+  const subcollectionsCommit = batch.commit();
 
-  // (optional) safety: also nuke any stray files in the folder posts/{uid}/{postId}
-  try {
-    const folderRef = sref(storage, `posts/${uid}/${postId}`);
-    const listing = await listAll(folderRef);
-    await Promise.all(listing.items.map(it => deleteObject(it)));
-  } catch (_) {}
+  // 3) delete recorded media paths in parallel (ignore missing)
+  const mediaDeletes = Array.isArray(media)
+    ? media
+        .filter((m): m is { storagePath: string } => !!m?.storagePath)
+        .map((m) => deleteObject(sref(storage, m.storagePath)).catch(() => {}))
+    : [];
 
-  // 3) finally delete the post doc
+  await Promise.all([subcollectionsCommit, ...mediaDeletes]);
+
+  // 4) delete the post doc
   await deleteDoc(doc(db, "posts", postId));
 }

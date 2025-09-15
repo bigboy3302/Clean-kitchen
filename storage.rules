@@ -1,55 +1,162 @@
 rules_version = '2';
-service firebase.storage {
-  match /b/{bucket}/o {
-    // Posts media: posts/{uid}/{postId}/{fileName}
-    match /posts/{uid}/{postId}/{fileName} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == uid;
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /* ---------- Helpers ---------- */
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // Recipe cover: recipeImages/{uid}/{recipeId}
-    match /recipeImages/{uid}/{recipeId} {
-      allow read: if true;
-      allow write: if request.auth != null
-        && request.auth.uid == uid
-        && exists(/databases/(default)/documents/recipes/$(recipeId))
-        && get(/databases/(default)/documents/recipes/$(recipeId)).data.uid == uid;
+    // ensure the doc’s uid matches the signed-in user
+    function creatingAsSelf() {
+      return isSignedIn() && request.resource.data.uid == request.auth.uid;
     }
 
-    // (optional) gallery files: recipeImages/{uid}/{recipeId}/gallery/{fileName}
-    match /recipeImages/{uid}/{recipeId}/gallery/{fileName} {
-      allow read: if true;
-      allow write: if request.auth != null
-        && request.auth.uid == uid
-        && exists(/databases/(default)/documents/recipes/$(recipeId))
-        && get(/databases/(default)/documents/recipes/$(recipeId)).data.uid == uid;
-    }
-    // Public read for post media, only owner can write
-    match /posts/{uid}/{postId}/{fileName} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == uid;
+    // prevent uid from being changed on updates
+    function ownershipUnchanged() {
+      return !('uid' in request.resource.data) ||
+             request.resource.data.uid == resource.data.uid;
     }
 
-    // Public read for recipe images, only owner can write
-    match /recipeImages/{uid}/{rid} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == uid;
-    }
-     // Public read of uploaded media (optional; you can restrict if you want)
-    match /posts/{uid}/{postId}/{fileName} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == uid;
+    // lightweight profanity guard (server-side) – expand as needed
+    function isClean(str) {
+      return !(str.matches('(?i).*(\\b(fuck|shit|bitch|asshole|nigger|retard|cunt)\\b).*'));
     }
 
-    match /recipeImages/{uid}/{recipeId} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == uid;
+    function cleanOptional(field) {
+      return !(field in request.resource.data) ||
+             request.resource.data[field] == null ||
+             isClean(request.resource.data[field]);
     }
 
-    // Fallback: deny everything else
-    match /{allPaths=**} {
-      allow read: if false;
-      allow write: if false;
+    /* ---------- users/{uid} ---------- */
+    match /users/{uid} {
+      // Only you can read your user profile
+      allow read:   if isSignedIn() && request.auth.uid == uid;
+
+      // Create/update/delete only yourself; uid must match
+      allow create: if isSignedIn()
+                    && request.auth.uid == uid
+                    && (!('uid' in request.resource.data) || request.resource.data.uid == uid);
+
+      allow update, delete: if isSignedIn()
+                            && request.auth.uid == uid
+                            && (!('uid' in request.resource.data) || request.resource.data.uid == uid);
+    }
+
+    /* ---------- pantryItems/{id} ---------- */
+    match /pantryItems/{id} {
+      // Read only your own pantry
+      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+
+      // New docs must be created as yourself
+      allow create: if creatingAsSelf();
+
+      // Update must be by owner and must not change uid
+      allow update: if isSignedIn()
+                    && resource.data.uid == request.auth.uid
+                    && ownershipUnchanged();
+
+      // Delete by owner (no need to check request.resource)
+      allow delete: if isSignedIn()
+                    && resource.data.uid == request.auth.uid;
+    }
+
+    /* ---------- recipes/{id} ---------- */
+    match /recipes/{id} {
+      // Public read
+      allow read: if true;
+
+      // Create: must set uid == auth.uid
+      allow create: if isSignedIn()
+                    && request.resource.data.uid == request.auth.uid;
+
+      // Update/Delete: only owner; uid immutable
+      allow update, delete: if isSignedIn()
+                            && resource.data.uid == request.auth.uid
+                            && ownershipUnchanged();
+
+      // photos subcollection (gallery metadata docs)
+      match /photos/{pid} {
+        allow read: if true;
+
+        // Only the recipe owner can add/remove photo docs
+        allow create, delete: if isSignedIn()
+                               && get(/databases/$(database)/documents/recipes/$(id)).data.uid == request.auth.uid;
+
+        // We don't update photo docs; add/delete only
+        allow update: if false;
+      }
+    }
+
+    /* ---------- users/{uid}/favoriteRecipes/{rid} ---------- */
+    match /users/{uid}/favoriteRecipes/{rid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow create, delete: if isSignedIn() && request.auth.uid == uid;
+      allow update: if false;
+    }
+
+    /* ---------- posts/{postId} and subcollections ---------- */
+    match /posts/{postId} {
+      allow read: if true; // public
+
+      // Create: must set uid == auth.uid
+      allow create: if isSignedIn()
+                    && request.resource.data.uid == request.auth.uid;
+
+      // Update/Delete: only post owner; uid must not change
+      allow update, delete: if isSignedIn()
+                            && resource.data.uid == request.auth.uid
+                            && ownershipUnchanged();
+
+      // likes (toggle per user)
+      match /likes/{uid} {
+        allow read: if true;
+        allow create, delete: if isSignedIn() && request.auth.uid == uid;
+        allow update: if false;
+      }
+
+      // reposts (toggle per user)
+      match /reposts/{uid} {
+        allow read: if true;
+        allow create, delete: if isSignedIn() && request.auth.uid == uid;
+        allow update: if false;
+      }
+
+      // comments
+      match /comments/{cid} {
+        allow read: if true;
+
+        // Author creates their own comment
+        allow create: if isSignedIn()
+                      && request.resource.data.uid == request.auth.uid;
+
+        // Update: comment owner OR post owner, but uid must not change
+        allow update: if isSignedIn() && (
+          request.auth.uid == resource.data.uid ||
+          request.auth.uid == get(/databases/$(database)/documents/posts/$(postId)).data.uid
+        ) && ownershipUnchanged();
+
+        // Delete: comment owner OR post owner
+        allow delete: if isSignedIn() && (
+          request.auth.uid == resource.data.uid ||
+          request.auth.uid == get(/databases/$(database)/documents/posts/$(postId)).data.uid
+        );
+      }
+    }
+
+    /* ---------- usernames/{uname} ---------- */
+    match /usernames/{uname} {
+      allow read: if true;
+
+      // Reserve a username once if not taken; must map to your uid
+      allow create: if isSignedIn()
+                    && !exists(/databases/$(database)/documents/usernames/$(uname))
+                    && request.resource.data.uid == request.auth.uid;
+
+      // No updates/deletes to username mapping
+      allow update, delete: if false;
     }
   }
 }
