@@ -1,4 +1,3 @@
-// components/posts/PostCard.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -13,36 +12,25 @@ import {
   setDoc,
   updateDoc,
 } from "firebase/firestore";
-import { hardDeletePost } from "@/lib/HardDelete"; // <-- lowercase
+import { hardDeletePost } from "@/lib/HardDelete";
+import { addMediaToPost, removeMediaFromPost, MediaItem } from "@/lib/postMedia";
 
 type Author = {
   username?: string | null;
   displayName?: string | null;
   avatarURL?: string | null;
 };
-
-type MediaItem = {
-  type: "image" | "video";
-  url: string;
-  storagePath?: string;
-  w?: number;
-  h?: number;
-  aspect?: number;
-  duration?: number;
-};
-
 type Post = {
   id: string;
   uid: string;
   text?: string | null;
-  imageURL?: string | null;
-  media?: MediaItem[];
+  imageURL?: string | null;   // legacy
+  media?: MediaItem[];        // new
   createdAt?: any;
   author?: Author | null;
   isRepost?: boolean;
 };
-
-type Props = { post: Post; meUid?: string | null };
+type Props = { post: Post; meUid?: string | null; };
 
 export default function PostCard({ post, meUid }: Props) {
   const router = useRouter();
@@ -64,39 +52,27 @@ export default function PostCard({ post, meUid }: Props) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  const [adding, setAdding] = useState(false);
+  const [progress, setProgress] = useState(0);
+
   const meUidLocal = meUid ?? auth.currentUser?.uid ?? null;
   const isOwner = meUidLocal === post.uid;
 
   // Live counts
   useEffect(() => {
-    const stopLikes = onSnapshot(
-      collection(db, "posts", post.id, "likes"),
-      (snap) => setLikes(snap.size)
-    );
-    const stopReposts = onSnapshot(
-      collection(db, "posts", post.id, "reposts"),
-      (snap) => setReposts(snap.size)
-    );
-    const stopComments = onSnapshot(
-      collection(db, "posts", post.id, "comments"),
-      (snap) => setComments(snap.size)
-    );
-    return () => {
-      stopLikes(); stopReposts(); stopComments();
-    };
+    const stopLikes = onSnapshot(collection(db, "posts", post.id, "likes"), (s) => setLikes(s.size));
+    const stopReposts = onSnapshot(collection(db, "posts", post.id, "reposts"), (s) => setReposts(s.size));
+    const stopComments = onSnapshot(collection(db, "posts", post.id, "comments"), (s) => setComments(s.size));
+    return () => { stopLikes(); stopReposts(); stopComments(); };
   }, [post.id]);
 
   // My like/repost state
   useEffect(() => {
-    if (!meUidLocal) {
-      setILiked(false);
-      setIReposted(false);
-      return;
-    }
-    const likeDocRef = doc(db, "posts", post.id, "likes", meUidLocal);
-    const repostDocRef = doc(db, "posts", post.id, "reposts", meUidLocal);
-    const stop1 = onSnapshot(likeDocRef, (snap) => setILiked(snap.exists()));
-    const stop2 = onSnapshot(repostDocRef, (snap) => setIReposted(snap.exists()));
+    if (!meUidLocal) { setILiked(false); setIReposted(false); return; }
+    const likeRef = doc(db, "posts", post.id, "likes", meUidLocal);
+    const repRef  = doc(db, "posts", post.id, "reposts", meUidLocal);
+    const stop1 = onSnapshot(likeRef, (snap) => setILiked(snap.exists()));
+    const stop2 = onSnapshot(repRef,  (snap) => setIReposted(snap.exists()));
     return () => { stop1(); stop2(); };
   }, [post.id, meUidLocal]);
 
@@ -106,63 +82,40 @@ export default function PostCard({ post, meUid }: Props) {
     setErr(null); setBusyLike(true);
     try {
       const ref = doc(db, "posts", post.id, "likes", meUidLocal);
-      if (iLiked) await deleteDoc(ref);
-      else await setDoc(ref, { createdAt: serverTimestamp() });
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to like.");
-    } finally {
-      setBusyLike(false);
-    }
+      if (iLiked) await deleteDoc(ref); else await setDoc(ref, { createdAt: serverTimestamp() });
+    } catch (e:any) { setErr(e?.message ?? "Failed to like."); }
+    finally { setBusyLike(false); }
   }
-
   async function toggleRepost(e?: React.MouseEvent) {
     e?.stopPropagation();
     if (!meUidLocal) { setErr("Please sign in to repost."); return; }
     setErr(null); setBusyRepost(true);
     try {
       const ref = doc(db, "posts", post.id, "reposts", meUidLocal);
-      if (iReposted) await deleteDoc(ref);
-      else await setDoc(ref, { createdAt: serverTimestamp() });
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to repost.");
-    } finally {
-      setBusyRepost(false);
-    }
+      if (iReposted) await deleteDoc(ref); else await setDoc(ref, { createdAt: serverTimestamp() });
+    } catch (e:any) { setErr(e?.message ?? "Failed to repost."); }
+    finally { setBusyRepost(false); }
   }
 
   function deletePost(e?: React.MouseEvent) {
     e?.stopPropagation();
-    setErr(null);
-    setShowConfirm(true);
+    setErr(null); setShowConfirm(true);
   }
-
   async function confirmDelete() {
     if (!meUidLocal) { setErr("Please sign in."); return; }
     if (meUidLocal !== post.uid) { setErr("Only the author can delete this post."); return; }
-
     setBusyDelete(true);
-    try {
-      // Optimistic UI: close the dialog immediately
-      await hardDeletePost(post.id, post.uid, post.media);
-      setShowConfirm(false);
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to delete.");
-    } finally {
-      setBusyDelete(false);
-    }
+    try { await hardDeletePost(post.id, post.uid, post.media); setShowConfirm(false); }
+    catch (e:any) { setErr(e?.message ?? "Failed to delete."); }
+    finally { setBusyDelete(false); }
   }
 
   async function saveEdit() {
     if (!isOwner) return;
     try {
-      await updateDoc(doc(db, "posts", post.id), {
-        text: textDraft.trim() || null,
-        updatedAt: serverTimestamp(),
-      });
+      await updateDoc(doc(db, "posts", post.id), { text: textDraft.trim() || null, updatedAt: serverTimestamp() });
       setEditing(false);
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to save.");
-    }
+    } catch (e:any) { setErr(e?.message ?? "Failed to save."); }
   }
 
   const created = useMemo(() => {
@@ -183,9 +136,41 @@ export default function PostCard({ post, meUid }: Props) {
   const media: MediaItem[] =
     Array.isArray(post.media) && post.media.length > 0
       ? post.media.slice(0, 4)
-      : post.imageURL
-      ? [{ type: "image", url: post.imageURL }]
+      : post.imageURL ? [{ mid: "legacy", type:"image", url: post.imageURL, storagePath:"" }] as any
       : [];
+
+  async function onPickMoreMedia(e: React.ChangeEvent<HTMLInputElement>) {
+    e.stopPropagation();
+    if (!isOwner || !meUidLocal) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setErr(null); setAdding(true); setProgress(0);
+    try {
+      await addMediaToPost({
+        uid: meUidLocal,
+        postId: post.id,
+        files,
+        limit: 4,
+        onProgress: (p) => setProgress(p),
+      });
+    } catch (e:any) {
+      const msg = e?.message || String(e);
+      setErr(
+        msg.includes("appcheck") || msg.includes("AppCheck") || msg.includes("permission")
+          ? "Upload blocked by App Check / permissions. Make sure your debug token is registered and rules allow writes."
+          : msg
+      );
+    } finally {
+      setAdding(false); setProgress(1); (e.target as HTMLInputElement).value = "";
+    }
+  }
+
+  async function onRemove(item: MediaItem, e?: React.MouseEvent) {
+    e?.stopPropagation();
+    if (!isOwner) return;
+    try { await removeMediaFromPost({ postId: post.id, item }); }
+    catch (e:any) { setErr(e?.message ?? "Failed to remove media."); }
+  }
 
   return (
     <article
@@ -197,19 +182,17 @@ export default function PostCard({ post, meUid }: Props) {
     >
       <header className="head" onClick={(e) => e.stopPropagation()}>
         <div className="who">
-          {post.author?.avatarURL ? (
-            <img className="avatar" src={post.author.avatarURL} alt="" />
-          ) : (
-            <div className="avatar ph">{(authorName[0] || "U").toUpperCase()}</div>
-          )}
+          {post.author?.avatarURL
+            ? <img className="avatar" src={post.author.avatarURL} alt="" />
+            : <div className="avatar ph">{(authorName[0] || "U").toUpperCase()}</div>}
           <div className="names">
             <div className="name">{authorName}</div>
-            {created ? (
+            {created && (
               <div className="time">
                 {created.toLocaleDateString()}{" "}
                 {created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               </div>
-            ) : null}
+            )}
           </div>
         </div>
 
@@ -218,9 +201,18 @@ export default function PostCard({ post, meUid }: Props) {
             <button
               className="btn"
               onClick={(e) => { e.stopPropagation(); setEditing(true); setTextDraft(post.text ?? ""); }}
-            >
-              Edit
-            </button>
+            >Edit</button>
+            <label className="btn" onClick={(e)=>e.stopPropagation()}>
+              {adding ? `Uploading… ${Math.round(progress*100)}%` : "Add media"}
+              <input
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                onChange={onPickMoreMedia}
+                style={{ display: "none" }}
+                disabled={adding}
+              />
+            </label>
             <button className="btn danger" onClick={deletePost}>Delete</button>
           </div>
         )}
@@ -228,24 +220,28 @@ export default function PostCard({ post, meUid }: Props) {
 
       {editing ? (
         <div className="editWrap" onClick={(e) => e.stopPropagation()}>
-          <textarea className="ta" rows={3} value={textDraft} onChange={(e) => setTextDraft(e.target.value)} />
+          <textarea className="ta" rows={3} value={textDraft} onChange={(e)=>setTextDraft(e.target.value)} />
           <div className="bar">
-            <button className="btn" onClick={() => setEditing(false)}>Cancel</button>
+            <button className="btn" onClick={()=>setEditing(false)}>Cancel</button>
             <button className="btn primary" onClick={saveEdit}>Save</button>
           </div>
         </div>
       ) : (
         <>
           {post.text ? <p className="text">{post.text}</p> : null}
+
           {media.length > 0 && (
-            <div className={`media grid-${Math.min(4, media.length)}`} onClick={(e) => e.stopPropagation()}>
+            <div className={`media grid-${Math.min(4, media.length)}`} onClick={(e)=>e.stopPropagation()}>
               {media.map((m, i) => (
-                <div key={i} className="mCell">
+                <div key={m.mid ?? i} className="mCell">
                   {m.type === "video" ? (
                     <video src={m.url} controls playsInline preload="metadata" />
                   ) : (
                     <img src={m.url} alt="" />
                   )}
+                  {isOwner && m.storagePath ? (
+                    <button className="rm" onClick={(e)=>onRemove(m,e)} title="Remove media">✕</button>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -253,31 +249,24 @@ export default function PostCard({ post, meUid }: Props) {
         </>
       )}
 
-      {err ? <p className="bad" onClick={(e) => e.stopPropagation()}>{err}</p> : null}
+      {err ? <p className="bad" onClick={(e)=>e.stopPropagation()}>{err}</p> : null}
 
-      <footer className="bar" onClick={(e) => e.stopPropagation()}>
+      <footer className="bar" onClick={(e)=>e.stopPropagation()}>
         <button className="btn" onClick={openThread} title="Open thread">💬 {comments}</button>
-        <button className={`btn ${iLiked ? "active" : ""}`} onClick={toggleLike} disabled={busyLike} aria-pressed={iLiked} title="Like">
-          ❤️ {likes}
-        </button>
-        <button className={`btn ${iReposted ? "active" : ""}`} onClick={toggleRepost} disabled={busyRepost} aria-pressed={iReposted} title="Repost">
-          🔁 {reposts}
-        </button>
+        <button className={`btn ${iLiked ? "active" : ""}`} onClick={toggleLike} disabled={busyLike} aria-pressed={iLiked} title="Like">❤️ {likes}</button>
+        <button className={`btn ${iReposted ? "active" : ""}`} onClick={toggleRepost} disabled={busyRepost} aria-pressed={iReposted} title="Repost">🔁 {reposts}</button>
       </footer>
 
       {showConfirm && (
-        <div
-          className="overlay"
-          role="dialog"
-          aria-modal="true"
-          onClick={(e) => { e.stopPropagation(); setShowConfirm(false); }}
-          onKeyDown={(e) => { if (e.key === "Escape") setShowConfirm(false); }}
+        <div className="overlay" role="dialog" aria-modal="true"
+          onClick={(e)=>{ e.stopPropagation(); setShowConfirm(false); }}
+          onKeyDown={(e)=>{ if (e.key === "Escape") setShowConfirm(false); }}
         >
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal" onClick={(e)=>e.stopPropagation()}>
             <h3 className="modalTitle">Delete post?</h3>
             <p className="modalText">This action can’t be undone.</p>
             <div className="modalRow">
-              <button className="btn" onClick={() => setShowConfirm(false)} disabled={busyDelete}>Cancel</button>
+              <button className="btn" onClick={()=>setShowConfirm(false)} disabled={busyDelete}>Cancel</button>
               <button className="btn danger" onClick={confirmDelete} disabled={busyDelete} autoFocus>
                 {busyDelete ? "Deleting…" : "Delete"}
               </button>
@@ -298,6 +287,9 @@ export default function PostCard({ post, meUid }: Props) {
         .time { font-size:12px; color:#6b7280; }
         .text { margin:8px 0; color:#0f172a; white-space:pre-wrap; }
 
+        .ownerActions { display:flex; gap:8px; align-items:center; }
+        .rm { position:absolute; top:6px; right:6px; border:none; background:#0f172a; color:#fff; border-radius:8px; padding:2px 7px; cursor:pointer; }
+
         .media { margin-top:8px; display:grid; gap:8px; }
         .media img, .media video { width:100%; height:100%; object-fit:cover; display:block; border-radius:10px; border:1px solid #eef2f7; background:#000; }
         .media.grid-1 { grid-template-columns: 1fr; }
@@ -305,8 +297,8 @@ export default function PostCard({ post, meUid }: Props) {
         .media.grid-3 { grid-template-columns: 2fr 1fr; grid-auto-rows: 180px; }
         .media.grid-3 .mCell:nth-child(1){ grid-row: 1 / span 2; }
         .media.grid-4 { grid-template-columns: 1fr 1fr; grid-auto-rows: 160px; }
+        .mCell { position:relative; }
 
-        .ownerActions { display:flex; gap:8px; }
         .editWrap { display:grid; gap:8px; margin-top:6px; }
         .ta { width:100%; border:1px solid #d1d5db; border-radius:10px; padding:8px 10px; }
 
