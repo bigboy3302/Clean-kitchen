@@ -1,40 +1,51 @@
+// app/posts/[id]/page.tsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { auth, db } from "@/lib/firebase";
 import {
-  addDoc,
   collection,
-  deleteDoc,
   doc,
+  getDoc,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
+  addDoc,
+  deleteDoc,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import CommentInput from "@/components/comments/CommentInput";
+import CommentItem from "@/components/comments/CommentItem";
 
-type Author = { username?: string | null; displayName?: string | null; avatarURL?: string | null } | null;
+type Author = {
+  username?: string | null;
+  displayName?: string | null;
+  avatarURL?: string | null;
+} | null;
+
 type Post = {
   id: string;
   uid: string;
   text?: string | null;
-  imageURL?: string | null;
+  imageURL?: string | null;   // legacy
   createdAt?: any;
   author?: Author;
 };
 
-type Comment = {
+type CommentDoc = {
   id: string;
   uid: string;
-  text: string;
+  text?: string | null;
   createdAt?: any;
+  author?: {
+    displayName?: string | null;
+    username?: string | null;
+    avatarURL?: string | null;
+  } | null;
 };
-
-const BAD = ["fuck","shit","bitch","asshole","cunt","nigger","faggot"];
-const clean = (t:string) => !t || !BAD.some(w => t.toLowerCase().includes(w));
 
 export default function PostThreadPage() {
   const { id } = useParams<{ id: string }>();
@@ -44,50 +55,67 @@ export default function PostThreadPage() {
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [comments, setComments] = useState<CommentDoc[]>([]);
 
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [cmt, setCmt] = useState("");
-  const [busy, setBusy] = useState(false);
-
+  // auth
   useEffect(() => {
-    const stopAuth = onAuthStateChanged(auth, (u) => setMe(u || null));
-    return () => stopAuth();
+    const stop = onAuthStateChanged(auth, (u) => setMe(u || null));
+    return () => stop();
   }, []);
 
-  // load post
+  // load post once
   useEffect(() => {
     if (!id) return;
-    const ref = doc(db, "posts", id);
-    const stop = onSnapshot(
-      ref,
-      (snap) => {
-        setLoading(false);
-        if (!snap.exists()) { setPost(null); setErr("Post not found."); return; }
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, "posts", String(id)));
+        if (!snap.exists()) {
+          setLoading(false);
+          router.replace("/dashboard");
+          return;
+        }
         setPost({ id: snap.id, ...(snap.data() as any) });
-        setErr(null);
-      },
-      (e) => { setLoading(false); setErr(e?.message ?? "Failed to load post."); }
-    );
-    return () => stop();
-  }, [id]);
+        setLoading(false);
+      } catch (e: any) {
+        setErr(e?.message ?? "Failed to load post.");
+        setLoading(false);
+      }
+    })();
+  }, [id, router]);
 
-  // load comments (new → old like X)
+  // live comments (newest first)
   useEffect(() => {
     if (!id) return;
-    const q = query(collection(db, "posts", id, "comments"), orderBy("createdAt", "desc"));
+    const qy = query(
+      collection(db, "posts", String(id), "comments"),
+      orderBy("createdAt", "desc")
+    );
     const stop = onSnapshot(
-      q,
-      (snap) => setComments(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }))),
+      qy,
+      (snap) => {
+        const list: CommentDoc[] = snap.docs.map((d) => {
+          const data = d.data() || {};
+          return {
+            id: d.id,
+            uid: data.uid,
+            text: data.text ?? "",
+            createdAt: data.createdAt,
+            author: data.author ?? null,
+          };
+        });
+        setComments(list);
+      },
       (e) => setErr(e?.message ?? "Failed to load comments.")
     );
     return () => stop();
   }, [id]);
 
+  // helpers
   const created = useMemo(() => {
     const ts: any = post?.createdAt;
     if (!ts) return null;
-    if (typeof ts.toDate === "function") return ts.toDate();
-    if (typeof ts.seconds === "number") return new Date(ts.seconds * 1000);
+    if (typeof ts?.toDate === "function") return ts.toDate();
+    if (typeof ts?.seconds === "number") return new Date(ts.seconds * 1000);
     return null;
   }, [post?.createdAt]);
 
@@ -96,36 +124,21 @@ export default function PostThreadPage() {
     post?.author?.displayName ||
     (post?.uid ? post.uid.slice(0, 6) : "Unknown");
 
-  async function addComment() {
-    setErr(null);
-    if (!me) { setErr("Please sign in to comment."); return; }
-    const text = cmt.trim();
-    if (!text) return;
-    if (!clean(text)) { setErr("Please avoid offensive words."); return; }
-    setBusy(true);
-    try {
-      await addDoc(collection(db, "posts", String(id), "comments"), {
-        uid: me.uid,
-        text,
-        createdAt: serverTimestamp(),
-      });
-      setCmt("");
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to add comment.");
-    } finally {
-      setBusy(false);
-    }
+  async function handleQuickReply(text: string) {
+    if (!me) throw new Error("Please sign in to comment.");
+    await addDoc(collection(db, "posts", String(id), "comments"), {
+      uid: me.uid,
+      text: text.trim(),
+      createdAt: serverTimestamp(),
+      // (optional) denormalized author snapshot
+      author: post?.author ?? null,
+    });
   }
 
-  async function deleteComment(cid: string, ownerUid: string) {
-    setErr(null);
-    try {
-      // Firestore rules allow: comment owner OR post owner
-      if (!me) throw new Error("Not signed in.");
-      await deleteDoc(doc(db, "posts", String(id), "comments", cid));
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to delete comment.");
-    }
+  async function deleteComment(cid: string) {
+    if (!me) return;
+    // Rules allow: comment owner OR post owner
+    await deleteDoc(doc(db, "posts", String(id), "comments", cid));
   }
 
   if (loading) return <main className="wrap"><div className="card">Loading…</div></main>;
@@ -144,12 +157,12 @@ export default function PostThreadPage() {
             )}
             <div className="names">
               <div className="name">{authorName}</div>
-              {created && (
+              {created ? (
                 <div className="time">
                   {created.toLocaleDateString()}{" "}
                   {created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </div>
-              )}
+              ) : null}
             </div>
           </div>
           <div className="actions">
@@ -164,49 +177,52 @@ export default function PostThreadPage() {
           </div>
         ) : null}
 
-        {/* composer */}
+        {/* compose box */}
         <section className="compose">
-          <textarea
-            className="ta"
-            rows={3}
-            value={cmt}
-            onChange={(e) => setCmt(e.target.value)}
+          <CommentInput
+            disabled={!me}
             placeholder={me ? "Write a reply…" : "Sign in to reply"}
-            disabled={!me || busy}
+            onSubmit={handleQuickReply}
           />
-          <div className="row end">
-            <button className="btn primary" onClick={addComment} disabled={!me || !cmt.trim() || busy}>
-              {busy ? "Sending…" : "Reply"}
-            </button>
-          </div>
-          {err && <p className="bad">{err}</p>}
+          {!me ? <p className="muted" style={{ marginTop: 6 }}>You must be signed in to comment.</p> : null}
         </section>
 
         {/* comments */}
         <section className="comments">
+          <h2 className="h2">Comments</h2>
           {comments.length === 0 ? (
             <p className="muted">No replies yet.</p>
           ) : (
             <ul className="list">
-              {comments.map(cm => {
-                const ts: any = cm.createdAt;
-                const d =
-                  ts && typeof ts.toDate === "function" ? ts.toDate() :
-                  ts && typeof ts.seconds === "number" ? new Date(ts.seconds * 1000) : null;
-                const canDelete = me && (me.uid === cm.uid || me.uid === post.uid);
+              {comments.map((c) => {
+                const ts: any = c.createdAt;
+                const createdAt =
+                  ts?.toDate ? ts.toDate() :
+                  typeof ts?.seconds === "number" ? new Date(ts.seconds * 1000) :
+                  undefined;
+                const canDelete = me && (me.uid === c.uid || me.uid === post.uid);
+                const displayName =
+                  c.author?.displayName ||
+                  c.author?.username ||
+                  (c.uid ? c.uid.slice(0, 6) : "user");
                 return (
-                  <li key={cm.id} className="cmt">
+                  <li key={c.id} className="cmt">
                     <div className="cmtHead">
-                      <span className="cmtWho">{cm.uid?.slice(0,6) || "user"}</span>
+                      <span className="cmtWho">{displayName}</span>
                       <span className="dot">•</span>
-                      <span className="cmtTime">{d ? d.toLocaleString() : ""}</span>
-                      {canDelete && (
-                        <button className="link danger" onClick={() => deleteComment(cm.id, cm.uid)}>
+                      <span className="cmtTime">{createdAt ? createdAt.toLocaleString() : ""}</span>
+                      {canDelete ? (
+                        <button className="link danger" onClick={() => deleteComment(c.id)}>
                           delete
                         </button>
-                      )}
+                      ) : null}
                     </div>
-                    <p className="cmtText">{cm.text}</p>
+
+                    <CommentItem
+                      text={c.text ?? ""}
+                      previewChars={800}
+                      previewLines={10}
+                    />
                   </li>
                 );
               })}
@@ -229,27 +245,24 @@ export default function PostThreadPage() {
         .time { font-size:12px; color:#6b7280; }
         .actions .btn { border:1px solid #e5e7eb; border-radius:10px; padding:6px 10px; background:#fff; }
 
-        .text { margin:8px 0; color:#0f172a; white-space:pre-wrap; }
+        .text { margin:8px 0; color:#0f172a; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; }
+
         .imgWrap { border:1px solid #eef2f7; border-radius:10px; overflow:hidden; margin:10px 0; }
         .img { width:100%; display:block; object-fit:cover; }
 
-        .compose { margin-top:8px; }
-        .ta { width:100%; border:1px solid #d1d5db; border-radius:10px; padding:10px; background:#fff; }
-        .row { display:flex; gap:8px; margin-top:8px; }
-        .row.end { justify-content:flex-end; }
-        .btn.primary { background:#0f172a; color:#fff; border:1px solid #0f172a; border-radius:10px; padding:6px 12px; }
-        .bad { margin-top:6px; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:6px 8px; font-size:12px; }
+        .compose { margin-top:12px; }
 
-        .comments { margin-top:12px; }
-        .muted { color:#6b7280; }
-        .list { list-style:none; padding:0; margin:0; display:grid; gap:10px; }
+        .comments { margin-top:16px; }
+        .h2 { font-size: 18px; font-weight: 700; margin: 0 0 10px; color:#0f172a; }
+        .muted { color:#6b7280; font-size:14px; }
+        .list { list-style:none; padding:0; margin:0; display:grid; gap:12px; }
+
         .cmt { border-top:1px solid #f1f5f9; padding-top:10px; }
-        .cmtHead { display:flex; align-items:center; gap:6px; font-size:13px; color:#334155; }
+        .cmtHead { display:flex; align-items:center; gap:6px; font-size:13px; color:#334155; flex-wrap:wrap; }
         .cmtWho { font-weight:600; color:#0f172a; }
         .dot { color:#94a3b8; }
         .link { background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; }
         .link.danger { color:#b91c1c; }
-        .cmtText { margin:4px 0 0; white-space:pre-wrap; color:#0f172a; }
       `}</style>
     </main>
   );

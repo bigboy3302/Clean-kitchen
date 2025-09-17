@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FirebaseError } from "firebase/app";
 import { useRouter } from "next/navigation";
 import {
@@ -12,7 +12,24 @@ import { auth, db } from "@/lib/firebase";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import PantryCard, { PantryCardItem } from "@/components/pantry/PantryCard";
+import BarcodeScanner from "@/components/scanner/BarcodeScanner";
+import { getNutrition, Nutrition } from "@/lib/nutrition";
 
+// ---------- utils ----------
+function startOfToday(): Date { const d=new Date(); d.setHours(0,0,0,0); return d; }
+function toDate(ts?: Timestamp | null) {
+  if (!ts) return null;
+  if (typeof (ts as any)?.toDate === "function") return (ts as any).toDate() as Date;
+  if (typeof (ts as any)?.seconds === "number") return new Date((ts as any).seconds * 1000);
+  return null;
+}
+function isExpired(expiresAt?: Timestamp | null) { const d = toDate(expiresAt); return d ? d < startOfToday() : false; }
+function titleCase(s: string) {
+  return s.trim().replace(/\s+/g," ").toLowerCase().replace(/\b\w/g,(c)=>c.toUpperCase());
+}
+function todayStr(){ const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`; }
+
+// ---------- types ----------
 type Item = {
   id: string;
   uid: string;
@@ -20,12 +37,8 @@ type Item = {
   quantity: number;
   createdAt?: Timestamp | null;
   expiresAt?: Timestamp | null;
+  nutrition?: Nutrition;
 };
-
-function todayStr() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
-}
 
 export default function PantryPage() {
   const router = useRouter();
@@ -33,6 +46,10 @@ export default function PantryPage() {
   const [name, setName] = useState("");
   const [qty, setQty] = useState<number>(1);
   const [date, setDate] = useState<string>("");
+
+  const [nutrition, setNutrition] = useState<Nutrition | null>(null);   // <—
+  const [showScanner, setShowScanner] = useState(false);                // <—
+
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -40,13 +57,12 @@ export default function PantryPage() {
   const stopRef = useRef<null | (() => void)>(null);
   const minDate = todayStr();
 
+  // auth + live list
   useEffect(() => {
     const stopAuth = onAuthStateChanged(auth, (u) => {
-      // clean any previous listener
       if (stopRef.current) { stopRef.current(); stopRef.current = null; }
 
       if (!u) {
-        // hard redirect before any UI flashes
         router.replace("/auth/login");
         setItems([]);
         return;
@@ -60,10 +76,7 @@ export default function PantryPage() {
       const stop = onSnapshot(
         qy,
         (snap) => {
-          const rows = snap.docs.map((d) => {
-            const data = d.data() as Omit<Item, "id">;
-            return { id: d.id, ...data } as Item;
-          });
+          const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Item, "id">) })) as Item[];
           setItems(rows);
           setErr(null);
         },
@@ -77,6 +90,12 @@ export default function PantryPage() {
       stopAuth();
     };
   }, [router]);
+
+  const active = useMemo(() => items.filter((it) => !isExpired(it.expiresAt)), [items]);
+  const expired = useMemo(() => {
+    const list = items.filter((it) => isExpired(it.expiresAt));
+    return list.sort((a,b) => (toDate(a.expiresAt)?.getTime() ?? 0) - (toDate(b.expiresAt)?.getTime() ?? 0));
+  }, [items]);
 
   function isPast(s: string) { return !!s && s < minDate; }
 
@@ -96,13 +115,14 @@ export default function PantryPage() {
 
       await addDoc(collection(db, "pantryItems"), {
         uid: u.uid,
-        name: name.trim(),
+        name: titleCase(name),
         quantity: Number(qty) || 1,
         createdAt: serverTimestamp(),
-        expiresAt, // null is allowed; avoid undefined
+        expiresAt,
+        nutrition: nutrition || null,     // <— store if we have it
       });
 
-      setName(""); setQty(1); setDate("");
+      setName(""); setQty(1); setDate(""); setNutrition(null);
     } catch (e: any) {
       setErr(e?.message ?? "Failed to add item.");
     } finally {
@@ -114,12 +134,11 @@ export default function PantryPage() {
     setErr(null);
     try {
       const toWrite: any = {
-        name: patch.name ?? "",
+        name: titleCase(patch.name ?? ""),
         quantity: Number(patch.quantity) || 1,
         expiresAt: null,
       };
       if (patch.expiresAt) {
-        // Accept TS-like or Timestamp or string
         if (typeof patch.expiresAt?.toDate === "function") {
           toWrite.expiresAt = patch.expiresAt;
         } else if (typeof patch.expiresAt?.seconds === "number") {
@@ -143,15 +162,28 @@ export default function PantryPage() {
       console.error("Delete failed:", e);
       const code = (e as FirebaseError).code || "";
       if (code === "permission-denied") {
-        setErr(
-          "You can only delete items you own. Old items created without a 'uid' need a one-time cleanup."
-        );
+        setErr("You can only delete items you own. Old items created without a 'uid' need a one-time cleanup.");
       } else {
         setErr((e as any)?.message ?? "Failed to delete.");
       }
-      throw e; // surface to the caller if you `await onDelete()`
+      throw e;
     }
   }
+
+  // ---- barcode flow ----
+  async function handleDetected(code: string) {
+    setShowScanner(false);
+    setErr(null);
+    const info = await getNutrition(code);
+    if (!info) {
+      setNutrition(null);
+      setErr("No nutrition found for this barcode.");
+      return;
+    }
+    setNutrition(info);
+    if (info.productName) setName(info.productName);
+  }
+
   return (
     <main className="container">
       <h1 className="pageTitle">Pantry</h1>
@@ -159,13 +191,51 @@ export default function PantryPage() {
       <section className="card addCard">
         <h2 className="cardTitle">Add product</h2>
         <div className="grid2">
-          <Input label="Name" value={name} onChange={(e:any)=>setName(e.target.value)} placeholder="Milk" />
-          <Input label="Quantity" type="number" min={1} value={String(qty)} onChange={(e:any)=>setQty(Number(e.target.value))} />
+          <Input
+            label="Name"
+            value={name}
+            onChange={(e:any)=>setName(titleCase(e.target.value))}
+            placeholder="Milk"
+          />
+          <Input
+            label="Quantity"
+            type="number"
+            min={1}
+            value={String(qty)}
+            onChange={(e:any)=>setQty(Number(e.target.value))}
+          />
           <div>
             <label className="label">Expiry date (optional)</label>
-            <input className="textInput" type="date" min={minDate} value={date} onChange={(e)=>setDate(e.currentTarget.value)} />
+            <input
+              className="textInput"
+              type="date"
+              min={minDate}
+              value={date}
+              onChange={(e)=>setDate(e.currentTarget.value)}
+            />
           </div>
         </div>
+
+        <div className="row" style={{marginTop:10, alignItems:"center", gap:8}}>
+          <Button variant="secondary" onClick={()=>setShowScanner(true)}>📷 Scan barcode</Button>
+          {nutrition ? (
+            <div className="nutriPreview">
+              {nutrition.image ? <img src={nutrition.image} alt="" /> : null}
+              <div className="npText">
+                <div className="npName">{nutrition.productName || "Product"}</div>
+                <div className="npLine">
+                  <span>{nutrition.calories ?? "–"} kcal</span>
+                  <span>P {nutrition.protein ?? "–"}g</span>
+                  <span>C {nutrition.carbs ?? "–"}g</span>
+                  <span>S {nutrition.sugars ?? "–"}g</span>
+                  <span>F {nutrition.fat ?? "–"}g</span>
+                </div>
+              </div>
+              <button className="link" onClick={()=>setNutrition(null)}>Clear</button>
+            </div>
+          ) : <span className="muted">No scan yet</span>}
+        </div>
+
         {err && <p className="error">{err}</p>}
         <div className="actions">
           <Button onClick={addItem} disabled={busy}>{busy ? "Saving…" : "Add item"}</Button>
@@ -173,14 +243,16 @@ export default function PantryPage() {
       </section>
 
       <section className="list">
-        {items.length === 0 ? (
-          <div className="empty">Your pantry is empty. Add something!</div>
+        <h2 className="cardTitle">Active</h2>
+        {active.length === 0 ? (
+          <div className="empty">No active items.</div>
         ) : (
           <div className="gridCards">
-            {items.map((it) => (
+            {active.map((it) => (
               <PantryCard
                 key={it.id}
                 item={it as unknown as PantryCardItem}
+                expired={false}
                 onDelete={() => removeItem(it.id)}
                 onSave={(patch) => saveItem(it.id, patch)}
               />
@@ -188,6 +260,29 @@ export default function PantryPage() {
           </div>
         )}
       </section>
+
+      <section className="list" style={{ marginTop: 18 }}>
+        <h2 className="cardTitle">Expired</h2>
+        {expired.length === 0 ? (
+          <div className="empty">No expired items 🎉</div>
+        ) : (
+          <div className="gridCards">
+            {expired.map((it) => (
+              <PantryCard
+                key={it.id}
+                item={it as unknown as PantryCardItem}
+                expired={true}
+                onDelete={() => removeItem(it.id)}
+                onSave={() => Promise.resolve()}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {showScanner && (
+        <BarcodeScanner onDetected={handleDetected} onClose={()=>setShowScanner(false)} />
+      )}
 
       <style jsx>{`
         .container { max-width: 960px; margin: 0 auto; padding: 24px; }
@@ -200,6 +295,14 @@ export default function PantryPage() {
         @media (max-width: 560px){ .grid2{ grid-template-columns:1fr; } }
         .label { display:block; margin-bottom:6px; font-size:.9rem; color:#111827; font-weight:500; }
         .textInput { width:100%; border:1px solid #d1d5db; border-radius:12px; padding:10px 12px; font-size:14px; }
+        .row { display:flex; gap:8px; }
+        .muted { color:#6b7280; font-size:13px; }
+        .nutriPreview { display:flex; gap:10px; align-items:center; padding:8px; border:1px solid #e5e7eb; border-radius:12px; }
+        .nutriPreview img { width:42px; height:42px; border-radius:8px; object-fit:cover; border:1px solid #e5e7eb; }
+        .npText { display:flex; flex-direction:column; gap:2px; }
+        .npName { font-weight:600; color:#0f172a; }
+        .npLine { display:flex; gap:8px; color:#475569; font-size:13px; }
+        .link { border:none; background:none; color:#2563eb; cursor:pointer; text-decoration:underline; }
         .actions { margin-top:10px; display:flex; gap:12px; justify-content:flex-end; }
         .list { margin-top:8px; }
         .gridCards { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:16px; }

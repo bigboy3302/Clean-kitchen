@@ -1,3 +1,4 @@
+// components/posts/PostCard.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -19,54 +20,58 @@ type Author = {
   username?: string | null;
   displayName?: string | null;
   avatarURL?: string | null;
-};
+} | null;
+
 type Post = {
   id: string;
   uid: string;
   text?: string | null;
-  imageURL?: string | null;   // legacy
-  media?: MediaItem[];        // new
+  imageURL?: string | null;   // legacy single image
+  media?: MediaItem[];        // modern media array
   createdAt?: any;
-  author?: Author | null;
+  author?: Author;
   isRepost?: boolean;
 };
-type Props = { post: Post; meUid?: string | null; };
+
+type Props = { post: Post; meUid?: string | null };
 
 export default function PostCard({ post, meUid }: Props) {
   const router = useRouter();
 
+  // counts
   const [likes, setLikes] = useState(0);
   const [reposts, setReposts] = useState(0);
   const [comments, setComments] = useState(0);
 
+  // my interactions
   const [iLiked, setILiked] = useState(false);
   const [iReposted, setIReposted] = useState(false);
 
+  // busy flags
   const [busyLike, setBusyLike] = useState(false);
   const [busyRepost, setBusyRepost] = useState(false);
   const [busyDelete, setBusyDelete] = useState(false);
+  const [adding, setAdding] = useState(false);
 
+  // ui state
   const [editing, setEditing] = useState(false);
   const [textDraft, setTextDraft] = useState(post.text ?? "");
-
   const [showConfirm, setShowConfirm] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-
-  const [adding, setAdding] = useState(false);
   const [progress, setProgress] = useState(0);
 
   const meUidLocal = meUid ?? auth.currentUser?.uid ?? null;
   const isOwner = meUidLocal === post.uid;
 
-  // Live counts
+  // live counters
   useEffect(() => {
-    const stopLikes = onSnapshot(collection(db, "posts", post.id, "likes"), (s) => setLikes(s.size));
-    const stopReposts = onSnapshot(collection(db, "posts", post.id, "reposts"), (s) => setReposts(s.size));
-    const stopComments = onSnapshot(collection(db, "posts", post.id, "comments"), (s) => setComments(s.size));
+    const stopLikes = onSnapshot(collection(db, "posts", post.id, "likes"), s => setLikes(s.size));
+    const stopReposts = onSnapshot(collection(db, "posts", post.id, "reposts"), s => setReposts(s.size));
+    const stopComments = onSnapshot(collection(db, "posts", post.id, "comments"), s => setComments(s.size));
     return () => { stopLikes(); stopReposts(); stopComments(); };
   }, [post.id]);
 
-  // My like/repost state
+  // my like/repost flags
   useEffect(() => {
     if (!meUidLocal) { setILiked(false); setIReposted(false); return; }
     const likeRef = doc(db, "posts", post.id, "likes", meUidLocal);
@@ -78,48 +83,73 @@ export default function PostCard({ post, meUid }: Props) {
 
   async function toggleLike(e?: React.MouseEvent) {
     e?.stopPropagation();
-    if (!meUidLocal) { setErr("Please sign in to like."); return; }
+    if (!meUidLocal) return setErr("Please sign in to like.");
     setErr(null); setBusyLike(true);
     try {
       const ref = doc(db, "posts", post.id, "likes", meUidLocal);
       if (iLiked) await deleteDoc(ref); else await setDoc(ref, { createdAt: serverTimestamp() });
-    } catch (e:any) { setErr(e?.message ?? "Failed to like."); }
-    finally { setBusyLike(false); }
+    } catch (e: any) {
+      setErr(`Failed to like: ${e?.code || e?.message || "unknown error"}`);
+    } finally { setBusyLike(false); }
   }
+
   async function toggleRepost(e?: React.MouseEvent) {
     e?.stopPropagation();
-    if (!meUidLocal) { setErr("Please sign in to repost."); return; }
+    if (!meUidLocal) return setErr("Please sign in to repost.");
     setErr(null); setBusyRepost(true);
     try {
       const ref = doc(db, "posts", post.id, "reposts", meUidLocal);
       if (iReposted) await deleteDoc(ref); else await setDoc(ref, { createdAt: serverTimestamp() });
-    } catch (e:any) { setErr(e?.message ?? "Failed to repost."); }
-    finally { setBusyRepost(false); }
+    } catch (e: any) {
+      setErr(`Failed to repost: ${e?.code || e?.message || "unknown error"}`);
+    } finally { setBusyRepost(false); }
   }
 
+  /** OPEN CONFIRM MODAL */
   function deletePost(e?: React.MouseEvent) {
     e?.stopPropagation();
-    setErr(null); setShowConfirm(true);
+    setErr(null);
+    setShowConfirm(true);
   }
+
+  /** YOUR REQUESTED confirmDelete VERSION */
   async function confirmDelete() {
-    if (!meUidLocal) { setErr("Please sign in."); return; }
-    if (meUidLocal !== post.uid) { setErr("Only the author can delete this post."); return; }
+    const me = auth.currentUser?.uid || null;
+    if (!me) {
+      setErr("Please sign in.");
+      return;
+    }
+    if (post.uid !== me) {
+      setErr(`You can only delete your own post. (post.uid=${post.uid}, you=${me})`);
+      return;
+    }
     setBusyDelete(true);
-    try { await hardDeletePost(post.id, post.uid, post.media); setShowConfirm(false); }
-    catch (e:any) { setErr(e?.message ?? "Failed to delete."); }
-    finally { setBusyDelete(false); }
+    try {
+      await hardDeletePost(post.id, post.uid, post.media);
+      setShowConfirm(false);
+    } catch (e: any) {
+      // Show the precise reason (from HardDelete)
+      setErr(e?.message || "Failed to delete.");
+    } finally {
+      setBusyDelete(false);
+    }
   }
 
   async function saveEdit() {
     if (!isOwner) return;
     try {
-      await updateDoc(doc(db, "posts", post.id), { text: textDraft.trim() || null, updatedAt: serverTimestamp() });
+      await updateDoc(doc(db, "posts", post.id), {
+        text: textDraft.trim() || null,
+        updatedAt: serverTimestamp(),
+      });
       setEditing(false);
-    } catch (e:any) { setErr(e?.message ?? "Failed to save."); }
+    } catch (e: any) {
+      setErr(`Failed to save: ${e?.code || e?.message || "unknown error"}`);
+    }
   }
 
   const created = useMemo(() => {
-    const ts = post.createdAt as any;
+    const ts: any = post.createdAt;
     if (!ts) return null;
     if (typeof ts?.toDate === "function") return ts.toDate();
     if (typeof ts?.seconds === "number") return new Date(ts.seconds * 1000);
@@ -131,20 +161,27 @@ export default function PostCard({ post, meUid }: Props) {
     post.author?.displayName ||
     (post.uid ? post.uid.slice(0, 6) : "Unknown");
 
-  function openThread() { router.push(`/posts/${post.id}`); }
+  function openThread() {
+    if (!showConfirm) router.push(`/posts/${post.id}`);
+  }
 
+  // media to render (fallback to legacy imageURL)
   const media: MediaItem[] =
     Array.isArray(post.media) && post.media.length > 0
       ? post.media.slice(0, 4)
-      : post.imageURL ? [{ mid: "legacy", type:"image", url: post.imageURL, storagePath:"" }] as any
+      : post.imageURL
+      ? [{ mid: "legacy", type: "image", url: post.imageURL, storagePath: "" } as any]
       : [];
 
   async function onPickMoreMedia(e: React.ChangeEvent<HTMLInputElement>) {
     e.stopPropagation();
     if (!isOwner || !meUidLocal) return;
     const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-    setErr(null); setAdding(true); setProgress(0);
+    if (!files.length) return;
+
+    setErr(null);
+    setAdding(true);
+    setProgress(0);
     try {
       await addMediaToPost({
         uid: meUidLocal,
@@ -153,15 +190,18 @@ export default function PostCard({ post, meUid }: Props) {
         limit: 4,
         onProgress: (p) => setProgress(p),
       });
-    } catch (e:any) {
-      const msg = e?.message || String(e);
+    } catch (e: any) {
+      const msg = String(e?.message || e);
+      const low = msg.toLowerCase();
       setErr(
-        msg.includes("appcheck") || msg.includes("AppCheck") || msg.includes("permission")
-          ? "Upload blocked by App Check / permissions. Make sure your debug token is registered and rules allow writes."
+        low.includes("appcheck") || low.includes("permission")
+          ? "Upload blocked by App Check / permissions. Verify your debug token and Storage rules."
           : msg
       );
     } finally {
-      setAdding(false); setProgress(1); (e.target as HTMLInputElement).value = "";
+      setAdding(false);
+      setProgress(1);
+      (e.target as HTMLInputElement).value = "";
     }
   }
 
@@ -169,7 +209,7 @@ export default function PostCard({ post, meUid }: Props) {
     e?.stopPropagation();
     if (!isOwner) return;
     try { await removeMediaFromPost({ postId: post.id, item }); }
-    catch (e:any) { setErr(e?.message ?? "Failed to remove media."); }
+    catch (e: any) { setErr(`Failed to remove media: ${e?.code || e?.message || "unknown error"}`); }
   }
 
   return (
@@ -201,9 +241,12 @@ export default function PostCard({ post, meUid }: Props) {
             <button
               className="btn"
               onClick={(e) => { e.stopPropagation(); setEditing(true); setTextDraft(post.text ?? ""); }}
-            >Edit</button>
-            <label className="btn" onClick={(e)=>e.stopPropagation()}>
-              {adding ? `Uploading… ${Math.round(progress*100)}%` : "Add media"}
+            >
+              Edit
+            </button>
+
+            <label className="btn" onClick={(e) => e.stopPropagation()}>
+              {adding ? `Uploading… ${Math.round(progress * 100)}%` : "Add media"}
               <input
                 type="file"
                 accept="image/*,video/*"
@@ -211,18 +254,22 @@ export default function PostCard({ post, meUid }: Props) {
                 onChange={onPickMoreMedia}
                 style={{ display: "none" }}
                 disabled={adding}
+                aria-disabled={adding}
               />
             </label>
-            <button className="btn danger" onClick={deletePost}>Delete</button>
+
+            <button className="btn danger" onClick={deletePost}>
+              Delete
+            </button>
           </div>
         )}
       </header>
 
       {editing ? (
         <div className="editWrap" onClick={(e) => e.stopPropagation()}>
-          <textarea className="ta" rows={3} value={textDraft} onChange={(e)=>setTextDraft(e.target.value)} />
+          <textarea className="ta" rows={3} value={textDraft} onChange={(e) => setTextDraft(e.target.value)} />
           <div className="bar">
-            <button className="btn" onClick={()=>setEditing(false)}>Cancel</button>
+            <button className="btn" onClick={() => setEditing(false)}>Cancel</button>
             <button className="btn primary" onClick={saveEdit}>Save</button>
           </div>
         </div>
@@ -231,16 +278,14 @@ export default function PostCard({ post, meUid }: Props) {
           {post.text ? <p className="text">{post.text}</p> : null}
 
           {media.length > 0 && (
-            <div className={`media grid-${Math.min(4, media.length)}`} onClick={(e)=>e.stopPropagation()}>
+            <div className={`media grid-${Math.min(4, media.length)}`} onClick={(e) => e.stopPropagation()}>
               {media.map((m, i) => (
                 <div key={m.mid ?? i} className="mCell">
-                  {m.type === "video" ? (
-                    <video src={m.url} controls playsInline preload="metadata" />
-                  ) : (
-                    <img src={m.url} alt="" />
-                  )}
+                  {m.type === "video"
+                    ? <video src={m.url} controls playsInline preload="metadata" />
+                    : <img src={m.url} alt="" />}
                   {isOwner && m.storagePath ? (
-                    <button className="rm" onClick={(e)=>onRemove(m,e)} title="Remove media">✕</button>
+                    <button className="rm" onClick={(e) => onRemove(m, e)} title="Remove media">✕</button>
                   ) : null}
                 </div>
               ))}
@@ -249,24 +294,47 @@ export default function PostCard({ post, meUid }: Props) {
         </>
       )}
 
-      {err ? <p className="bad" onClick={(e)=>e.stopPropagation()}>{err}</p> : null}
+      {err ? <p className="bad" onClick={(e) => e.stopPropagation()}>{err}</p> : null}
 
-      <footer className="bar" onClick={(e)=>e.stopPropagation()}>
+      <footer className="bar" onClick={(e) => e.stopPropagation()}>
         <button className="btn" onClick={openThread} title="Open thread">💬 {comments}</button>
-        <button className={`btn ${iLiked ? "active" : ""}`} onClick={toggleLike} disabled={busyLike} aria-pressed={iLiked} title="Like">❤️ {likes}</button>
-        <button className={`btn ${iReposted ? "active" : ""}`} onClick={toggleRepost} disabled={busyRepost} aria-pressed={iReposted} title="Repost">🔁 {reposts}</button>
+        <button
+          className={`btn ${iLiked ? "active" : ""}`}
+          onClick={toggleLike}
+          disabled={busyLike}
+          aria-pressed={iLiked}
+          aria-disabled={busyLike}
+          title="Like"
+        >
+          ❤️ {likes}
+        </button>
+        <button
+          className={`btn ${iReposted ? "active" : ""}`}
+          onClick={toggleRepost}
+          disabled={busyRepost}
+          aria-pressed={iReposted}
+          aria-disabled={busyRepost}
+          title="Repost"
+        >
+          🔁 {reposts}
+        </button>
       </footer>
 
       {showConfirm && (
-        <div className="overlay" role="dialog" aria-modal="true"
-          onClick={(e)=>{ e.stopPropagation(); setShowConfirm(false); }}
-          onKeyDown={(e)=>{ if (e.key === "Escape") setShowConfirm(false); }}
+        <div
+          className="overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => { e.stopPropagation(); setShowConfirm(false); }}
+          onKeyDown={(e) => { if (e.key === "Escape") setShowConfirm(false); }}
         >
-          <div className="modal" onClick={(e)=>e.stopPropagation()}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h3 className="modalTitle">Delete post?</h3>
             <p className="modalText">This action can’t be undone.</p>
             <div className="modalRow">
-              <button className="btn" onClick={()=>setShowConfirm(false)} disabled={busyDelete}>Cancel</button>
+              <button className="btn" onClick={() => setShowConfirm(false)} disabled={busyDelete}>
+                Cancel
+              </button>
               <button className="btn danger" onClick={confirmDelete} disabled={busyDelete} autoFocus>
                 {busyDelete ? "Deleting…" : "Delete"}
               </button>
@@ -285,8 +353,7 @@ export default function PostCard({ post, meUid }: Props) {
         .names { line-height:1.2; }
         .name { font-weight:600; color:#0f172a; }
         .time { font-size:12px; color:#6b7280; }
-        .text { margin:8px 0; color:#0f172a; white-space:pre-wrap; }
-
+        .text { margin:8px 0; color:#0f172a; white-space:pre-wrap; word-wrap:break-word; overflow-wrap:anywhere; }
         .ownerActions { display:flex; gap:8px; align-items:center; }
         .rm { position:absolute; top:6px; right:6px; border:none; background:#0f172a; color:#fff; border-radius:8px; padding:2px 7px; cursor:pointer; }
 

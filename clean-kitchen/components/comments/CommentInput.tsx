@@ -1,68 +1,80 @@
+// components/comments/CommentInput.tsx
 "use client";
 
 import { useState } from "react";
-import { auth, db } from "@/lib/firebase";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+
+const MAX = 25000;
 
 export default function CommentInput({
-  postId,
-  onPosted,
-  maxChars = 25000,
+  disabled,
+  placeholder = "Write a comment…",
+  onSubmit,
 }: {
-  postId: string;
-  onPosted?: () => void;
-  maxChars?: number;
+  disabled?: boolean;
+  placeholder?: string;
+  onSubmit: (text: string) => Promise<void> | void;
 }) {
-  const [val, setVal] = useState("");
+  const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  const user = auth.currentUser;
+  const [err, setErr] = useState<string | null>(null);
 
-  async function submit() {
-    if (!user) return;
-    const text = val.trim();
-    if (!text) return;
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (disabled || busy) return;
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setErr(null);
     setBusy(true);
     try {
-      const author = {
-        displayName: user.displayName || null,
-        username: user.email?.split("@")[0] || null,
-        avatarURL: user.photoURL || null,
-      };
-      await addDoc(collection(db, "posts", postId, "comments"), {
-        uid: user.uid,
-        text: text.slice(0, maxChars),
-        createdAt: serverTimestamp(),
-        author,
-      });
-      setVal("");
-      onPosted?.();
+      await onSubmit(trimmed);
+      setText("");
+    } catch (e: any) {
+      setErr(e?.message ?? "Failed to post comment.");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="comment-input">
+    <form onSubmit={handleSubmit} className="cmtForm">
       <textarea
-        rows={3}
-        placeholder="Write a reply…"
-        value={val}
-        onChange={(e) => setVal(e.target.value.slice(0, maxChars))}
-        className="comment-ta"
+        className="ta"
+        rows={4}
+        value={text}
+        disabled={disabled || busy}
+        placeholder={placeholder}
+        onChange={(e) => setText(e.target.value.slice(0, MAX))}
       />
-      <div className="comment-input-bar">
-        <span className="comment-count">
-          {val.length}/{maxChars}
-        </span>
-        <button
-          className="btn-base btn--sm btn--primary"
-          onClick={submit}
-          disabled={busy || !val.trim()}
-          type="button"
-        >
-          {busy ? "Posting…" : "Reply"}
+      <div className="row">
+        <small className="muted">{text.length} / {MAX}</small>
+        <button className="btn" type="submit" disabled={disabled || busy || !text.trim()}>
+          {busy ? "Posting…" : "Post"}
         </button>
       </div>
-    </div>
+      {err ? <p className="err">{err}</p> : null}
+
+      <style jsx>{`
+        .cmtForm { display:grid; gap:8px; }
+        .ta {
+          width:100%;
+          border:1px solid #d1d5db;
+          border-radius:10px;
+          padding:10px;
+          background:#fff;
+          resize:vertical;
+          white-space:pre-wrap;
+          overflow-wrap:anywhere;
+          word-break:break-word;
+        }
+        .row { display:flex; gap:8px; align-items:center; justify-content:space-between; }
+        .muted { color:#6b7280; font-size:12px; }
+        .btn {
+          border:1px solid #0f172a; background:#0f172a; color:#fff;
+          border-radius:10px; padding:6px 12px; cursor:pointer;
+        }
+        .btn[disabled] { opacity:.6; cursor:not-allowed; }
+        .err { margin:0; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:6px 8px; font-size:12px; }
+      `}</style>
+    </form>
   );
 }

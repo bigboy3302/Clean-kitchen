@@ -1,23 +1,43 @@
 // lib/comments.ts
 import { db } from "@/lib/firebase";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  serverTimestamp,
+} from "firebase/firestore";
 
-export async function addComment(opts: {
-  postId: string;
-  uid: string;
-  text: string;
-}) {
+export async function addComment(opts: { postId: string; uid: string; text: string }) {
   const { postId, uid, text } = opts;
 
-  // Client-side guard (helps UX; server rules still enforce)
-  const MAX = 25000;
-  const trimmed = (text ?? "").slice(0, MAX);
+  const trimmed = text.trim().slice(0, 25000);
+  if (!trimmed) return;
 
-  if (!trimmed) throw new Error("Comment cannot be empty.");
+  // (optional) light author copy
+  let author:
+    | { displayName?: string | null; username?: string | null; avatarURL?: string | null }
+    | null = null;
+
+  try {
+    const uref = doc(db, "users", uid);
+    const usnap = await getDoc(uref);
+    if (usnap.exists()) {
+      const u = usnap.data() || {};
+      author = {
+        displayName: u.firstName
+          ? `${u.firstName}${u.lastName ? " " + u.lastName : ""}`
+          : u.displayName || null,
+        username: u.username || null,
+        avatarURL: u.photoURL || null,
+      };
+    }
+  } catch { /* ok if profile is missing */ }
 
   await addDoc(collection(db, "posts", postId, "comments"), {
     uid,
     text: trimmed,
+    author,
     createdAt: serverTimestamp(),
   });
 }

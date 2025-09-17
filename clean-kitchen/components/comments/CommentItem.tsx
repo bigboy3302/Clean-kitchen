@@ -1,83 +1,62 @@
+// components/comments/CommentItem.tsx
 "use client";
+
 import { useMemo, useState } from "react";
 
-type Props = {
-  authorName: string;
-  avatarURL?: string;
-  createdAt?: Date | null;
-  text: string;
-  /** chars to keep before showing “Show more” */
-  previewChars?: number;
-  /** visual line clamp when collapsed */
-  previewLines?: number;
-};
-
 export default function CommentItem({
-  authorName,
-  avatarURL,
-  createdAt,
   text,
   previewChars = 800,
   previewLines = 10,
-}: Props) {
+}: {
+  text: string;
+  previewChars?: number;
+  previewLines?: number;
+}) {
+  const needsClamp = (text?.length || 0) > previewChars;
   const [expanded, setExpanded] = useState(false);
 
-  const needsClamp = useMemo(
-    () => (text?.length ?? 0) > previewChars,
-    [text, previewChars]
-  );
+  const shown = useMemo(() => {
+    if (expanded) return text;
+    if (!needsClamp) return text;
+    return text.slice(0, previewChars);
+  }, [text, expanded, needsClamp, previewChars]);
 
   return (
-    <li className="comment-row">
-      {/* avatar */}
-      <div className="comment-avatar">
-        {avatarURL ? (
-          <img src={avatarURL} alt="" className="comment-avatar-img" />
-        ) : (
-          <div className="comment-avatar-ph">
-            {(authorName?.[0] || "U").toUpperCase()}
-          </div>
-        )}
-      </div>
+    <div className="comment">
+      <p className={`cmtText ${expanded ? "" : "clamped"}`}>{shown}</p>
+      {needsClamp && (
+        <button className="show" onClick={() => setExpanded((s) => !s)}>
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      )}
 
-      {/* text column */}
-      <div className="comment-textcol">
-        <div className="comment-meta">
-          <span className="comment-author">{authorName}</span>
-          {createdAt ? (
-            <span className="comment-time">
-              {createdAt.toLocaleDateString()}{" "}
-              {createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            </span>
-          ) : null}
-        </div>
-
-        <div className="comment-bubble">
-          <p
-            className={[
-              "comment-text",
-              !expanded && needsClamp ? "comment-clamp" : "",
-            ].join(" ")}
-            style={
-              !expanded && needsClamp
-                ? { WebkitLineClamp: previewLines }
-                : undefined
-            }
-          >
-            {text}
-          </p>
-
-          {needsClamp && (
-            <button
-              className="comment-more"
-              onClick={() => setExpanded((s) => !s)}
-              type="button"
-            >
-              {expanded ? "Show less" : "Show more"}
-            </button>
-          )}
-        </div>
-      </div>
-    </li>
+      <style jsx>{`
+        .comment { display:grid; gap:6px; }
+        .cmtText {
+          margin:4px 0 0;
+          color:#0f172a;
+          white-space:pre-wrap;
+          /* keep text inside box, even with long tokens/urls */
+          overflow-wrap:anywhere;
+          word-break:break-word;
+        }
+        .cmtText.clamped {
+          display:-webkit-box;
+          -webkit-line-clamp:${previewLines};
+          -webkit-box-orient:vertical;
+          overflow:hidden;
+        }
+        .show {
+          align-self:start;
+          border:none;
+          background:transparent;
+          color:#0f172a;
+          text-decoration:underline;
+          cursor:pointer;
+          padding:0;
+          font-size:13px;
+        }
+      `}</style>
+    </div>
   );
 }
