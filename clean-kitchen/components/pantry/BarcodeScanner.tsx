@@ -1,177 +1,151 @@
 // components/pantry/BarcodeScanner.tsx
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import {
-  BrowserMultiFormatReader,
-  IScannerControls,
-} from "@zxing/browser";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { BrowserMultiFormatReader, IScannerControls } from "@zxing/browser";
+import { DecodeHintType, BarcodeFormat } from "@zxing/library";
 
 type Props = {
   onDetected: (code: string) => void;
-  // If false, camera is hidden and only photo upload is offered
-  allowCamera?: boolean;
+  /** start the camera automatically */
+  autoStart?: boolean;
+  /** max video height in px (visual size only) */
+  maxHeight?: number;
 };
 
-export default function BarcodeScanner({ onDetected, allowCamera = true }: Props) {
+export default function BarcodeScanner({
+  onDetected,
+  autoStart = true,
+  maxHeight = 560, // larger preview
+}: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
-  const [mode, setMode] = useState<"camera" | "photo">(allowCamera ? "camera" : "photo");
+  const [running, setRunning] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
-  // Start/stop camera decoding
+  // Decode hints: focus on common retail formats + try harder on tough scans
+  const hints = useMemo(() => {
+    const m = new Map();
+    m.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.UPC_E,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.CODE_128,
+      BarcodeFormat.CODE_39,
+      BarcodeFormat.ITF,
+    ]);
+    m.set(DecodeHintType.TRY_HARDER, true);
+    return m;
+  }, []);
+
+  // Reader options (THIS replaces the old numeric arg)
+  const readerOpts = useMemo(
+    () => ({
+      delayBetweenScanAttempts: 200,  // ms between attempts
+      delayBetweenScanSuccess: 500,   // brief pause after a success
+      // tryPlayVideo: true,          // (optional) defaults are fine
+      // unMuteVideoElement: true,
+    }),
+    []
+  );
+
   useEffect(() => {
-    if (!allowCamera || mode !== "camera") {
-      stopCamera();
-      return;
-    }
-
-    let mounted = true;
-    const reader = new BrowserMultiFormatReader();
-
-    async function start() {
-      setErr(null);
-      try {
-        // Use constraints API (3 args): constraints, videoEl, callback
-        const controls = await reader.decodeFromConstraints(
-          {
-            video: { facingMode: { ideal: "environment" } },
-            audio: false,
-          } as MediaStreamConstraints,
-          videoRef.current!,
-          (result, _err) => {
-            if (!mounted) return;
-            if (result) {
-              onDetected(result.getText());
-              // stop after first successful scan
-              stopCamera();
-              setMode("photo"); // optional: switch to photo tab after success
-            }
-          }
-        );
-        controlsRef.current = controls;
-      } catch (e: any) {
-        // Typical reasons: http (not https), permission denied, no camera
-        setErr(
-          e?.name === "NotAllowedError"
-            ? "Camera permission was denied. Use the Photo tab instead."
-            : e?.message || "Camera failed to start. Use the Photo tab."
-        );
-      }
-    }
-
-    if (videoRef.current) {
-      // iOS/Safari playback hints
-      videoRef.current.setAttribute("playsInline", "true");
-      videoRef.current.muted = true;
-      videoRef.current.autoplay = true;
-      start();
-    }
-
-    return () => {
-      mounted = false;
-      stopCamera();
-    };
+    if (autoStart) startCamera();
+    return () => stopCamera();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, allowCamera]);
+  }, []);
+
+  async function startCamera() {
+    if (running) return;
+    setErr(null);
+    try {
+      if (videoRef.current) {
+        videoRef.current.setAttribute("playsInline", "true");
+        videoRef.current.autoplay = true;
+        videoRef.current.muted = true;
+      }
+
+      const constraints: MediaStreamConstraints = {
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          frameRate: { ideal: 30 },
+        },
+        audio: false,
+      };
+
+      // ✅ pass hints + options object
+      const reader = new BrowserMultiFormatReader(hints, readerOpts);
+      const controls = await reader.decodeFromConstraints(
+        constraints,
+        videoRef.current!,
+        (result) => {
+          if (result) {
+            stopCamera();                 // stop after first hit
+            onDetected(result.getText()); // send the code up
+          }
+        }
+      );
+      controlsRef.current = controls;
+      setRunning(true);
+    } catch (e: any) {
+      setErr(
+        e?.name === "NotAllowedError"
+          ? "Camera permission was denied. Allow it in the browser settings."
+          : e?.message || "Camera failed to start. Check HTTPS or try again."
+      );
+      setRunning(false);
+    }
+  }
 
   function stopCamera() {
-    try {
-      controlsRef.current?.stop();
-    } catch {}
+    try { controlsRef.current?.stop(); } catch {}
     controlsRef.current = null;
 
-    // Also stop tracks explicitly (defensive)
     const v = videoRef.current;
     const stream = (v?.srcObject as MediaStream | null) || null;
     if (stream) {
       stream.getTracks().forEach((t) => t.stop());
       if (v) v.srcObject = null;
     }
-  }
-
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.currentTarget.files?.[0];
-    if (!file) return;
-    setBusy(true);
-    setErr(null);
-    try {
-      const url = URL.createObjectURL(file);
-      const reader = new BrowserMultiFormatReader();
-      const result = await reader.decodeFromImageUrl(url);
-      URL.revokeObjectURL(url);
-      onDetected(result.getText());
-    } catch (e: any) {
-      setErr(e?.message || "Could not read a barcode from the image.");
-    } finally {
-      setBusy(false);
-      e.currentTarget.value = "";
-    }
+    setRunning(false);
   }
 
   return (
     <div className="scanWrap">
-      <div className="tabs">
-        {allowCamera && (
-          <button
-            type="button"
-            className={`tab ${mode === "camera" ? "active" : ""}`}
-            onClick={() => setMode("camera")}
-          >
-            Camera
-          </button>
+      <div className="row">
+        {!running ? (
+          <button type="button" className="btn" onClick={startCamera}>Start camera</button>
+        ) : (
+          <button type="button" className="btn" onClick={stopCamera}>Stop camera</button>
         )}
-        <button
-          type="button"
-          className={`tab ${mode === "photo" ? "active" : ""}`}
-          onClick={() => setMode("photo")}
-        >
-          Photo
-        </button>
       </div>
 
-      {mode === "camera" && allowCamera ? (
-        <div className="cam">
-          <video ref={videoRef} className="video" />
-          <div className="hint">
-            If it’s black: use HTTPS, allow camera permissions, and use the Photo tab if your device has no camera.
-          </div>
+      <div className="cam">
+        <video ref={videoRef} className="video" />
+        <div className="hint">
+          Tip: fill most of the frame, keep lines horizontal, avoid glare. Works best over HTTPS.
         </div>
-      ) : (
-        <div className="upload">
-          <input
-            type="file"
-            accept="image/*"
-            // lets mobile open rear camera app to take a photo if they want
-            capture="environment"
-            onChange={handleFile}
-            disabled={busy}
-          />
-          {busy && <div className="hint">Reading image…</div>}
-        </div>
-      )}
+      </div>
 
       {err && <p className="err">{err}</p>}
 
       <style jsx>{`
         .scanWrap { display:grid; gap:10px; }
-        .tabs { display:flex; gap:8px; }
-        .tab {
-          border:1px solid #e5e7eb; background:#fff; padding:6px 10px;
-          border-radius:10px; cursor:pointer;
-        }
-        .tab.active { background:#0f172a; color:#fff; border-color:#0f172a; }
+        .row { display:flex; gap:8px; }
+        .btn { border:1px solid #e5e7eb; background:#fff; padding:8px 12px; border-radius:10px; cursor:pointer; }
         .cam { display:grid; gap:6px; }
         .video {
-          width:100%;
-          max-height:360px;
+          width: 100%;
+          max-height: ${maxHeight}px;
           background:#000;
           border-radius:12px;
           border:1px solid #e5e7eb;
-          object-fit:cover;
+          object-fit: cover;
+          aspect-ratio: 16 / 9;
         }
-        .upload { display:grid; gap:8px; }
         .hint { color:#64748b; font-size:12px; }
         .err {
           background:#fef2f2; color:#991b1b;

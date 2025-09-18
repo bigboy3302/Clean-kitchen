@@ -1,3 +1,4 @@
+// app/pantry/page.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -5,59 +6,104 @@ import { FirebaseError } from "firebase/app";
 import { useRouter } from "next/navigation";
 import {
   addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query,
-  serverTimestamp, Timestamp, updateDoc, where
+  serverTimestamp, Timestamp, updateDoc, where, getDocs, limit, increment
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import PantryCard, { PantryCardItem } from "@/components/pantry/PantryCard";
-import BarcodeScanner from "@/components/scanner/BarcodeScanner";
-import { getNutrition, Nutrition } from "@/lib/nutrition";
+import BarcodeScanner from "@/components/pantry/BarcodeScanner";
+import PantryHelpButton from "@/components/pantry/PantryHelpButton";
+import { fetchNutritionByBarcode, NutritionInfo } from "@/lib/nutrition";
 
-// ---------- utils ----------
-function startOfToday(): Date { const d=new Date(); d.setHours(0,0,0,0); return d; }
-function toDate(ts?: Timestamp | null) {
+/* ------------ helpers ------------- */
+const looksLikeBarcode = (s: string) => /^\d{6,}$/.test(s);
+function capFirst(s: string) { return s.replace(/^\p{L}/u, (m) => m.toUpperCase()); }
+function todayStr() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+}
+function startOfToday(): Date { const d = new Date(); d.setHours(0,0,0,0); return d; }
+function toDate(ts?: Timestamp | {seconds:number;nanoseconds:number} | null) {
   if (!ts) return null;
-  if (typeof (ts as any)?.toDate === "function") return (ts as any).toDate() as Date;
-  if (typeof (ts as any)?.seconds === "number") return new Date((ts as any).seconds * 1000);
+  const anyTs = ts as any;
+  if (typeof anyTs?.toDate === "function") return anyTs.toDate();
+  if (typeof anyTs?.seconds === "number") return new Date(anyTs.seconds * 1000);
   return null;
 }
-function isExpired(expiresAt?: Timestamp | null) { const d = toDate(expiresAt); return d ? d < startOfToday() : false; }
-function titleCase(s: string) {
-  return s.trim().replace(/\s+/g," ").toLowerCase().replace(/\b\w/g,(c)=>c.toUpperCase());
-}
-function todayStr(){ const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`; }
 
-// ---------- types ----------
+/** Reduce noisy product titles to a clean generic English name. */
+function normalizeProductName(raw: string): string {
+  const original = raw || "";
+  let s = original.toLowerCase()
+    .replace(/[_\-]+/g, " ")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!s) return "";
+
+  if (s.includes("nutella")) return "Nutella";
+
+  const cat = (out: string, ...keys: string[]) =>
+    keys.some(k => s.includes(k)) ? out : null;
+
+  return (
+    cat("Pasta", "pasta", "spaghetti", "penne", "fusilli", "rigatoni", "macaroni", "farfalle", "tagliatelle") ||
+    cat("Rice", "rice", "basmati", "jasmine", "arborio", "risotto") ||
+    cat("Milk", "milk") ||
+    cat("Yogurt", "yoghurt", "yogurt") ||
+    cat("Bread", "bread", "baguette", "loaf") ||
+    cat("Oats", "oat", "oats", "oatmeal", "porridge") ||
+    cat("Beans", "beans", "bean", "kidney beans", "black beans", "pinto") ||
+    cat("Lentils", "lentil", "lentils") ||
+    cat("Chickpeas", "chickpea", "chickpeas", "garbanzo") ||
+    cat("Sugar", "sugar") ||
+    cat("Salt", "salt", "sea salt") ||
+    cat("Butter", "butter") ||
+    cat("Cheese", "cheese") ||
+    cat("Eggs", "eggs", "egg") ||
+    capFirst(s.split(" ").find(Boolean) || original)
+  );
+}
+
+/* ------------ types ------------- */
 type Item = {
   id: string;
   uid: string;
   name: string;
+  nameKey?: string;            // lowercase name for merging
   quantity: number;
   createdAt?: Timestamp | null;
   expiresAt?: Timestamp | null;
-  nutrition?: Nutrition;
+  barcode?: string | null;
+  nutrition?: NutritionInfo | null;
 };
 
+/* ============ component ============ */
 export default function PantryPage() {
   const router = useRouter();
 
   const [name, setName] = useState("");
   const [qty, setQty] = useState<number>(1);
   const [date, setDate] = useState<string>("");
+  const [barcode, setBarcode] = useState<string>("");
 
-  const [nutrition, setNutrition] = useState<Nutrition | null>(null);   // <—
-  const [showScanner, setShowScanner] = useState(false);                // <—
+  const [nutrition, setNutrition] = useState<NutritionInfo | null>(null);
+  const [nutriBusy, setNutriBusy] = useState(false);
+  const [nutriErr, setNutriErr] = useState<string | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const [items, setItems] = useState<Item[]>([]);
   const stopRef = useRef<null | (() => void)>(null);
-  const minDate = todayStr();
 
-  // auth + live list
+  const minDate = todayStr();
+  const today0 = useMemo(startOfToday, []);
+
+  /* auth + live items */
   useEffect(() => {
     const stopAuth = onAuthStateChanged(auth, (u) => {
       if (stopRef.current) { stopRef.current(); stopRef.current = null; }
@@ -75,35 +121,52 @@ export default function PantryPage() {
       );
       const stop = onSnapshot(
         qy,
-        (snap) => {
-          const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Item, "id">) })) as Item[];
-          setItems(rows);
-          setErr(null);
-        },
+        (snap) => setItems(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as Item[]),
         (e) => setErr(e?.message ?? "Could not load pantry.")
       );
       stopRef.current = stop;
     });
 
-    return () => {
-      if (stopRef.current) stopRef.current();
-      stopAuth();
-    };
+    return () => { if (stopRef.current) stopRef.current(); stopAuth(); };
   }, [router]);
 
-  const active = useMemo(() => items.filter((it) => !isExpired(it.expiresAt)), [items]);
-  const expired = useMemo(() => {
-    const list = items.filter((it) => isExpired(it.expiresAt));
-    return list.sort((a,b) => (toDate(a.expiresAt)?.getTime() ?? 0) - (toDate(b.expiresAt)?.getTime() ?? 0));
-  }, [items]);
+  /* nutrition lookup (react to barcode changes) */
+  useEffect(() => {
+    const id = setTimeout(async () => {
+      if (!barcode) { setNutrition(null); setNutriErr(null); return; }
+      if (!looksLikeBarcode(barcode)) return;
 
+      setNutriBusy(true); setNutriErr(null);
+      try {
+        const info = await fetchNutritionByBarcode(barcode);
+        setNutrition(info || null);
+        if (info?.name) setName(normalizeProductName(info.name));
+      } catch (e: any) {
+        setNutriErr(e?.message || "Could not fetch nutrition for that barcode.");
+      } finally {
+        setNutriBusy(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(id);
+  }, [barcode]);
+
+  // camera detection → updates barcode (triggers lookup effect)
+  function handleDetected(code: string) {
+    setBarcode(code);
+  }
+
+  /* CRUD */
   function isPast(s: string) { return !!s && s < minDate; }
 
-  async function addItem() {
+  // ADD or MERGE with existing item (by barcode first, else by nameKey)
+  async function addOrMergeItem() {
     setErr(null);
     const u = auth.currentUser;
     if (!u) { router.replace("/auth/login"); return; }
-    if (!name.trim()) { setErr("Please enter product name."); return; }
+
+    const cleanedName = capFirst(normalizeProductName(name.trim()));
+    if (!cleanedName) { setErr("Please enter product name."); return; }
     if (date && isPast(date)) { setErr("Expiry date cannot be in the past."); return; }
 
     setBusy(true);
@@ -113,16 +176,64 @@ export default function PantryPage() {
           ? Timestamp.fromDate(new Date(`${date}T00:00:00`))
           : null;
 
-      await addDoc(collection(db, "pantryItems"), {
-        uid: u.uid,
-        name: titleCase(name),
-        quantity: Number(qty) || 1,
-        createdAt: serverTimestamp(),
-        expiresAt,
-        nutrition: nutrition || null,     // <— store if we have it
-      });
+      const nameKey = cleanedName.toLowerCase();
 
-      setName(""); setQty(1); setDate(""); setNutrition(null);
+      // 1) find existing by barcode
+      let existingId: string | null = null;
+      if (barcode) {
+        const q1 = query(
+          collection(db, "pantryItems"),
+          where("uid", "==", u.uid),
+          where("barcode", "==", barcode),
+          limit(1)
+        );
+        const s1 = await getDocs(q1);
+        if (!s1.empty) existingId = s1.docs[0].id;
+      }
+
+      // 2) if no barcode match, find by nameKey
+      if (!existingId) {
+        const q2 = query(
+          collection(db, "pantryItems"),
+          where("uid", "==", u.uid),
+          where("nameKey", "==", nameKey),
+          limit(1)
+        );
+        const s2 = await getDocs(q2);
+        if (!s2.empty) existingId = s2.docs[0].id;
+      }
+
+      // 3) merge or create
+      if (existingId) {
+        const ref = doc(db, "pantryItems", existingId);
+        await updateDoc(ref, {
+          quantity: increment(Number(qty) || 1),
+          ...(expiresAt ? { expiresAt } : {}),
+          ...(barcode ? { barcode } : {}),
+          ...(nutrition ? { nutrition } : {}),
+          name: cleanedName,
+          nameKey,
+        });
+      } else {
+        await addDoc(collection(db, "pantryItems"), {
+          uid: u.uid,
+          name: cleanedName,
+          nameKey,
+          quantity: Number(qty) || 1,
+          createdAt: serverTimestamp(),
+          expiresAt,
+          barcode: barcode || null,
+          nutrition: nutrition || null,
+        });
+      }
+
+      // Reset inputs
+      setName("");
+      setQty(1);
+      setDate("");
+      setBarcode("");
+      setNutrition(null);
+      setNutriErr(null);
     } catch (e: any) {
       setErr(e?.message ?? "Failed to add item.");
     } finally {
@@ -133,8 +244,10 @@ export default function PantryPage() {
   async function saveItem(id: string, patch: { name: string; quantity: number; expiresAt: any }) {
     setErr(null);
     try {
+      const cleaned = capFirst(normalizeProductName(patch.name || "")); // name cleaned on save too
       const toWrite: any = {
-        name: titleCase(patch.name ?? ""),
+        name: cleaned,
+        nameKey: cleaned.toLowerCase(),
         quantity: Number(patch.quantity) || 1,
         expiresAt: null,
       };
@@ -149,101 +262,95 @@ export default function PantryPage() {
       }
       await updateDoc(doc(db, "pantryItems", id), toWrite);
     } catch (e: any) {
-      setErr(e?.message ?? "Failed to save changes.");
-      throw e;
+      setErr(e?.message ?? "Failed to save changes."); throw e;
     }
   }
 
   async function removeItem(id: string) {
     setErr(null);
-    try {
-      await deleteDoc(doc(db, "pantryItems", id));
-    } catch (e) {
-      console.error("Delete failed:", e);
+    try { await deleteDoc(doc(db, "pantryItems", id)); }
+    catch (e) {
       const code = (e as FirebaseError).code || "";
-      if (code === "permission-denied") {
-        setErr("You can only delete items you own. Old items created without a 'uid' need a one-time cleanup.");
-      } else {
-        setErr((e as any)?.message ?? "Failed to delete.");
-      }
+      setErr(code === "permission-denied" ? "You can only delete items you own." : (e as any)?.message ?? "Failed to delete.");
       throw e;
     }
   }
 
-  // ---- barcode flow ----
-  async function handleDetected(code: string) {
-    setShowScanner(false);
-    setErr(null);
-    const info = await getNutrition(code);
-    if (!info) {
-      setNutrition(null);
-      setErr("No nutrition found for this barcode.");
-      return;
-    }
-    setNutrition(info);
-    if (info.productName) setName(info.productName);
-  }
+  /* split active/expired */
+  const active: Item[] = [];
+  const expired: Item[] = [];
+  items.forEach((it) => {
+    const d = toDate(it.expiresAt);
+    if (d && d < today0) expired.push(it);
+    else active.push(it);
+  });
 
   return (
     <main className="container">
-      <h1 className="pageTitle">Pantry</h1>
+      <div className="titleRow">
+        <h1 className="pageTitle">Pantry</h1>
+        <PantryHelpButton />
+      </div>
 
       <section className="card addCard">
         <h2 className="cardTitle">Add product</h2>
+
         <div className="grid2">
-          <Input
-            label="Name"
-            value={name}
-            onChange={(e:any)=>setName(titleCase(e.target.value))}
-            placeholder="Milk"
-          />
-          <Input
-            label="Quantity"
-            type="number"
-            min={1}
-            value={String(qty)}
-            onChange={(e:any)=>setQty(Number(e.target.value))}
-          />
+          <Input label="Name" value={name} onChange={(e:any)=>setName(e.target.value)} placeholder="Pasta" />
+          <Input label="Quantity" type="number" min={1} value={String(qty)} onChange={(e:any)=>setQty(Number(e.target.value))} />
           <div>
             <label className="label">Expiry date (optional)</label>
-            <input
-              className="textInput"
-              type="date"
-              min={minDate}
-              value={date}
-              onChange={(e)=>setDate(e.currentTarget.value)}
+            <input className="textInput" type="date" min={minDate} value={date} onChange={(e)=>setDate(e.currentTarget.value)} />
+          </div>
+
+          <div className="barcodeRow">
+            <Input
+              label="Barcode"
+              value={barcode}
+              onChange={(e:any)=>setBarcode(String(e.target.value).trim())}
+              placeholder="Scan or type digits"
             />
+            <button
+              type="button"
+              className="btn"
+              onClick={() => { setBarcode(""); setNutrition(null); setNutriErr(null); }}
+              aria-label="Clear barcode"
+            >
+              Clear
+            </button>
+          </div>
+
+          <div className="scannerCol">
+            <label className="label">Scan with camera</label>
+            {/* Keep your existing BarcodeScanner component */}
+            <BarcodeScanner onDetected={handleDetected} />
+            {nutriErr && <p className="error small">{nutriErr}</p>}
+            {nutriBusy && <p className="muted small">Looking up nutrition…</p>}
           </div>
         </div>
 
-        <div className="row" style={{marginTop:10, alignItems:"center", gap:8}}>
-          <Button variant="secondary" onClick={()=>setShowScanner(true)}>📷 Scan barcode</Button>
-          {nutrition ? (
-            <div className="nutriPreview">
-              {nutrition.image ? <img src={nutrition.image} alt="" /> : null}
-              <div className="npText">
-                <div className="npName">{nutrition.productName || "Product"}</div>
-                <div className="npLine">
-                  <span>{nutrition.calories ?? "–"} kcal</span>
-                  <span>P {nutrition.protein ?? "–"}g</span>
-                  <span>C {nutrition.carbs ?? "–"}g</span>
-                  <span>S {nutrition.sugars ?? "–"}g</span>
-                  <span>F {nutrition.fat ?? "–"}g</span>
-                </div>
-              </div>
-              <button className="link" onClick={()=>setNutrition(null)}>Clear</button>
+        {(nutrition?.name || nutrition?.kcalPer100g || nutrition?.kcalPerServing) && (
+          <div className="nutri cardLite">
+            <div className="nutTitle">Nutrition (from barcode)</div>
+            <div className="nutGrid">
+              <div><span className="muted">Name:</span> <strong>{normalizeProductName(nutrition?.name || "")}</strong></div>
+              <div><span className="muted">kcal / 100g:</span> <strong>{nutrition?.kcalPer100g ?? "—"}</strong></div>
+              <div><span className="muted">kcal / serving:</span> <strong>{nutrition?.kcalPerServing ?? "—"}</strong></div>
+              <div><span className="muted">Serving size:</span> <strong>{nutrition?.servingSize ?? "—"}</strong></div>
             </div>
-          ) : <span className="muted">No scan yet</span>}
-        </div>
+          </div>
+        )}
 
         {err && <p className="error">{err}</p>}
         <div className="actions">
-          <Button onClick={addItem} disabled={busy}>{busy ? "Saving…" : "Add item"}</Button>
+          <Button onClick={addOrMergeItem} disabled={busy}>
+            {busy ? "Saving…" : "Add / Merge"}
+          </Button>
         </div>
       </section>
 
       <section className="list">
-        <h2 className="cardTitle">Active</h2>
+        <h2 className="secTitle">Active</h2>
         {active.length === 0 ? (
           <div className="empty">No active items.</div>
         ) : (
@@ -252,7 +359,6 @@ export default function PantryPage() {
               <PantryCard
                 key={it.id}
                 item={it as unknown as PantryCardItem}
-                expired={false}
                 onDelete={() => removeItem(it.id)}
                 onSave={(patch) => saveItem(it.id, patch)}
               />
@@ -261,50 +367,50 @@ export default function PantryPage() {
         )}
       </section>
 
-      <section className="list" style={{ marginTop: 18 }}>
-        <h2 className="cardTitle">Expired</h2>
+      <section className="list" style={{ marginTop: 16 }}>
+        <h2 className="secTitle">Expired</h2>
         {expired.length === 0 ? (
-          <div className="empty">No expired items 🎉</div>
+          <div className="empty">Nothing expired 🎉</div>
         ) : (
           <div className="gridCards">
             {expired.map((it) => (
               <PantryCard
                 key={it.id}
-                item={it as unknown as PantryCardItem}
-                expired={true}
+                item={{ ...it, name: it.name } as unknown as PantryCardItem}
                 onDelete={() => removeItem(it.id)}
-                onSave={() => Promise.resolve()}
+                onSave={(patch) => saveItem(it.id, patch)}
               />
             ))}
           </div>
         )}
       </section>
 
-      {showScanner && (
-        <BarcodeScanner onDetected={handleDetected} onClose={()=>setShowScanner(false)} />
-      )}
-
       <style jsx>{`
         .container { max-width: 960px; margin: 0 auto; padding: 24px; }
-        .pageTitle { font-size: 28px; font-weight: 700; margin-bottom: 16px; }
+        .titleRow { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
+        .pageTitle { font-size: 28px; font-weight: 700; }
         .card { border:1px solid #e5e7eb; background:#fff; border-radius:16px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.04); }
+        .cardLite { border:1px solid #eef2f7; background:#fafbff; border-radius:12px; padding:10px 12px; }
         .addCard { margin-bottom: 24px; }
         .cardTitle { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
-        .grid2 { display:grid; grid-template-columns:1fr 160px 200px; gap:12px 16px; align-items:end; }
-        @media (max-width: 860px){ .grid2{ grid-template-columns:1fr 1fr; } }
+        .grid2 { display:grid; grid-template-columns:1fr 160px 200px 1fr 1fr; gap:12px 16px; align-items:start; }
+        @media (max-width: 1100px){ .grid2{ grid-template-columns:1fr 140px 180px 1fr; } }
+        @media (max-width: 900px){ .grid2{ grid-template-columns:1fr 1fr; } }
         @media (max-width: 560px){ .grid2{ grid-template-columns:1fr; } }
         .label { display:block; margin-bottom:6px; font-size:.9rem; color:#111827; font-weight:500; }
         .textInput { width:100%; border:1px solid #d1d5db; border-radius:12px; padding:10px 12px; font-size:14px; }
-        .row { display:flex; gap:8px; }
-        .muted { color:#6b7280; font-size:13px; }
-        .nutriPreview { display:flex; gap:10px; align-items:center; padding:8px; border:1px solid #e5e7eb; border-radius:12px; }
-        .nutriPreview img { width:42px; height:42px; border-radius:8px; object-fit:cover; border:1px solid #e5e7eb; }
-        .npText { display:flex; flex-direction:column; gap:2px; }
-        .npName { font-weight:600; color:#0f172a; }
-        .npLine { display:flex; gap:8px; color:#475569; font-size:13px; }
-        .link { border:none; background:none; color:#2563eb; cursor:pointer; text-decoration:underline; }
+        .barcodeRow { display:grid; grid-template-columns: 1fr auto; gap:8px; align-items:end; }
+        .btn { border:1px solid #e5e7eb; background:#fff; padding:8px 12px; border-radius:10px; cursor:pointer; }
+        .scannerCol { display:grid; gap:8px; }
+        .muted { color:#64748b; }
+        .small { font-size:12px; }
+        .nutri { margin-top: 10px; }
+        .nutTitle { font-weight:600; margin-bottom:6px; }
+        .nutGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px 12px; }
+        @media (max-width:560px){ .nutGrid{ grid-template-columns:1fr; } }
         .actions { margin-top:10px; display:flex; gap:12px; justify-content:flex-end; }
-        .list { margin-top:8px; }
+        .list { margin-top: 18px; }
+        .secTitle { font-size:16px; font-weight:700; margin: 6px 0 10px; }
         .gridCards { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:16px; }
         @media (max-width: 900px){ .gridCards{ grid-template-columns:repeat(2, minmax(0,1fr)); } }
         @media (max-width: 600px){ .gridCards{ grid-template-columns:1fr; } }

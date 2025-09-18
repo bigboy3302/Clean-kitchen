@@ -1,114 +1,177 @@
+// components/pantry/BarcodeScanner.tsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BrowserMultiFormatReader, IScannerControls } from "@zxing/browser";
+import {
+  BrowserMultiFormatReader,
+  IScannerControls,
+} from "@zxing/browser";
 
-type Props = {
-  onDetected: (code: string) => void;
-  onClose: () => void;
-};
+type Props = { onDetected: (code: string) => void };
 
-export default function BarcodeScanner({ onDetected, onClose }: Props) {
+export default function BarcodeScanner({ onDetected }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
-  const [deviceId, setDeviceId] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [starting, setStarting] = useState(false);
 
+  const [running, setRunning] = useState(false);
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [deviceId, setDeviceId] = useState<string | "">("");
+  const [facing, setFacing] = useState<"environment" | "user">("environment");
+
+  const [torchOn, setTorchOn] = useState(false);
+  const [torchCapable, setTorchCapable] = useState(false);
+
+  const [err, setErr] = useState<string | null>(null);
+
+  // discover cameras
   useEffect(() => {
     (async () => {
       try {
-        const all = await navigator.mediaDevices.enumerateDevices();
-        const cams = all.filter((d) => d.kind === "videoinput");
+        if (!navigator.mediaDevices?.enumerateDevices) return;
+        const list = await navigator.mediaDevices.enumerateDevices();
+        const cams = list.filter((d) => d.kind === "videoinput");
         setDevices(cams);
-        setDeviceId((cams[0] && cams[0].deviceId) || null);
-      } catch (e: any) {
-        setErr(e?.message || "Camera enumeration failed.");
-      }
+        // choose a rear cam if we can
+        const rear = cams.find((c) => /back|rear|environment/i.test(c.label || ""));
+        if (rear) setDeviceId(rear.deviceId);
+      } catch {}
     })();
   }, []);
 
+  // start/stop scanner
   useEffect(() => {
-    start();
-    return () => stop();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deviceId]);
+    if (!running) return stop();
 
-  async function start() {
-    if (!deviceId || !videoRef.current) return;
-    setErr(null);
-    setStarting(true);
-    stop();
-    try {
-      const reader = new BrowserMultiFormatReader();
-      const controls = await reader.decodeFromVideoDevice(
-        deviceId,
-        videoRef.current,
-        (result, error) => {
-          if (result) {
-            onDetected(result.getText());
-            // freeze until parent closes modal
+    let mounted = true;
+    const reader = new BrowserMultiFormatReader();
+
+    (async () => {
+      setErr(null);
+      try {
+        const constraints: MediaStreamConstraints = {
+          audio: false,
+          video: deviceId
+            ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+            : { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        };
+
+        const ctrls = await reader.decodeFromConstraints(
+          constraints,
+          videoRef.current!,
+          (result) => {
+            if (!mounted) return;
+            if (result) {
+              try { navigator.vibrate?.(30); } catch {}
+              onDetected(result.getText());
+              setRunning(false); // stop after first good scan
+            }
           }
+        );
+        controlsRef.current = ctrls;
+
+        if (videoRef.current) {
+          videoRef.current.setAttribute("playsInline", "true");
+          videoRef.current.muted = true;
+          videoRef.current.autoplay = true;
         }
-      );
-      controlsRef.current = controls;
-    } catch (e: any) {
-      setErr(e?.message || "Failed to start scanner.");
-    } finally {
-      setStarting(false);
+
+        // torch capability check
+        const track = getVideoTrack();
+        const caps = track?.getCapabilities?.();
+        setTorchCapable(Boolean(caps && "torch" in caps));
+      } catch (e: any) {
+        const msg =
+          e?.name === "NotAllowedError"
+            ? "Camera permission denied. Allow it or type the barcode."
+            : e?.message || "Camera failed to start (HTTPS or localhost required).";
+        setErr(msg);
+        setRunning(false);
+      }
+    })();
+
+    return () => { mounted = false; stop(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, deviceId, facing]);
+
+  function stop() {
+    try { controlsRef.current?.stop(); } catch {}
+    controlsRef.current = null;
+    setTorchOn(false);
+    const v = videoRef.current;
+    const stream = v?.srcObject as MediaStream | null;
+    if (stream) {
+      stream.getTracks().forEach((t) => t.stop());
+      if (v) v.srcObject = null;
     }
   }
 
-  function stop() {
+  function getVideoTrack(): MediaStreamTrack | null {
+    const stream = videoRef.current?.srcObject as MediaStream | null;
+    return stream?.getVideoTracks?.()[0] || null;
+  }
+
+  async function toggleTorch() {
+    const track = getVideoTrack();
+    const caps = track?.getCapabilities?.();
+    if (!track || !caps || !("torch" in caps)) return;
     try {
-      controlsRef.current?.stop();
-      controlsRef.current = null;
+      await track.applyConstraints({ advanced: [{ torch: !torchOn }] as any });
+      setTorchOn((s) => !s);
     } catch {}
   }
 
   return (
-    <div className="overlay" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3 className="title">Scan barcode</h3>
+    <div className="wrap">
+      <div className="controls">
+        <button className={`btn ${running ? "danger" : ""}`} onClick={() => setRunning((s) => !s)}>
+          {running ? "Stop camera" : "Start camera"}
+        </button>
 
-        <div className="row">
+        <button
+          className="btn"
+          onClick={() => {
+            setFacing((f) => (f === "environment" ? "user" : "environment"));
+            if (running) { setRunning(false); setTimeout(() => setRunning(true), 50); }
+          }}
+        >
+          Flip
+        </button>
+
+        {devices.length > 0 && (
           <select
-            value={deviceId || ""}
-            onChange={(e) => setDeviceId(e.currentTarget.value || null)}
+            className="sel"
+            value={deviceId}
+            onChange={(e) => {
+              setDeviceId(e.target.value);
+              if (running) { setRunning(false); setTimeout(() => setRunning(true), 50); }
+            }}
           >
+            <option value="">Auto camera</option>
             {devices.map((d) => (
               <option key={d.deviceId} value={d.deviceId}>
-                {d.label || "Camera"}
+                {d.label || `Camera ${d.deviceId.slice(0,6)}…`}
               </option>
             ))}
           </select>
-          <button className="btn" onClick={start} disabled={!deviceId || starting}>
-            {starting ? "Starting…" : "Restart"}
-          </button>
-          <button className="btn" onClick={onClose}>Close</button>
-        </div>
+        )}
 
-        <div className="videoWrap">
-          <video ref={videoRef} className="video" autoPlay muted playsInline />
-          <div className="hint">Point camera at barcode (EAN/UPC)</div>
-        </div>
-
-        {err && <p className="err">{err}</p>}
-
-        <style jsx>{`
-          .overlay{position:fixed; inset:0; background:rgba(2,6,23,.6); display:grid; place-items:center; padding:16px; z-index:1000;}
-          .modal{width:100%; max-width:700px; background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px; box-shadow:0 24px 60px rgba(0,0,0,.25);}
-          .title{margin:0 0 10px; font-size:18px; font-weight:800; color:#0f172a;}
-          .row{display:flex; gap:8px; align-items:center; margin-bottom:10px;}
-          select{border:1px solid #d1d5db; border-radius:10px; padding:8px 10px;}
-          .btn{border:1px solid #e5e7eb; background:#fff; border-radius:10px; padding:6px 10px; cursor:pointer;}
-          .videoWrap{position:relative; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; background:#000;}
-          .video{width:100%; height:380px; object-fit:cover;}
-          .hint{position:absolute; bottom:8px; left:8px; color:#fff; background:rgba(0,0,0,.35); padding:4px 8px; border-radius:8px; font-size:12px;}
-          .err{margin-top:8px; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:6px 8px; font-size:12px;}
-        `}</style>
+        {torchCapable && running && (
+          <button className="btn" onClick={toggleTorch}>{torchOn ? "Torch off" : "Torch on"}</button>
+        )}
       </div>
+
+      <video ref={videoRef} className="video" />
+      {err && <p className="err">{err}</p>}
+
+      <style jsx>{`
+        .wrap { display:grid; gap:8px; }
+        .controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+        .btn { border:1px solid #e5e7eb; background:#fff; border-radius:10px; padding:6px 10px; cursor:pointer; }
+        .btn.danger { background:#fee2e2; color:#991b1b; border-color:#fecaca; }
+        .sel { border:1px solid #e5e7eb; background:#fff; border-radius:10px; padding:6px 10px; }
+        .video { width:100%; max-height:360px; background:#000; border-radius:12px; border:1px solid #e5e7eb; object-fit:cover; }
+        .err { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:6px 8px; font-size:12px; }
+      `}</style>
     </div>
   );
 }
