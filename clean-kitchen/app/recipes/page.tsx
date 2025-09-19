@@ -8,15 +8,17 @@ import {
   deleteDoc,
   doc,
   getDoc,
-  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   where,
+  getDocs,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
+import { getDownloadURL, ref as sref, uploadBytes } from "firebase/storage";
+import { auth, db, storage } from "@/lib/firebase";
 
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -29,26 +31,37 @@ import {
   searchMealsByName,
   lookupMealById,
 } from "@/lib/recipesApi";
+import ConfirmDialog from "@/components/ui/ConfirmDialog"; // ✅ new
 
 /* ---------------- helpers ---------------- */
-function capFirst(s: string) {
-  return s.replace(/^\p{L}/u, (m) => m.toUpperCase());
-}
+const capFirst = (s: string) => s.replace(/^\p{L}/u, (m) => m.toUpperCase());
+
+/** One-per-line. Accepts “—”, “–”, “-”, “:” as separators between name and measure. */
 function parseIngredientsText(text: string): Ingredient[] {
-  // one per line; optionally "Name — amount"
+  const SEP = /\s*(?:—|–|:|-)\s*/;
   return text
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean)
     .map((line) => {
-      const m = line.split(/—|–| - | -|-\s/);
-      if (m.length >= 2) return { name: m[0].trim(), measure: m.slice(1).join(" ").trim() || undefined };
-      return { name: line, measure: undefined };
-    });
+      const parts = line.split(SEP);
+      const name = (parts[0] || "").trim();
+      const measure = (parts[1] || "").trim();
+      if (!name) return { name: "" };
+      return measure ? { name, measure } : { name };
+    })
+    .filter((i) => i.name);
 }
+
+/** Drop all `undefined` so Firestore never sees it. */
+function packIngredients(list: Ingredient[]): Array<{ name: string; measure?: string | null }> {
+  return list.map((i) => (i.measure ? { name: i.name, measure: i.measure } : { name: i.name }));
+}
+
 function ridFor(r: CommonRecipe) {
   return r.source === "api" ? `api-${r.id}` : `user-${r.id}`;
 }
+
 function pantryTerms(names: string[], max = 6): string[] {
   const stops = new Set(["and", "of", "with", "the"]);
   const uniq = new Set<string>();
@@ -84,7 +97,7 @@ export default function RecipesPage() {
 
   // search
   const [q, setQ] = useState("");
-  const [mode, setMode] = useState<"name" | "ingredient">("name"); // default to "name"
+  const [mode, setMode] = useState<"name" | "ingredient">("name");
   const [busySearch, setBusySearch] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -94,11 +107,27 @@ export default function RecipesPage() {
   const [tTitle, setTTitle] = useState("");
   const [tIngredients, setTIngredients] = useState("");
   const [tInstructions, setTInstructions] = useState("");
+
+  // cover image
+  const [imgFile, setImgFile] = useState<File | null>(null);
+  const [imgPreview, setImgPreview] = useState<string | null>(null);
+
   const [addBusy, setAddBusy] = useState(false);
   const [addErr, setAddErr] = useState<string | null>(null);
 
   // delete feedback
   const [delBusyId, setDelBusyId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null); // ✅
+
+  // prevent background scroll when a modal/overlay is open
+  useEffect(() => {
+    const lock = open || showFavs;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = lock ? "hidden" : prev || "";
+    return () => {
+      document.body.style.overflow = prev || "";
+    };
+  }, [open, showFavs]);
 
   /* ---------- auth + live listeners ---------- */
   useEffect(() => {
@@ -106,7 +135,7 @@ export default function RecipesPage() {
       setMe(u?.uid ?? null);
 
       if (u) {
-        // No composite index needed: only where("uid"=="..."), sort locally by createdAt.seconds desc
+        // only where("uid","==") to avoid composite index; sort locally by createdAt desc
         const qMine = query(collection(db, "recipes"), where("uid", "==", u.uid));
         const stopUser = onSnapshot(
           qMine,
@@ -118,22 +147,20 @@ export default function RecipesPage() {
                   id: d.id,
                   source: "user",
                   title: data.title || "Untitled",
-                  image: data.image ?? null,
-                  category: data.category ?? null,
-                  area: data.area ?? null,
+                  image: data.image || null,
+                  category: data.category || null,
+                  area: data.area || null,
                   ingredients: Array.isArray(data.ingredients) ? data.ingredients : [],
-                  instructions: data.instructions ?? null,
+                  instructions: data.instructions || null,
                   author: { uid: data.uid || data.author?.uid || u.uid, name: data.author?.name || null },
                 };
-                (r as any)._cts = data.createdAt?.seconds || 0; // for local sort
+                (r as any)._cts = data.createdAt?.seconds || 0;
                 return r;
               })
               .sort((a: any, b: any) => b._cts - a._cts);
             setUserRecipes(rows);
           },
-          (e) => {
-            console.error("User recipes listener error:", e);
-          }
+          (e) => console.error("User recipes listener error:", e)
         );
 
         // favorites map
@@ -222,7 +249,6 @@ export default function RecipesPage() {
         return;
       }
       const lists = await Promise.all(terms.map((t) => searchMealsByIngredient(t, 12)));
-      // merge unique by id
       const seen = new Set<string>();
       const merged: CommonRecipe[] = [];
       for (const arr of lists) {
@@ -289,38 +315,63 @@ export default function RecipesPage() {
         });
       }
     }
-    setShowFavs(false);
+    setShowFavs(false); // ensure modal sits on top
   }
 
   /* ---------- add user recipe ---------- */
+  function onPickImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.currentTarget.files?.[0] || null;
+    if (!f) return;
+    setImgFile(f);
+    const url = URL.createObjectURL(f);
+    setImgPreview(url);
+  }
+  function clearPickedImage() {
+    if (imgPreview) URL.revokeObjectURL(imgPreview);
+    setImgPreview(null);
+    setImgFile(null);
+  }
+
   async function addRecipe() {
     if (!me) return alert("Please sign in.");
     setAddErr(null);
+
     const title = capFirst(tTitle.trim());
     if (!title) return setAddErr("Please enter a title.");
-    const ingredients = parseIngredientsText(tIngredients);
+
+    const ingredients = packIngredients(parseIngredientsText(tIngredients));
     const instructions = tInstructions.trim() || null;
 
-    // IMPORTANT: never write undefined (rules/SDKs reject it)
-    const payload = {
+    const basePayload = {
       uid: me,
       title,
       image: null as string | null,
       category: null as string | null,
       area: null as string | null,
-      ingredients, // [] if empty is fine
-      instructions, // null or string
+      ingredients,
+      instructions,
       author: { uid: me, name: auth.currentUser?.displayName || null } as { uid: string; name: string | null },
       createdAt: serverTimestamp(),
     };
 
     setAddBusy(true);
     try {
-      await addDoc(collection(db, "recipes"), payload);
+      const refDoc = await addDoc(collection(db, "recipes"), basePayload);
+
+      // write a FILE, not a folder → '/cover'
+      if (imgFile) {
+        const path = `recipeImages/${me}/${refDoc.id}/cover`;
+        const storageRef = sref(storage, path);
+        await uploadBytes(storageRef, imgFile, { contentType: imgFile.type });
+        const url = await getDownloadURL(storageRef);
+        await updateDoc(refDoc, { image: url });
+      }
+
       setAdding(false);
       setTTitle("");
       setTIngredients("");
       setTInstructions("");
+      clearPickedImage();
     } catch (e: any) {
       setAddErr(e?.message ?? "Failed to add recipe.");
     } finally {
@@ -331,7 +382,6 @@ export default function RecipesPage() {
   /* ---------- delete user recipe ---------- */
   async function deleteRecipe(id: string) {
     if (!me) return alert("Please sign in.");
-    if (!confirm("Delete this recipe? This cannot be undone.")) return;
 
     setDelBusyId(id);
     setErr(null);
@@ -351,15 +401,12 @@ export default function RecipesPage() {
         return;
       }
 
-      // NOTE: Your security rules require resource.data.uid == request.auth.uid.
-      // Old docs that lack 'uid' will fail delete. Migrate them by adding a uid or delete via admin.
-      await deleteDoc(ref);
-      // onSnapshot will update the UI
+      await deleteDoc(ref); // live listener updates UI
     } catch (e: any) {
       const code = e?.code || "";
       setErr(
         code === "permission-denied"
-          ? "Permission denied. If this is an old recipe without a 'uid' field, add the uid (migration) or delete with admin."
+          ? "Permission denied. If this is an old recipe without a 'uid' field, fix the doc or delete via admin."
           : e?.message || "Failed to delete."
       );
     } finally {
@@ -367,40 +414,63 @@ export default function RecipesPage() {
     }
   }
 
+  // ✅ open the confirm popup instead of window.confirm
+  function requestDelete(id: string) {
+    setConfirmDeleteId(id);
+  }
+  function cancelDelete() {
+    setConfirmDeleteId(null);
+  }
+  async function confirmDelete() {
+    const id = confirmDeleteId;
+    setConfirmDeleteId(null);
+    if (id) await deleteRecipe(id);
+  }
+
   return (
     <main className="container">
       <div className="topbar">
         <h1 className="title">Recipes</h1>
         <div className="right">
-          <button className="linkBtn" onClick={()=>setShowFavs(true)}>favorites</button>
+          <button className="linkBtn" onClick={() => setShowFavs(true)}>
+            favorites
+          </button>
         </div>
       </div>
 
       {/* controls */}
-      <section className="card controls">
+      <section className="card controls" aria-label="Search and actions">
         <div className="row">
           <div className="toggles">
-            <label className={`chip ${mode === "name" ? "active" : ""}`} onClick={()=>setMode("name")}>By name</label>
-            <label className={`chip ${mode === "ingredient" ? "active" : ""}`} onClick={()=>setMode("ingredient")}>By ingredient</label>
+            <label className={`chip ${mode === "name" ? "active" : ""}`} onClick={() => setMode("name")}>
+              By name
+            </label>
+            <label className={`chip ${mode === "ingredient" ? "active" : ""}`} onClick={() => setMode("ingredient")}>
+              By ingredient
+            </label>
           </div>
 
           <div className="grow">
             <Input
               label="Search"
               value={q}
-              onChange={(e:any)=>setQ(e.target.value)}
+              onChange={(e: any) => setQ(e.target.value)}
               placeholder={mode === "name" ? "e.g. Pasta" : "e.g. chicken"}
             />
           </div>
 
-          <Button onClick={()=>setAdding((v)=>!v)}>{adding ? "Close" : "Add recipe"}</Button>
-          <Button variant="secondary" onClick={loadPantrySuggestions}>Find with my pantry</Button>
+          <Button onClick={() => setAdding((v) => !v)}>{adding ? "Close" : "Add recipe"}</Button>
+          <Button variant="secondary" onClick={loadPantrySuggestions}>
+            Find with my pantry
+          </Button>
         </div>
 
         {busySearch && <p className="muted">Loading…</p>}
         {err && <p className="error">{err}</p>}
         {pantryRecipes && (
-          <p className="muted small">Showing suggestions from your pantry ({pantryTerms(pantry, 6).join(", ")}).</p>
+          <p className="muted small">
+            Showing suggestions from your pantry ({pantryTerms(pantry, 6).join(", ")}).
+          </p>
         )}
       </section>
 
@@ -408,19 +478,63 @@ export default function RecipesPage() {
       {adding && (
         <section className="card addForm">
           <div className="grid">
-            <Input label="Title" value={tTitle} onChange={(e:any)=>setTTitle(e.target.value)} placeholder="Grandma’s Pasta" />
-            <div className="full">
-              <label className="lab">Ingredients (one per line — “Name — amount”)</label>
-              <textarea className="ta" rows={6} value={tIngredients} onChange={(e)=>setTIngredients(e.currentTarget.value)} />
+            <Input
+              label="Title (what’s this dish called?)"
+              value={tTitle}
+              onChange={(e: any) => setTTitle(e.target.value)}
+              placeholder="Grandma’s Pasta"
+            />
+
+            <div>
+              <label className="lab">
+                Cover photo <span className="muted small">(optional)</span>
+              </label>
+              {imgPreview ? (
+                <div className="pick">
+                  <img className="cover" src={imgPreview} alt="Cover preview" />
+                  <Button variant="secondary" size="sm" onClick={clearPickedImage}>
+                    Remove image
+                  </Button>
+                </div>
+              ) : (
+                <input type="file" accept="image/*" onChange={onPickImage} />
+              )}
+              <div className="muted small">Shown as thumbnail &amp; hero in the recipe.</div>
             </div>
+
             <div className="full">
-              <label className="lab">Instructions</label>
-              <textarea className="ta" rows={6} value={tInstructions} onChange={(e)=>setTInstructions(e.currentTarget.value)} />
+              <label className="lab">Ingredients</label>
+              <textarea
+                className="ta"
+                rows={6}
+                value={tIngredients}
+                onChange={(e) => setTIngredients(e.currentTarget.value)}
+                placeholder={`Pasta — 100g
+Cucumber — 150g
+Onion — 50g`}
+              />
+            </div>
+
+            <div className="full">
+              <label className="lab">
+                Instructions <span className="muted small">(steps)</span>
+              </label>
+              <textarea
+                className="ta"
+                rows={6}
+                value={tInstructions}
+                onChange={(e) => setTInstructions(e.currentTarget.value)}
+                placeholder={`1) Boil pasta
+2) Chop veggies
+3) Mix & serve`}
+              />
             </div>
           </div>
           {addErr && <p className="error">{addErr}</p>}
           <div className="actions">
-            <Button onClick={addRecipe} disabled={addBusy}>{addBusy ? "Saving…" : "Save recipe"}</Button>
+            <Button onClick={addRecipe} disabled={addBusy}>
+              {addBusy ? "Saving…" : "Save recipe"}
+            </Button>
           </div>
         </section>
       )}
@@ -438,12 +552,16 @@ export default function RecipesPage() {
                   {r.image ? <img className="mthumb" src={r.image} alt={r.title} /> : <div className="mthumb ph" />}
                   <div className="mbody">
                     <div className="mline">
-                      <div className="mt" title={r.title}>{r.title}</div>
-                      <button className={`star ${fav ? "on" : ""}`} onClick={()=>toggleFav(r)} title="Favorite">★</button>
+                      <div className="mt">{r.title}</div>
+                      <button className={`star ${fav ? "on" : ""}`} onClick={() => toggleFav(r)} title="Favorite">
+                        ★
+                      </button>
                     </div>
                     <div className="rowBtns">
-                      <button className="open" onClick={()=>setOpen(r)}>Open</button>
-                      <button className="del" onClick={()=>deleteRecipe(r.id)} disabled={deleting}>
+                      <button className="open" onClick={() => setOpen(r)}>
+                        Open
+                      </button>
+                      <button className="del" onClick={() => requestDelete(r.id)} disabled={deleting}>
                         {deleting ? "Deleting…" : "Delete"}
                       </button>
                     </div>
@@ -462,22 +580,26 @@ export default function RecipesPage() {
             const fav = favs[ridFor(r)];
             return (
               <article key={`${r.source}-${r.id}`} className="rcard">
-                {r.image ? <img className="thumb small" src={r.image} alt={r.title} /> : <div className="thumb small ph" />}
+                {r.image ? (
+                  <img className="thumb small" src={r.image} alt={r.title} />
+                ) : (
+                  <div className="thumb small ph" />
+                )}
                 <div className="body">
                   <div className="row2">
-                    <h4 className="rt" title={r.title}>{r.title}</h4>
-                    <button
-                      className={`star ${fav ? "on" : ""}`}
-                      title={fav ? "Unfavorite" : "Favorite"}
-                      onClick={()=>toggleFav(r)}
-                    >★</button>
+                    <h4 className="rt">{r.title}</h4>
+                    <button className={`star ${fav ? "on" : ""}`} title="Favorite" onClick={() => toggleFav(r)}>
+                      ★
+                    </button>
                   </div>
                   <div className="meta">
                     {r.category ? <span className="chip small">{r.category}</span> : null}
                     {r.area ? <span className="chip small">{r.area}</span> : null}
                     <span className="muted small">{r.source === "api" ? "TheMealDB" : "User"}</span>
                   </div>
-                  <button className="open" onClick={()=>setOpen(r)}>Open</button>
+                  <button className="open" onClick={() => setOpen(r)}>
+                    Open
+                  </button>
                 </div>
               </article>
             );
@@ -485,20 +607,32 @@ export default function RecipesPage() {
         </div>
       </section>
 
+      {/* ✅ pass favorite props so you can unstar in the modal too */}
       {open ? (
         <RecipeModal
           recipe={open}
-          onClose={()=>setOpen(null)}
+          onClose={() => setOpen(null)}
           isFavorite={!!favs[ridFor(open)]}
-          onToggleFavorite={(r)=>toggleFav(r)}
+          onToggleFavorite={(r) => toggleFav(r)}
         />
       ) : null}
+
+      {/* ✅ confirm dialog */}
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        title="Delete this recipe?"
+        message="This will permanently remove the recipe. You can’t undo this."
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      />
 
       {showFavs ? (
         <FavOverlay
           uid={me}
-          onClose={()=>setShowFavs(false)}
-          onOpen={(id, source, recipeId)=>openFavorite(id, source, recipeId)}
+          onClose={() => setShowFavs(false)}
+          onOpen={(id, source, recipeId) => openFavorite(id, source, recipeId)}
         />
       ) : null}
 
@@ -522,6 +656,8 @@ export default function RecipesPage() {
         .addForm .grid{display:grid;grid-template-columns:1fr;gap:12px}
         .lab{display:block;margin-bottom:6px;font-size:.9rem;color:#111827;font-weight:500}
         .ta{width:100%;border:1px solid #d1d5db;border-radius:12px;padding:10px 12px;font-size:14px}
+        .pick{display:flex;align-items:center;gap:12px}
+        .cover{width:140px;height:90px;object-fit:cover;border-radius:10px;border:1px solid #e5e7eb}
         .actions { margin-top:10px; display:flex; gap:12px; justify-content:flex-end; }
 
         /* my row */
@@ -591,22 +727,40 @@ function FavOverlay({
     return () => stop();
   }, [uid]);
 
+  // ✅ allow unfavorite directly from overlay
+  async function removeFav(favId: string) {
+    if (!uid) return;
+    const ref = doc(db, "users", uid, "favoriteRecipes", favId);
+    await deleteDoc(ref).catch(() => {});
+  }
+
   return (
     <div className="ov" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="box" onClick={(e)=>e.stopPropagation()}>
+      <div className="box" onClick={(e) => e.stopPropagation()}>
         <div className="bh">
           <div className="bt">Favorites</div>
-          <button className="x" onClick={onClose}>✕</button>
+          <button className="x" onClick={onClose}>
+            ✕
+          </button>
         </div>
         {rows.length === 0 ? (
-          <p className="muted small" style={{padding:"8px 12px"}}>No favorites yet.</p>
+          <p className="muted small" style={{ padding: "8px 12px" }}>
+            No favorites yet.
+          </p>
         ) : (
           <div className="gridFav">
             {rows.map((r) => (
               <div key={r.id} className="fi">
                 {r.image ? <img className="fimg" src={r.image} alt={r.title} /> : <div className="fimg" />}
-                <div className="ft" title={r.title}>{r.title}</div>
-                <button className="open" onClick={()=>onOpen(r.id, r.source, r.recipeId)}>Open</button>
+                <div className="ft">{r.title}</div>
+                <div className="btns">
+                  <button className="open" onClick={() => onOpen(r.id, r.source, r.recipeId)}>
+                    Open
+                  </button>
+                  <button className="unfav" onClick={() => removeFav(r.id)} title="Remove from favorites">
+                    Remove
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -614,7 +768,7 @@ function FavOverlay({
       </div>
 
       <style jsx>{`
-        .ov{position:fixed;inset:0;background:rgba(2,6,23,.55);display:grid;place-items:center;padding:16px;z-index:1000}
+        .ov{position:fixed;inset:0;background:rgba(2,6,23,.55);display:grid;place-items:center;padding:16px;z-index:1200}
         .box{width:100%;max-width:760px;max-height:90vh;overflow:auto;background:#fff;border-radius:16px;border:1px solid #e5e7eb}
         .bh{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #eef2f7;padding:10px 12px}
         .bt{font-weight:800;color:#0f172a}
@@ -622,10 +776,12 @@ function FavOverlay({
         .gridFav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:12px}
         @media (max-width:840px){ .gridFav{grid-template-columns:repeat(2,minmax(0,1fr));} }
         @media (max-width:560px){ .gridFav{grid-template-columns:1fr;} }
-        .fi{border:1px solid #eef2f7;border-radius:12px;background:#fff;overflow:hidden}
+        .fi{border:1px solid #eef2f7;border-radius:12px;background:#fff;overflow:hidden;display:flex;flex-direction:column}
         .fimg{width:100%;height:120px;object-fit:cover;background:#eee}
-        .ft{padding:8px 10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .open{margin:0 10px 10px;border:1px solid #e5e7eb;background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer}
+        .ft{padding:8px 10px;font-weight:700;flex:1}
+        .btns{display:flex;gap:8px;justify-content:flex-end;padding:0 10px 10px}
+        .open{border:1px solid #e5e7eb;background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer}
+        .unfav{border:1px solid #fde68a;background:#fef9c3;border-radius:8px;padding:6px 10px;cursor:pointer}
       `}</style>
     </div>
   );

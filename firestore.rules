@@ -88,7 +88,7 @@ match /pantryItems/{id} {
 }
 
 
- /* =========================================================
+/* =========================================================
    recipes/{id} (+photos subcollection)
 ========================================================== */
 match /recipes/{id} {
@@ -100,26 +100,35 @@ match /recipes/{id} {
 
   // Update: only owner; uid must not change
   allow update: if isSignedIn()
-                && resource.data.uid == request.auth.uid
+                && (
+                     resource.data.uid == request.auth.uid
+                  || resource.data.author.uid == request.auth.uid  // <-- legacy support
+                )
                 && ownershipUnchanged();
 
-  // Delete: only owner (do NOT call ownershipUnchanged here)
+  // Delete: only owner (legacy allowed via author.uid)
   allow delete: if isSignedIn()
-                && resource.data.uid == request.auth.uid;
+                && (
+                     resource.data.uid == request.auth.uid
+                  || resource.data.author.uid == request.auth.uid  // <-- legacy support
+                );
 
   // photos subcollection (gallery metadata docs)
   match /photos/{pid} {
     allow read: if true;
 
-    // Only recipe owner can add/remove photo docs
+    // Only recipe owner can add/remove photo docs (supports legacy)
     allow create, delete: if isSignedIn()
-                           && get(/databases/$(database)/documents/recipes/$(id))
-                              .data.uid == request.auth.uid;
+                           && (
+                                get(/databases/$(database)/documents/recipes/$(id)).data.uid == request.auth.uid
+                             || get(/databases/$(database)/documents/recipes/$(id)).data.author.uid == request.auth.uid
+                           );
 
     // No updates to photo docs
     allow update: if false;
   }
 }
+
     /* =========================================================
        users/{uid}/favoriteRecipes/{rid}
     ========================================================== */

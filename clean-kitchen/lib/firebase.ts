@@ -1,3 +1,4 @@
+// lib/firebase.ts
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
@@ -9,7 +10,7 @@ const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!, // MUST be like: your-project-id.appspot.com
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
 };
@@ -26,7 +27,8 @@ declare global {
   var _appCheck: AppCheck | undefined;
 }
 
-const app = global._firebaseApp ?? (getApps().length ? getApp() : initializeApp(firebaseConfig));
+const app =
+  global._firebaseApp ?? (getApps().length ? getApp() : initializeApp(firebaseConfig));
 global._firebaseApp = app;
 
 function ensureAppCheckClient() {
@@ -37,7 +39,10 @@ function ensureAppCheckClient() {
   if (process.env.NODE_ENV !== "production") {
     // @ts-ignore
     self.FIREBASE_APPCHECK_DEBUG_TOKEN = pinned || true;
-    console.log("[AppCheck] Debug token:", pinned ? "(using pinned token from .env)" : "(will auto-generate; check console once)");
+    console.log(
+      "[AppCheck] Debug token:",
+      pinned ? "(using pinned token from .env)" : "(will auto-generate; check console once)"
+    );
   }
 
   const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY!;
@@ -55,6 +60,10 @@ ensureAppCheckClient();
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export const storage = getStorage(app, `gs://${process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}`); // explicit bucket
+
+// ✅ Use the default bucket from firebaseConfig.storageBucket.
+// (Avoid passing a custom "gs://..."; it can go wrong if the env var is off.)
+export const storage = getStorage(app);
+
 export const functions = getFunctions(app);
 export default app;
