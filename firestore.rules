@@ -88,27 +88,38 @@ match /pantryItems/{id} {
 }
 
 
-    /* =========================================================
-       recipes/{id} (+photos subcollection)
-    ========================================================== */
-    match /recipes/{id} {
-      allow read: if true;
+ /* =========================================================
+   recipes/{id} (+photos subcollection)
+========================================================== */
+match /recipes/{id} {
+  allow read: if true;
 
-      allow create: if isSignedIn()
-                    && request.resource.data.uid == request.auth.uid;
+  // Create: must set uid == auth.uid
+  allow create: if isSignedIn()
+                && request.resource.data.uid == request.auth.uid;
 
-      allow update, delete: if isSignedIn()
-                            && resource.data.uid == request.auth.uid
-                            && ownershipUnchanged();
+  // Update: only owner; uid must not change
+  allow update: if isSignedIn()
+                && resource.data.uid == request.auth.uid
+                && ownershipUnchanged();
 
-      match /photos/{pid} {
-        allow read: if true;
-        allow create, delete: if isSignedIn()
-                               && get(/databases/$(database)/documents/recipes/$(id)).data.uid == request.auth.uid;
-        allow update: if false;
-      }
-    }
+  // Delete: only owner (do NOT call ownershipUnchanged here)
+  allow delete: if isSignedIn()
+                && resource.data.uid == request.auth.uid;
 
+  // photos subcollection (gallery metadata docs)
+  match /photos/{pid} {
+    allow read: if true;
+
+    // Only recipe owner can add/remove photo docs
+    allow create, delete: if isSignedIn()
+                           && get(/databases/$(database)/documents/recipes/$(id))
+                              .data.uid == request.auth.uid;
+
+    // No updates to photo docs
+    allow update: if false;
+  }
+}
     /* =========================================================
        users/{uid}/favoriteRecipes/{rid}
     ========================================================== */

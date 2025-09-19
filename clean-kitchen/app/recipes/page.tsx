@@ -1,352 +1,632 @@
+// app/recipes/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { auth, db } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  addDoc,
   collection,
-  onSnapshot,
-  orderBy,
-  query,
-  where,
-  doc,
-  setDoc,
   deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  query,
   serverTimestamp,
+  setDoc,
+  where,
 } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "@/lib/firebase";
 
-/* ---------- Types ---------- */
-type Ingredient = { name: string; qty?: number; unit?: string | null };
-type Author = { username?: string; displayName?: string; avatarURL?: string | null };
+import Input from "@/components/ui/Input";
+import Button from "@/components/ui/Button";
 
-type Recipe = {
-  id: string;
-  uid: string;
-  title: string;
-  description?: string | null;
-  imageURL?: string | null;
-  createdAt?: any;
-  ingredients?: Ingredient[];
-  // optional precomputed field for searching (lowercased names)
-  ingredientsNames?: string[];
-  author?: Author;
-};
+import type { CommonRecipe, Ingredient } from "@/components/recipes/types";
+import RecipeModal from "@/components/recipes/RecipeModal";
+import {
+  getRandomMeals,
+  searchMealsByIngredient,
+  searchMealsByName,
+  lookupMealById,
+} from "@/lib/recipesApi";
 
-type PantryItem = {
-  id: string;
-  uid: string;
-  name: string;
-  quantity: number;
-  createdAt?: any;
-  expiresAt?: any;
-};
-
-export default function RecipesListPage() {
-  const [me, setMe] = useState<{ uid: string } | null>(null);
-
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [pantry, setPantry] = useState<PantryItem[]>([]);
-  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
-
-  // search UI state
-  const [q, setQ] = useState("");
-  const [usePantryTerms, setUsePantryTerms] = useState(false);
-
-  /* ---------- Auth ---------- */
-  useEffect(() => {
-    const stop = onAuthStateChanged(auth, (u) => setMe(u ? { uid: u.uid } : null));
-    return () => stop();
-  }, []);
-
-  /* ---------- Recipes (public) ---------- */
-  useEffect(() => {
-    const qr = query(collection(db, "recipes"), orderBy("createdAt", "desc"));
-    const stop = onSnapshot(qr, (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as Recipe[];
-      setRecipes(list);
+/* ---------------- helpers ---------------- */
+function capFirst(s: string) {
+  return s.replace(/^\p{L}/u, (m) => m.toUpperCase());
+}
+function parseIngredientsText(text: string): Ingredient[] {
+  // one per line; optionally "Name — amount"
+  return text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const m = line.split(/—|–| - | -|-\s/);
+      if (m.length >= 2) return { name: m[0].trim(), measure: m.slice(1).join(" ").trim() || undefined };
+      return { name: line, measure: undefined };
     });
-    return () => stop();
-  }, []);
-
-  /* ---------- Pantry (for “Use my pantry” search) ---------- */
-  useEffect(() => {
-    if (!me) { setPantry([]); return; }
-    const qp = query(
-      collection(db, "pantryItems"),
-      where("uid", "==", me.uid),
-      orderBy("createdAt", "desc")
-    );
-    const stop = onSnapshot(qp, (snap) => {
-      setPantry(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as PantryItem[]);
-    });
-    return () => stop();
-  }, [me]);
-
-  /* ---------- Favorites (users/{uid}/favoriteRecipes/{recipeId}) ---------- */
-  useEffect(() => {
-    if (!me) { setFavoriteIds(new Set()); return; }
-    const qf = collection(db, "users", me.uid, "favoriteRecipes");
-    const stop = onSnapshot(qf, (snap) => {
-      const ids = new Set<string>(snap.docs.map((d) => d.id));
-      setFavoriteIds(ids);
-    });
-    return () => stop();
-  }, [me]);
-
-  /* ---------- Build search terms ---------- */
-  const uiTerms = useMemo(() => {
-    const manualTerms = q
+}
+function ridFor(r: CommonRecipe) {
+  return r.source === "api" ? `api-${r.id}` : `user-${r.id}`;
+}
+function pantryTerms(names: string[], max = 6): string[] {
+  const stops = new Set(["and", "of", "with", "the"]);
+  const uniq = new Set<string>();
+  for (const n of names) {
+    const bits = n
       .toLowerCase()
-      .split(/[, ]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
+      .replace(/[^\p{L}\p{N}\s]/gu, " ")
+      .split(/\s+/)
+      .filter(Boolean)
+      .filter((w) => !stops.has(w));
+    const key = bits[bits.length - 1] || n.toLowerCase();
+    if (!uniq.has(key)) uniq.add(key);
+    if (uniq.size >= max) break;
+  }
+  return Array.from(uniq);
+}
 
-    const pantryTerms = usePantryTerms
-      ? Array.from(
-          new Set(
-            pantry
-              .map((p) => p.name?.toLowerCase().trim())
-              .filter(Boolean) as string[]
-          )
-        )
-      : [];
+/* ---------------- page ---------------- */
+export default function RecipesPage() {
+  const [me, setMe] = useState<string | null>(auth.currentUser?.uid ?? null);
 
-    return Array.from(new Set([...manualTerms, ...pantryTerms]));
-  }, [q, usePantryTerms, pantry]);
+  // lists
+  const [apiRecipes, setApiRecipes] = useState<CommonRecipe[]>([]);
+  const [userRecipes, setUserRecipes] = useState<CommonRecipe[]>([]);
+  const [pantryRecipes, setPantryRecipes] = useState<CommonRecipe[] | null>(null);
 
-  /* ---------- Helpers ---------- */
-  function ingredientNames(r: Recipe): string[] {
-    if (Array.isArray(r.ingredientsNames) && r.ingredientsNames.length) {
-      return r.ingredientsNames.map((s) => s.toLowerCase());
+  // favorites
+  const [favs, setFavs] = useState<Record<string, boolean>>({});
+  const [showFavs, setShowFavs] = useState(false);
+
+  // pantry names
+  const [pantry, setPantry] = useState<string[]>([]);
+
+  // search
+  const [q, setQ] = useState("");
+  const [mode, setMode] = useState<"name" | "ingredient">("name"); // default to "name"
+  const [busySearch, setBusySearch] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // modal + add form
+  const [open, setOpen] = useState<CommonRecipe | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [tTitle, setTTitle] = useState("");
+  const [tIngredients, setTIngredients] = useState("");
+  const [tInstructions, setTInstructions] = useState("");
+  const [addBusy, setAddBusy] = useState(false);
+  const [addErr, setAddErr] = useState<string | null>(null);
+
+  // delete feedback
+  const [delBusyId, setDelBusyId] = useState<string | null>(null);
+
+  /* ---------- auth + live listeners ---------- */
+  useEffect(() => {
+    const stopAuth = onAuthStateChanged(auth, (u) => {
+      setMe(u?.uid ?? null);
+
+      if (u) {
+        // No composite index needed: only where("uid"=="..."), sort locally by createdAt.seconds desc
+        const qMine = query(collection(db, "recipes"), where("uid", "==", u.uid));
+        const stopUser = onSnapshot(
+          qMine,
+          (snap) => {
+            const rows = snap.docs
+              .map((d) => {
+                const data = d.data() as any;
+                const r: CommonRecipe = {
+                  id: d.id,
+                  source: "user",
+                  title: data.title || "Untitled",
+                  image: data.image ?? null,
+                  category: data.category ?? null,
+                  area: data.area ?? null,
+                  ingredients: Array.isArray(data.ingredients) ? data.ingredients : [],
+                  instructions: data.instructions ?? null,
+                  author: { uid: data.uid || data.author?.uid || u.uid, name: data.author?.name || null },
+                };
+                (r as any)._cts = data.createdAt?.seconds || 0; // for local sort
+                return r;
+              })
+              .sort((a: any, b: any) => b._cts - a._cts);
+            setUserRecipes(rows);
+          },
+          (e) => {
+            console.error("User recipes listener error:", e);
+          }
+        );
+
+        // favorites map
+        const fq = query(collection(db, "users", u.uid, "favoriteRecipes"));
+        const stopFavs = onSnapshot(fq, (snap) => {
+          const map: Record<string, boolean> = {};
+          snap.docs.forEach((d) => (map[d.id] = true));
+          setFavs(map);
+        });
+
+        // pantry names
+        const pq = query(collection(db, "pantryItems"), where("uid", "==", u.uid));
+        const stopPantry = onSnapshot(pq, (snap) => {
+          const names = snap.docs
+            .map((d) => (d.data() as any)?.name || "")
+            .filter(Boolean)
+            .map((n) => n.toLowerCase());
+          setPantry(names);
+        });
+
+        return () => {
+          stopUser();
+          stopFavs();
+          stopPantry();
+        };
+      } else {
+        setUserRecipes([]);
+        setFavs({});
+        setPantry([]);
+      }
+    });
+
+    return () => stopAuth();
+  }, []);
+
+  /* ---------- initial API list (randoms) ---------- */
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const list = await getRandomMeals(15);
+        if (alive) setApiRecipes(list);
+      } catch {}
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  /* ---------- search ---------- */
+  useEffect(() => {
+    const id = setTimeout(async () => {
+      setErr(null);
+      setPantryRecipes(null); // searching cancels pantry suggestions
+      if (!q.trim()) {
+        const list = await getRandomMeals(15);
+        setApiRecipes(list);
+        setBusySearch(false);
+        return;
+      }
+      setBusySearch(true);
+      try {
+        const list =
+          mode === "ingredient"
+            ? await searchMealsByIngredient(q.trim())
+            : await searchMealsByName(q.trim());
+        setApiRecipes(list);
+      } catch (e: any) {
+        setErr(e?.message || "Search failed.");
+      } finally {
+        setBusySearch(false);
+      }
+    }, 350);
+    return () => clearTimeout(id);
+  }, [q, mode]);
+
+  /* ---------- find via pantry ---------- */
+  async function loadPantrySuggestions() {
+    setErr(null);
+    setBusySearch(true);
+    try {
+      const terms = pantryTerms(pantry, 6);
+      if (terms.length === 0) {
+        setPantryRecipes([]);
+        setBusySearch(false);
+        return;
+      }
+      const lists = await Promise.all(terms.map((t) => searchMealsByIngredient(t, 12)));
+      // merge unique by id
+      const seen = new Set<string>();
+      const merged: CommonRecipe[] = [];
+      for (const arr of lists) {
+        for (const r of arr) {
+          const k = `api-${r.id}`;
+          if (seen.has(k)) continue;
+          seen.add(k);
+          merged.push(r);
+        }
+      }
+      setPantryRecipes(merged);
+    } catch (e: any) {
+      setErr(e?.message || "Pantry search failed.");
+    } finally {
+      setBusySearch(false);
     }
-    if (Array.isArray(r.ingredients) && r.ingredients.length) {
-      return r.ingredients
-        .map((i) => (i?.name || "").toLowerCase().trim())
-        .filter(Boolean);
-    }
-    return [];
   }
 
-  /* ---------- Filter recipes ---------- */
-  const filtered = useMemo(() => {
-    if (uiTerms.length === 0) return recipes;
-    return recipes.filter((r) => {
-      const names = ingredientNames(r);
-      if (names.length === 0) return false;
-      // every search term must be included in at least one ingredient name
-      return uiTerms.every((term) => names.some((n) => n.includes(term)));
-    });
-  }, [recipes, uiTerms]);
+  const visibleRecipes = pantryRecipes ?? apiRecipes;
 
-  // favorites at the top
-  const favorites = useMemo(
-    () => filtered.filter((r) => favoriteIds.has(r.id)),
-    [filtered, favoriteIds]
-  );
-  const others = useMemo(
-    () => filtered.filter((r) => !favoriteIds.has(r.id)),
-    [filtered, favoriteIds]
-  );
-
-  /* ---------- Toggle favorite ---------- */
-  async function toggleFavorite(recipeId: string) {
-    if (!me) return; // optionally route to login
-    const favRef = doc(db, "users", me.uid, "favoriteRecipes", recipeId);
-    if (favoriteIds.has(recipeId)) {
-      await deleteDoc(favRef);
+  /* ---------- favorites toggle ---------- */
+  async function toggleFav(r: CommonRecipe) {
+    const uid = me;
+    if (!uid) return alert("Please sign in to favorite.");
+    const id = ridFor(r);
+    const ref = doc(db, "users", uid, "favoriteRecipes", id);
+    if (favs[id]) {
+      await deleteDoc(ref).catch(() => {});
     } else {
-      await setDoc(favRef, { createdAt: serverTimestamp() });
+      await setDoc(ref, {
+        title: r.title,
+        image: r.image || null,
+        source: r.source,
+        recipeId: r.id,
+        createdAt: serverTimestamp(),
+      }).catch(() => {});
+    }
+  }
+
+  /* ---------- open favorite from popup ---------- */
+  async function openFavorite(id: string, source: "api" | "user", recipeId: string) {
+    if (source === "api") {
+      const hit =
+        visibleRecipes.find((r) => r.source === "api" && r.id === recipeId) ||
+        apiRecipes.find((r) => r.source === "api" && r.id === recipeId);
+      if (hit) return setOpen(hit);
+      const full = await lookupMealById(recipeId);
+      if (full) setOpen(full);
+    } else {
+      const ref = doc(db, "recipes", recipeId);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        const data = snap.data() as any;
+        setOpen({
+          id: snap.id,
+          source: "user",
+          title: data.title || "Untitled",
+          image: data.image || null,
+          category: data.category || null,
+          area: data.area || null,
+          ingredients: Array.isArray(data.ingredients) ? data.ingredients : [],
+          instructions: data.instructions || null,
+          author: { uid: data.uid || null, name: data.author?.name || null },
+        });
+      }
+    }
+    setShowFavs(false);
+  }
+
+  /* ---------- add user recipe ---------- */
+  async function addRecipe() {
+    if (!me) return alert("Please sign in.");
+    setAddErr(null);
+    const title = capFirst(tTitle.trim());
+    if (!title) return setAddErr("Please enter a title.");
+    const ingredients = parseIngredientsText(tIngredients);
+    const instructions = tInstructions.trim() || null;
+
+    // IMPORTANT: never write undefined (rules/SDKs reject it)
+    const payload = {
+      uid: me,
+      title,
+      image: null as string | null,
+      category: null as string | null,
+      area: null as string | null,
+      ingredients, // [] if empty is fine
+      instructions, // null or string
+      author: { uid: me, name: auth.currentUser?.displayName || null } as { uid: string; name: string | null },
+      createdAt: serverTimestamp(),
+    };
+
+    setAddBusy(true);
+    try {
+      await addDoc(collection(db, "recipes"), payload);
+      setAdding(false);
+      setTTitle("");
+      setTIngredients("");
+      setTInstructions("");
+    } catch (e: any) {
+      setAddErr(e?.message ?? "Failed to add recipe.");
+    } finally {
+      setAddBusy(false);
+    }
+  }
+
+  /* ---------- delete user recipe ---------- */
+  async function deleteRecipe(id: string) {
+    if (!me) return alert("Please sign in.");
+    if (!confirm("Delete this recipe? This cannot be undone.")) return;
+
+    setDelBusyId(id);
+    setErr(null);
+    try {
+      const ref = doc(db, "recipes", id);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) {
+        setDelBusyId(null);
+        return;
+      }
+      const data = snap.data() as any;
+      const owner = data?.uid || data?.author?.uid || null;
+
+      if (owner && owner !== me) {
+        setErr("You can only delete your own recipes.");
+        setDelBusyId(null);
+        return;
+      }
+
+      // NOTE: Your security rules require resource.data.uid == request.auth.uid.
+      // Old docs that lack 'uid' will fail delete. Migrate them by adding a uid or delete via admin.
+      await deleteDoc(ref);
+      // onSnapshot will update the UI
+    } catch (e: any) {
+      const code = e?.code || "";
+      setErr(
+        code === "permission-denied"
+          ? "Permission denied. If this is an old recipe without a 'uid' field, add the uid (migration) or delete with admin."
+          : e?.message || "Failed to delete."
+      );
+    } finally {
+      setDelBusyId(null);
     }
   }
 
   return (
-    <main className="wrap">
-      <h1 className="title">Recipes</h1>
+    <main className="container">
+      <div className="topbar">
+        <h1 className="title">Recipes</h1>
+        <div className="right">
+          <button className="linkBtn" onClick={()=>setShowFavs(true)}>favorites</button>
+        </div>
+      </div>
 
-      {/* Search */}
-      <section className="searchCard">
+      {/* controls */}
+      <section className="card controls">
         <div className="row">
-          <div className="col">
-            <label className="label">Search by ingredients</label>
-            <input
-              className="textInput"
-              type="text"
+          <div className="toggles">
+            <label className={`chip ${mode === "name" ? "active" : ""}`} onClick={()=>setMode("name")}>By name</label>
+            <label className={`chip ${mode === "ingredient" ? "active" : ""}`} onClick={()=>setMode("ingredient")}>By ingredient</label>
+          </div>
+
+          <div className="grow">
+            <Input
+              label="Search"
               value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="e.g. tomato, garlic, pasta"
+              onChange={(e:any)=>setQ(e.target.value)}
+              placeholder={mode === "name" ? "e.g. Pasta" : "e.g. chicken"}
             />
-            <div className="hint">
-              Separate by comma or space. We’ll match ingredient names that include those words.
-            </div>
           </div>
 
-          <div className="col small">
-            <label className="label">&nbsp;</label>
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={usePantryTerms}
-                onChange={(e) => setUsePantryTerms(e.target.checked)}
-                disabled={!me || pantry.length === 0}
-              />
-              Use my pantry
-            </label>
-
-            {!!me && pantry.length > 0 && usePantryTerms && (
-              <div className="chips">
-                {Array.from(
-                  new Set(
-                    pantry
-                      .map((p) => p.name?.toLowerCase().trim())
-                      .filter(Boolean) as string[]
-                  )
-                ).map((name) => (
-                  <span className="chip" key={name}>{name}</span>
-                ))}
-              </div>
-            )}
-          </div>
+          <Button onClick={()=>setAdding((v)=>!v)}>{adding ? "Close" : "Add recipe"}</Button>
+          <Button variant="secondary" onClick={loadPantrySuggestions}>Find with my pantry</Button>
         </div>
 
-        <div className="actions">
-          <button className="btn" onClick={() => setQ("")}>Clear</button>
-          <button
-            className="btn"
-            onClick={() => setUsePantryTerms((v) => !v)}
-            disabled={!me || pantry.length === 0}
-          >
-            {usePantryTerms ? "Remove pantry terms" : "Add pantry terms"}
-          </button>
+        {busySearch && <p className="muted">Loading…</p>}
+        {err && <p className="error">{err}</p>}
+        {pantryRecipes && (
+          <p className="muted small">Showing suggestions from your pantry ({pantryTerms(pantry, 6).join(", ")}).</p>
+        )}
+      </section>
+
+      {/* add user recipe */}
+      {adding && (
+        <section className="card addForm">
+          <div className="grid">
+            <Input label="Title" value={tTitle} onChange={(e:any)=>setTTitle(e.target.value)} placeholder="Grandma’s Pasta" />
+            <div className="full">
+              <label className="lab">Ingredients (one per line — “Name — amount”)</label>
+              <textarea className="ta" rows={6} value={tIngredients} onChange={(e)=>setTIngredients(e.currentTarget.value)} />
+            </div>
+            <div className="full">
+              <label className="lab">Instructions</label>
+              <textarea className="ta" rows={6} value={tInstructions} onChange={(e)=>setTInstructions(e.currentTarget.value)} />
+            </div>
+          </div>
+          {addErr && <p className="error">{addErr}</p>}
+          <div className="actions">
+            <Button onClick={addRecipe} disabled={addBusy}>{addBusy ? "Saving…" : "Save recipe"}</Button>
+          </div>
+        </section>
+      )}
+
+      {/* my recipes row (first line) */}
+      {userRecipes.length > 0 && (
+        <section className="myRow">
+          <h3 className="h3">My recipes</h3>
+          <div className="hstrip">
+            {userRecipes.map((r) => {
+              const fav = favs[ridFor(r)];
+              const deleting = delBusyId === r.id;
+              return (
+                <article key={`u-${r.id}`} className="mini">
+                  {r.image ? <img className="mthumb" src={r.image} alt={r.title} /> : <div className="mthumb ph" />}
+                  <div className="mbody">
+                    <div className="mline">
+                      <div className="mt" title={r.title}>{r.title}</div>
+                      <button className={`star ${fav ? "on" : ""}`} onClick={()=>toggleFav(r)} title="Favorite">★</button>
+                    </div>
+                    <div className="rowBtns">
+                      <button className="open" onClick={()=>setOpen(r)}>Open</button>
+                      <button className="del" onClick={()=>deleteRecipe(r.id)} disabled={deleting}>
+                        {deleting ? "Deleting…" : "Delete"}
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* all other recipes (API or pantry suggestions) */}
+      <section className="list">
+        <div className="gridCards">
+          {(pantryRecipes ?? apiRecipes).map((r) => {
+            const fav = favs[ridFor(r)];
+            return (
+              <article key={`${r.source}-${r.id}`} className="rcard">
+                {r.image ? <img className="thumb small" src={r.image} alt={r.title} /> : <div className="thumb small ph" />}
+                <div className="body">
+                  <div className="row2">
+                    <h4 className="rt" title={r.title}>{r.title}</h4>
+                    <button
+                      className={`star ${fav ? "on" : ""}`}
+                      title={fav ? "Unfavorite" : "Favorite"}
+                      onClick={()=>toggleFav(r)}
+                    >★</button>
+                  </div>
+                  <div className="meta">
+                    {r.category ? <span className="chip small">{r.category}</span> : null}
+                    {r.area ? <span className="chip small">{r.area}</span> : null}
+                    <span className="muted small">{r.source === "api" ? "TheMealDB" : "User"}</span>
+                  </div>
+                  <button className="open" onClick={()=>setOpen(r)}>Open</button>
+                </div>
+              </article>
+            );
+          })}
         </div>
       </section>
 
-      {/* Favorites */}
-      {favorites.length > 0 && (
-        <>
-          <h2 className="h2">My favorites</h2>
-          <ul className="grid">
-            {favorites.map((r) => (
-              <RecipeCard
-                key={r.id}
-                r={r}
-                isFav={favoriteIds.has(r.id)}
-                onToggleFav={() => toggleFavorite(r.id)}
-              />
-            ))}
-          </ul>
-        </>
-      )}
+      {open ? (
+        <RecipeModal
+          recipe={open}
+          onClose={()=>setOpen(null)}
+          isFavorite={!!favs[ridFor(open)]}
+          onToggleFavorite={(r)=>toggleFav(r)}
+        />
+      ) : null}
 
-      {/* Matches / All */}
-      <h2 className="h2" style={{ marginTop: favorites.length ? 10 : 0 }}>
-        {uiTerms.length ? "Matches" : "All recipes"}
-      </h2>
-      {others.length === 0 && favorites.length === 0 ? (
-        <p className="muted">No recipes found.</p>
-      ) : (
-        <ul className="grid">
-          {others.map((r) => (
-            <RecipeCard
-              key={r.id}
-              r={r}
-              isFav={favoriteIds.has(r.id)}
-              onToggleFav={() => toggleFavorite(r.id)}
-            />
-          ))}
-        </ul>
-      )}
+      {showFavs ? (
+        <FavOverlay
+          uid={me}
+          onClose={()=>setShowFavs(false)}
+          onOpen={(id, source, recipeId)=>openFavorite(id, source, recipeId)}
+        />
+      ) : null}
 
       <style jsx>{`
-        .wrap { max-width: 1000px; margin: 0 auto; padding: 24px; }
-        .title { font-size: 28px; font-weight: 800; margin-bottom: 12px; }
-        .h2 { font-size: 18px; font-weight: 700; margin: 16px 0 10px; color:#0f172a; }
-        .muted { color:#6b7280; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+        .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+        .title{font-size:28px;font-weight:800;margin:0}
+        .right{display:flex;gap:10px}
+        .linkBtn{border:none;background:none;color:#0f172a;text-decoration:underline;cursor:pointer;font-size:13px}
 
-        .searchCard { border:1px solid #e5e7eb; background:#fff; border-radius:12px; padding:12px; margin-bottom:12px; }
-        .row { display:grid; grid-template-columns: 1fr 280px; gap:12px 16px; }
-        @media (max-width: 820px){ .row { grid-template-columns: 1fr; } }
-        .col.small { align-self:end; }
-        .label { display:block; margin-bottom:6px; font-weight:600; color:#0f172a; }
-        .textInput { width:100%; border:1px solid #d1d5db; border-radius:10px; padding:10px 12px; font-size:14px; }
-        .hint { margin-top:6px; font-size:12px; color:#64748b; }
+        .card { border:1px solid #e5e7eb; background:#fff; border-radius:16px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.04); }
+        .controls .row{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
+        .toggles{display:flex;gap:8px}
+        .chip{border:1px solid #e5e7eb;background:#fff;border-radius:999px;padding:6px 10px;cursor:pointer}
+        .chip.active{background:#0f172a;color:#fff;border-color:#0f172a}
+        .grow{flex:1 1 360px}
+        .muted{color:#64748b}
+        .small{font-size:12px}
+        .error{margin-top:8px;background:#fef2f2;color:#991b1b;border:1px solid #fecaca;border-radius:8px;padding:8px 10px;font-size:13px}
 
-        .checkbox { font-size:14px; color:#0f172a; display:flex; align-items:center; gap:8px; }
-        .chips { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
-        .chip { border:1px solid #e5e7eb; border-radius:999px; padding:4px 8px; font-size:12px; background:#f8fafc; }
+        .addForm .grid{display:grid;grid-template-columns:1fr;gap:12px}
+        .lab{display:block;margin-bottom:6px;font-size:.9rem;color:#111827;font-weight:500}
+        .ta{width:100%;border:1px solid #d1d5db;border-radius:12px;padding:10px 12px;font-size:14px}
+        .actions { margin-top:10px; display:flex; gap:12px; justify-content:flex-end; }
 
-        .actions { display:flex; gap:8px; align-items:center; margin-top:12px; }
-        .btn { border:1px solid #e5e7eb; border-radius:10px; padding:8px 12px; background:#fff; cursor:pointer; }
-        .btn:hover { background:#f8fafc; }
+        /* my row */
+        .myRow{margin:14px 0}
+        .h3{margin:0 0 8px}
+        .hstrip{display:flex;gap:12px;overflow:auto;padding:4px}
+        .mini{min-width:240px;border:1px solid #eef2f7;border-radius:12px;background:#fff;overflow:hidden}
+        .mthumb{width:100%;height:110px;object-fit:cover;background:#eee}
+        .mbody{padding:8px}
+        .mline{display:flex;align-items:center;gap:8px}
+        .mt{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+        .rowBtns{display:flex;gap:8px;margin-top:6px}
+        .star{border:1px solid #e5e7eb;background:#fff;border-radius:8px;padding:4px 8px;cursor:pointer}
+        .star.on{background:#fde68a;border-color:#f59e0b}
+        .open,.del{border:1px solid #e5e7eb;background:#fff;border-radius:10px;padding:6px 10px;cursor:pointer}
+        .del{background:#fee2e2;border-color:#fecaca;color:#991b1b}
 
-        .grid { list-style:none; padding:0; margin:0; display:grid; grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); gap:16px; }
+        /* grid */
+        .list{margin-top:12px}
+        .gridCards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+        @media (max-width: 980px){ .gridCards{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+        @media (max-width: 640px){ .gridCards{ grid-template-columns:1fr; } }
+
+        .rcard{border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;background:#fff;display:grid;grid-template-rows:auto 1fr}
+        .thumb.small{width:100%;height:120px;object-fit:cover;background:#ddd}
+        .thumb.ph{display:block}
+        .body{padding:10px}
+        .row2{display:flex;align-items:center;gap:8px}
+        .rt{margin:0; font-size:16px; font-weight:700; color:#0f172a; flex:1}
+        .meta{display:flex;gap:8px;align-items:center;margin:6px 0}
+        .chip.small{font-size:12px;padding:2px 8px}
       `}</style>
     </main>
   );
 }
 
-/* ---------- RecipeCard (inline component) ---------- */
-function RecipeCard({
-  r,
-  isFav,
-  onToggleFav,
+/* -------- favorites popup overlay -------- */
+function FavOverlay({
+  uid,
+  onClose,
+  onOpen,
 }: {
-  r: Recipe;
-  isFav: boolean;
-  onToggleFav: () => void;
+  uid: string | null;
+  onClose: () => void;
+  onOpen: (id: string, source: "api" | "user", recipeId: string) => void;
 }) {
-  const authorName =
-    r?.author?.username ||
-    r?.author?.displayName ||
-    (r?.uid ? r.uid.slice(0, 6) : "Unknown");
+  const [rows, setRows] = useState<
+    { id: string; title: string; image: string | null; source: "api" | "user"; recipeId: string }[]
+  >([]);
+
+  useEffect(() => {
+    if (!uid) return;
+    const q = query(collection(db, "users", uid, "favoriteRecipes"));
+    const stop = onSnapshot(q, (snap) => {
+      const list = snap.docs.map((d) => {
+        const data = d.data() as any;
+        return {
+          id: d.id,
+          title: data.title || "Untitled",
+          image: data.image || null,
+          source: (data.source as "api" | "user") || "api",
+          recipeId: String(data.recipeId || ""),
+        };
+      });
+      setRows(list);
+    });
+    return () => stop();
+  }, [uid]);
 
   return (
-    <li className="card">
-      <Link href={`/recipes/${r.id}`} className="link">
-        {r.imageURL ? <img className="thumb" src={r.imageURL} alt="" /> : <div className="thumb ph" />}
-        <div className="meta">
-          <div className="top">
-            <div className="title2">{r.title || "Untitled"}</div>
-            <button
-              type="button"
-              className={`star ${isFav ? "on" : ""}`}
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleFav(); }}
-              aria-label={isFav ? "Unstar" : "Star"}
-              title={isFav ? "Unstar" : "Star"}
-            >
-              ★
-            </button>
-          </div>
-          {r.description && <div className="desc">{r.description}</div>}
-          {Array.isArray(r.ingredients) && r.ingredients.length > 0 && (
-            <div className="ings">
-              {r.ingredients.slice(0, 4).map((i, idx) => (
-                <span className="pill" key={idx}>{i?.name || "ingredient"}</span>
-              ))}
-              {r.ingredients.length > 4 && <span className="pill more">+{r.ingredients.length - 4}</span>}
-            </div>
-          )}
-          <div className="by">by <strong>{authorName}</strong></div>
+    <div className="ov" onClick={onClose} role="dialog" aria-modal="true">
+      <div className="box" onClick={(e)=>e.stopPropagation()}>
+        <div className="bh">
+          <div className="bt">Favorites</div>
+          <button className="x" onClick={onClose}>✕</button>
         </div>
-      </Link>
+        {rows.length === 0 ? (
+          <p className="muted small" style={{padding:"8px 12px"}}>No favorites yet.</p>
+        ) : (
+          <div className="gridFav">
+            {rows.map((r) => (
+              <div key={r.id} className="fi">
+                {r.image ? <img className="fimg" src={r.image} alt={r.title} /> : <div className="fimg" />}
+                <div className="ft" title={r.title}>{r.title}</div>
+                <button className="open" onClick={()=>onOpen(r.id, r.source, r.recipeId)}>Open</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <style jsx>{`
-        .card { border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; background:#fff; }
-        .link { display:block; text-decoration:none; color:inherit; }
-        .thumb { width:100%; height:160px; object-fit:cover; border-bottom:1px solid #eef2f7; display:block; }
-        .thumb.ph { background:#f1f5f9; }
-        .meta { padding:12px; display:grid; gap:6px; }
-        .top { display:flex; align-items:center; gap:8px; justify-content:space-between; }
-        .title2 { font-weight:700; }
-        .desc { color:#4b5563; font-size:14px; }
-        .ings { display:flex; gap:6px; flex-wrap:wrap; }
-        .pill { border:1px solid #e5e7eb; border-radius:999px; padding:2px 8px; font-size:12px; background:#f8fafc; }
-        .pill.more { background:#fff; }
-        .by { color:#64748b; font-size:12px; }
-        .star { border:none; background:transparent; font-size:20px; line-height:1; cursor:pointer; color:#cbd5e1; }
-        .star.on { color:#f59e0b; }
-        .star:hover { transform: scale(1.05); }
+        .ov{position:fixed;inset:0;background:rgba(2,6,23,.55);display:grid;place-items:center;padding:16px;z-index:1000}
+        .box{width:100%;max-width:760px;max-height:90vh;overflow:auto;background:#fff;border-radius:16px;border:1px solid #e5e7eb}
+        .bh{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #eef2f7;padding:10px 12px}
+        .bt{font-weight:800;color:#0f172a}
+        .x{border:none;background:#0f172a;color:#fff;border-radius:10px;padding:4px 10px;cursor:pointer}
+        .gridFav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:12px}
+        @media (max-width:840px){ .gridFav{grid-template-columns:repeat(2,minmax(0,1fr));} }
+        @media (max-width:560px){ .gridFav{grid-template-columns:1fr;} }
+        .fi{border:1px solid #eef2f7;border-radius:12px;background:#fff;overflow:hidden}
+        .fimg{width:100%;height:120px;object-fit:cover;background:#eee}
+        .ft{padding:8px 10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .open{margin:0 10px 10px;border:1px solid #e5e7eb;background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer}
       `}</style>
-    </li>
+    </div>
   );
 }

@@ -3,40 +3,52 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
+    /* ---------- helpers ---------- */
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // --- Posts media: posts/{uid}/{postId}/{fileName}
-    // Public read; only the owner can write.
-    match /posts/{uid}/{postId}/{fileName} {
-      allow read: if true;
+    // The signed-in user must be the owner of the recipe document
+    function isRecipeOwner(recipeId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/recipes/$(recipeId))
+        && get(/databases/$(database)/documents/recipes/$(recipeId)).data.uid == request.auth.uid;
+    }
+
+    /* =========================================================
+       POSTS media — store under: posts/{uid}/{postId}/...
+       (Allows nested files/folders)
+    ========================================================== */
+    match /posts/{uid}/{postId}/{allPaths=**} {
+      allow read: if true;  // make public if you want
       allow write: if isSignedIn() && request.auth.uid == uid;
+      // write covers upload, update, and delete
     }
 
-    // --- Recipe cover: recipeImages/{uid}/{recipeId}
-    // Require that the recipe doc exists and belongs to the uploader.
-    match /recipeImages/{uid}/{recipeId} {
+    /* =========================================================
+       RECIPES media
+       Recommended path: recipeImages/{uid}/{recipeId}/...
+       - Store a cover as: recipeImages/{uid}/{recipeId}/cover.jpg
+       - Store gallery as: recipeImages/{uid}/{recipeId}/gallery/...
+       We verify that the Firestore recipe doc exists and is owned by the uploader.
+    ========================================================== */
+    match /recipeImages/{uid}/{recipeId}/{allPaths=**} {
+      allow read: if true; // or restrict
+      allow write: if isRecipeOwner(recipeId) && request.auth.uid == uid;
+    }
+
+    /* =========================================================
+       (Optional) Back-compat: if you also use recipes/{uid}/{recipeId}/...
+       keep this matcher until you migrate everything to recipeImages/...
+    ========================================================== */
+    match /recipes/{uid}/{recipeId}/{allPaths=**} {
       allow read: if true;
-      allow write: if isSignedIn()
-                   && request.auth.uid == uid
-                   && exists(/databases/(default)/documents/recipes/$(recipeId))
-                   && get(/databases/(default)/documents/recipes/$(recipeId)).data.uid == uid;
+      allow write: if isRecipeOwner(recipeId) && request.auth.uid == uid;
     }
 
-    // --- Optional gallery: recipeImages/{uid}/{recipeId}/gallery/{fileName}
-    match /recipeImages/{uid}/{recipeId}/gallery/{fileName} {
-      allow read: if true;
-      allow write: if isSignedIn()
-                   && request.auth.uid == uid
-                   && exists(/databases/(default)/documents/recipes/$(recipeId))
-                   && get(/databases/(default)/documents/recipes/$(recipeId)).data.uid == uid;
-    }
-
-    // --- Deny everything else
-    match /{allPaths=**} {
-      allow read: if false;
-      allow write: if false;
+    /* ---------- deny everything else ---------- */
+    match /{allOtherPaths=**} {
+      allow read, write: if false;
     }
   }
 }
