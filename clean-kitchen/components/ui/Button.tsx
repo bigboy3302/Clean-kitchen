@@ -1,45 +1,52 @@
+// components/ui/Button.tsx
 "use client";
-import React, { ButtonHTMLAttributes, forwardRef } from "react";
-import clsx from "clsx";
+import React from "react";
 
-type Variant = "primary" | "secondary" | "danger" | "destructive";
-type Size = "md" | "sm";
-
-type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: Variant;
-  size?: Size;
-  className?: string;
-  full?: boolean;
+type Props = React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: "primary" | "secondary" | "ghost";
+  size?: "sm" | "md" | "lg";
 };
 
-const variants: Record<Variant, string> = {
-  primary:     "btn btnPrimary",
-  secondary:   "btn btnSecondary",
-  danger:      "btn btnDanger",
-  destructive: "btn btnDanger",   // alias -> same style as danger
-};
-
-export default forwardRef<HTMLButtonElement, Props>(function Button(
-  { variant = "primary", size = "md", className, full = true, children, type, ...rest },
-  ref
-) {
-  // keep backward-compat if someone passes 'destructive'
-  const v = (variant === "danger" ? "danger" : variant) as Variant;
-
+export default function Button({ variant = "primary", size = "md", className = "", ...rest }: Props) {
   return (
-    <button
-      ref={ref}
-      type={type ?? "button"}                 // ✅ prevents accidental form submits
-      className={clsx(
-        "btn-base",
-        variants[v] || variants.primary,      // ✅ never undefined
-        size === "sm" ? "btn--sm" : "btn--md",
-        full && "btn--full",
-        className
-      )}
-      {...rest}
-    >
-      {children}
-    </button>
+    <>
+      <button
+        className={`btn ${variant} ${size} ${className}`}
+        {...rest}
+      />
+      <style jsx>{`
+        .btn{
+          border-radius:12px;
+          cursor:pointer;
+          border:1px solid var(--btn-border);
+          background: var(--btn-bg);
+          color: var(--btn-fg);
+          transition: filter .15s, transform .02s;
+        }
+        .btn:hover{ filter: brightness(1.05); }
+        .btn:active{ transform: translateY(1px); }
+
+        .primary{}
+        .secondary{
+          background: var(--bg2);
+          color: var(--text);
+          border-color: var(--border);
+        }
+        .secondary:hover{ filter:none; background: rgba(0,0,0,.04); }
+        :root[data-theme="dark"] .secondary:hover{ background: rgba(255,255,255,.06); }
+
+        .ghost{
+          background: transparent;
+          color: var(--text);
+          border-color: var(--border);
+        }
+        .ghost:hover{ background: rgba(0,0,0,.04); }
+        :root[data-theme="dark"] .ghost:hover{ background: rgba(255,255,255,.06); }
+
+        .sm{ padding:6px 10px; font-size:.9rem; }
+        .md{ padding:8px 14px; font-size:1rem; }
+        .lg{ padding:12px 18px; font-size:1.05rem; }
+      `}</style>
+    </>
   );
-});
+}

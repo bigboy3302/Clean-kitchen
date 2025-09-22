@@ -128,7 +128,6 @@ export default function PostCard({ post, meUid }: Props) {
       await hardDeletePost(post.id, post.uid, post.media);
       setShowConfirm(false);
     } catch (e: any) {
-      // Show the precise reason (from HardDelete)
       setErr(e?.message || "Failed to delete.");
     } finally {
       setBusyDelete(false);
@@ -344,21 +343,40 @@ export default function PostCard({ post, meUid }: Props) {
       )}
 
       <style jsx>{`
-        .card { border:1px solid #e5e7eb; background:#fff; border-radius:12px; padding:12px; cursor:pointer; }
-        .card:focus { outline: 2px solid #0f172a; outline-offset: 2px; }
+        .card {
+          border: 1px solid var(--border);
+          background: var(--card-bg);
+          color: var(--text);
+          border-radius: 12px;
+          padding: 12px;
+          cursor: pointer;
+          box-shadow: 0 10px 30px color-mix(in oklab, #000 6%, transparent);
+        }
+        .card:focus { outline: 2px solid var(--primary); outline-offset: 2px; }
+
         .head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
         .who { display:flex; gap:10px; align-items:center; }
-        .avatar { width:36px; height:36px; border-radius:999px; object-fit:cover; border:1px solid #e5e7eb; }
-        .avatar.ph { width:36px; height:36px; border-radius:999px; display:grid; place-items:center; background:#f1f5f9; color:#0f172a; font-weight:700; border:1px solid #e2e8f0; }
+        .avatar { width:36px; height:36px; border-radius:999px; object-fit:cover; border:1px solid var(--border); }
+        .avatar.ph { width:36px; height:36px; border-radius:999px; display:grid; place-items:center; background:var(--bg2); color:var(--text); font-weight:700; border:1px solid var(--border); }
         .names { line-height:1.2; }
-        .name { font-weight:600; color:#0f172a; }
-        .time { font-size:12px; color:#6b7280; }
-        .text { margin:8px 0; color:#0f172a; white-space:pre-wrap; word-wrap:break-word; overflow-wrap:anywhere; }
+        .name { font-weight:600; color:var(--text); }
+        .time { font-size:12px; color:var(--muted); }
+
+        .text { margin:8px 0; color:var(--text); white-space:pre-wrap; word-wrap:break-word; overflow-wrap:anywhere; }
+
         .ownerActions { display:flex; gap:8px; align-items:center; }
-        .rm { position:absolute; top:6px; right:6px; border:none; background:#0f172a; color:#fff; border-radius:8px; padding:2px 7px; cursor:pointer; }
+
+        .rm {
+          position:absolute; top:6px; right:6px;
+          border:none; background:var(--primary); color:var(--primary-contrast);
+          border-radius:8px; padding:2px 7px; cursor:pointer;
+        }
 
         .media { margin-top:8px; display:grid; gap:8px; }
-        .media img, .media video { width:100%; height:100%; object-fit:cover; display:block; border-radius:10px; border:1px solid #eef2f7; background:#000; }
+        .media img, .media video {
+          width:100%; height:100%; object-fit:cover; display:block;
+          border-radius:10px; border:1px solid var(--border); background:#000;
+        }
         .media.grid-1 { grid-template-columns: 1fr; }
         .media.grid-2 { grid-template-columns: 1fr 1fr; }
         .media.grid-3 { grid-template-columns: 2fr 1fr; grid-auto-rows: 180px; }
@@ -367,22 +385,46 @@ export default function PostCard({ post, meUid }: Props) {
         .mCell { position:relative; }
 
         .editWrap { display:grid; gap:8px; margin-top:6px; }
-        .ta { width:100%; border:1px solid #d1d5db; border-radius:10px; padding:8px 10px; }
+        .ta {
+          width:100%; border:1px solid var(--border); border-radius:10px; padding:8px 10px;
+          background: var(--bg2); color: var(--text);
+        }
 
         .bar { display:flex; gap:8px; margin-top:10px; }
-        .btn { border:1px solid #e5e7eb; background:#fff; border-radius:10px; padding:6px 10px; cursor:pointer; }
-        .btn:hover { background:#f8fafc; }
-        .btn.active { background:#0f172a; color:#fff; border-color:#0f172a; }
-        .btn.primary { background:#0f172a; color:#fff; border-color:#0f172a; }
+        .btn {
+          border:1px solid var(--border);
+          background: var(--bg2);
+          color: var(--text);
+          border-radius:10px;
+          padding:6px 10px;
+          cursor:pointer;
+        }
+        .btn:hover { border-color: var(--primary); background: color-mix(in oklab, var(--bg2) 75%, var(--primary) 25%); }
+        .btn.active, .btn.primary { background: var(--primary); color: var(--primary-contrast); border-color: var(--primary); }
         .btn.primary:hover { opacity:.95; }
-        .btn.danger { background:#fee2e2; color:#991b1b; border-color:#fecaca; }
+        .btn.danger {
+          background: color-mix(in oklab, #ef4444 15%, var(--card-bg));
+          color: color-mix(in oklab, #7f1d1d 70%, var(--text) 30%);
+          border-color: color-mix(in oklab, #ef4444 35%, var(--border));
+        }
 
-        .bad { margin-top:8px; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:6px 8px; font-size:12px; }
+        .bad {
+          margin-top:8px;
+          background: color-mix(in oklab, #ef4444 15%, transparent);
+          color: color-mix(in oklab, #7f1d1d 70%, var(--text) 30%);
+          border:1px solid color-mix(in oklab, #ef4444 35%, var(--border));
+          border-radius:8px; padding:6px 8px; font-size:12px;
+        }
 
         .overlay { position:fixed; inset:0; background:rgba(2,6,23,.45); display:grid; place-items:center; padding:16px; z-index:1000; }
-        .modal { width:100%; max-width:420px; background:#fff; border-radius:14px; border:1px solid #e5e7eb; box-shadow:0 24px 60px rgba(0,0,0,.2); padding:16px; }
-        .modalTitle { margin:0 0 6px; font-size:18px; font-weight:800; color:#0f172a; }
-        .modalText { margin:0 0 12px; color:#475569; }
+        .modal {
+          width:100%; max-width:420px;
+          background:var(--card-bg);
+          border-radius:14px; border:1px solid var(--border);
+          box-shadow:0 24px 60px rgba(0,0,0,.2); padding:16px;
+        }
+        .modalTitle { margin:0 0 6px; font-size:18px; font-weight:800; color:var(--text); }
+        .modalText { margin:0 0 12px; color:var(--muted); }
         .modalRow { display:flex; gap:10px; justify-content:flex-end; }
       `}</style>
     </article>

@@ -1,36 +1,27 @@
+// components/ui/Input.tsx
 "use client";
-import React, { forwardRef, InputHTMLAttributes } from "react";
-import styles from "./Input.module.css";
+import React from "react";
 
-type Props = {
-  label?: string;
-  hint?: string;
-  error?: string;
-  className?: string;
-} & InputHTMLAttributes<HTMLInputElement>;
+type Props = React.InputHTMLAttributes<HTMLInputElement> & { label?: string };
 
-const Input = forwardRef<HTMLInputElement, Props>(function Input(
-  { label, hint, error, className, id, ...rest },
-  ref
-) {
-  const inputId = id || rest.name || undefined;
+export default function Input({ label, className = "", ...rest }: Props) {
   return (
-    <div className={`${styles.wrapper} ${className || ""}`}>
-      {label && (
-        <label htmlFor={inputId} className={styles.label}>
-          {label}
-        </label>
-      )}
-      <input
-        ref={ref}
-        id={inputId}
-        className={`${styles.input} ${error ? styles.error : ""}`}
-        {...rest}
-      />
-      {hint && !error && <p className={styles.hint}>{hint}</p>}
-      {error && <p className={styles.errorText}>{error}</p>}
-    </div>
+    <label className={`f ${className}`}>
+      {label ? <span className="lab">{label}</span> : null}
+      <input className="inp" {...rest} />
+      <style jsx>{`
+        .f{display:flex;flex-direction:column;gap:6px}
+        .lab{font-size:.9rem;color:var(--text);opacity:.88;font-weight:600}
+        .inp{
+          border:1px solid var(--border);
+          background:var(--bg2);
+          color:var(--text);
+          border-radius:12px;
+          padding:10px 12px;
+          outline:none;
+        }
+        .inp:focus{ box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 30%, transparent); border-color: var(--ring); }
+      `}</style>
+    </label>
   );
-});
-
-export default Input;
+}

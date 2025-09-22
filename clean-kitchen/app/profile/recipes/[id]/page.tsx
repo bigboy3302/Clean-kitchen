@@ -10,7 +10,6 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage
 import dynamic from "next/dynamic";
 
 // Use ONLY the dynamic import (no direct import)
-const RecipePhotos = dynamic(() => import("@/components/recipes/RecipePhotos"), { ssr: false });
 
 type Ingredient = { name: string; qty?: number | null; unit?: string | null };
 type Author = { username?: string; displayName?: string; avatarURL?: string | null } | null;
@@ -258,7 +257,6 @@ export default function RecipeEditPage() {
             <label className="label">Image</label>
 
             {/* Gallery (owner can add/remove) */}
-            <RecipePhotos recipeId={recipe.id} recipeUid={recipe.uid} canEdit={true} />
 
             {recipe.imageURL ? (
               <div className="imgRow">

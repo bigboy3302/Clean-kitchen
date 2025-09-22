@@ -201,7 +201,7 @@ export default function WorkoutGrid({
       ) : null}
 
       <p className="muted small" style={{ marginTop: 8 }}>
-        Exercise images courtesy of ExerciseDB.
+        
       </p>
 
       <style jsx>{`

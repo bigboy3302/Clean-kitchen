@@ -1,18 +1,23 @@
 // components/ui/Card.tsx
+"use client";
 import React from "react";
 
-type CardProps = React.HTMLAttributes<HTMLDivElement> & {
-  className?: string;
-  children: React.ReactNode;
-};
-
-export default function Card({ className, children, ...rest }: CardProps) {
+export default function Card({ className = "", children }: { className?: string; children: React.ReactNode }) {
   return (
-    <div className={`card ${className || ""}`} {...rest}>
-      {children}
+    <>
+      <section className={`card ${className}`}>{children}</section>
       <style jsx>{`
-        .card { border:1px solid #e5e7eb; border-radius:16px; background:#fff; padding:12px; }
+        .card{
+          border:1px solid var(--card-border);
+          background: var(--card-bg);
+          border-radius:16px;
+          padding:16px;
+          box-shadow: 0 10px 30px rgba(0,0,0,.04);
+        }
+        :root[data-theme="dark"] .card{
+          box-shadow: 0 12px 24px rgba(0,0,0,.25);
+        }
       `}</style>
-    </div>
+    </>
   );
 }

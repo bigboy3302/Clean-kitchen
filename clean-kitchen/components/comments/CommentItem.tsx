@@ -1,6 +1,4 @@
-// components/comments/CommentItem.tsx
 "use client";
-
 import { useMemo, useState } from "react";
 
 export default function CommentItem({
@@ -16,8 +14,7 @@ export default function CommentItem({
   const [expanded, setExpanded] = useState(false);
 
   const shown = useMemo(() => {
-    if (expanded) return text;
-    if (!needsClamp) return text;
+    if (expanded || !needsClamp) return text;
     return text.slice(0, previewChars);
   }, [text, expanded, needsClamp, previewChars]);
 
@@ -25,37 +22,42 @@ export default function CommentItem({
     <div className="comment">
       <p className={`cmtText ${expanded ? "" : "clamped"}`}>{shown}</p>
       {needsClamp && (
-        <button className="show" onClick={() => setExpanded((s) => !s)}>
+        <button
+          className="show"
+          onClick={() => setExpanded((s) => !s)}
+          aria-expanded={expanded}
+        >
           {expanded ? "Show less" : "Show more"}
         </button>
       )}
 
       <style jsx>{`
         .comment { display:grid; gap:6px; }
-        .cmtText {
+        .cmtText{
           margin:4px 0 0;
-          color:#0f172a;
+          color: var(--text);
           white-space:pre-wrap;
-          /* keep text inside box, even with long tokens/urls */
           overflow-wrap:anywhere;
           word-break:break-word;
         }
-        .cmtText.clamped {
+        .cmtText.clamped{
           display:-webkit-box;
           -webkit-line-clamp:${previewLines};
           -webkit-box-orient:vertical;
           overflow:hidden;
         }
-        .show {
+        .show{
           align-self:start;
           border:none;
           background:transparent;
-          color:#0f172a;
+          color: var(--primary);
           text-decoration:underline;
           cursor:pointer;
           padding:0;
           font-size:13px;
         }
+        .show:hover{ opacity:.9; }
+        .show:focus{ outline:2px solid var(--primary); outline-offset:2px; border-radius:6px; }
       `}</style>
     </div>
   );
