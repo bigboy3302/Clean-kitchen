@@ -90,6 +90,10 @@ export default function PantryPage() {
   const [date, setDate] = useState<string>("");
   const [barcode, setBarcode] = useState<string>("");
 
+  // NEW: control scanner remount & autoStart
+  const [scannerKey, setScannerKey] = useState(0);
+  const [scannerAutoStart, setScannerAutoStart] = useState(false); // <— don't auto-start
+
   const [nutrition, setNutrition] = useState<NutritionInfo | null>(null);
   const [nutriBusy, setNutriBusy] = useState(false);
   const [nutriErr, setNutriErr] = useState<string | null>(null);
@@ -154,6 +158,8 @@ export default function PantryPage() {
   // camera detection → updates barcode (triggers lookup effect)
   function handleDetected(code: string) {
     setBarcode(code);
+    // once we scanned, keep scanner stopped; user can press Start again later if needed
+    setScannerAutoStart(false);
   }
 
   /* CRUD */
@@ -227,13 +233,17 @@ export default function PantryPage() {
         });
       }
 
-      // Reset inputs
+      // ✅ Hard reset UI AFTER a successful add
       setName("");
       setQty(1);
       setDate("");
-      setBarcode("");
+      setBarcode("");            // clear the input
       setNutrition(null);
       setNutriErr(null);
+
+      // ✅ Also remount the scanner so it cannot instantly re-fill the same code
+      setScannerAutoStart(false);    // keep it off until user taps "Start camera"
+      setScannerKey((k) => k + 1);   // force remount to fully reset internal state
     } catch (e: any) {
       setErr(e?.message ?? "Failed to add item.");
     } finally {
@@ -322,8 +332,8 @@ export default function PantryPage() {
 
           <div className="scannerCol">
             <label className="label">Scan with camera</label>
-            {/* Keep your existing BarcodeScanner component */}
-            <BarcodeScanner onDetected={handleDetected} />
+            {/* ✅ don't auto-start; also remount when scannerKey changes */}
+            <BarcodeScanner key={scannerKey} autoStart={scannerAutoStart} onDetected={handleDetected} />
             {nutriErr && <p className="error small">{nutriErr}</p>}
             {nutriBusy && <p className="muted small">Looking up nutrition…</p>}
           </div>
@@ -343,7 +353,7 @@ export default function PantryPage() {
 
         {err && <p className="error">{err}</p>}
         <div className="actions">
-          <Button onClick={addOrMergeItem} disabled={busy}>
+          <Button onClick={addOrMergeItem} disabled={busy} type="button">
             {busy ? "Saving…" : "Add / Merge"}
           </Button>
         </div>

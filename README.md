@@ -111,19 +111,5 @@ Pēc deploy Firebase dos URL, piemēram:
 https://clean-kitchen-de925.web.app
 
 
-📌 To-Do / nākamie soļi
 
- 🟢 Navbar — globālā navigācija (Dashboard, Pantry, Recipes, Profile)
-
- 🔑 Autentifikācija — Firebase Auth (Login, Register, Logout)
-
- 📦 Pantry CRUD — pievienot/rediģēt/dzēst produktus Firestore
-
- 🍳 Receptes CRUD — veidot un kopīgot receptes
-
- 📷 Barcode Scanner — pievienot produktu ar svītrkodu
-
- ⏰ Derīguma termiņu brīdinājumi Dashboard skatā
-
- 🤖 AI attēlu atpazīšana (ja būs laiks)
 

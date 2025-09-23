@@ -8,7 +8,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 
 import dynamic from "next/dynamic";
-const RecipePhotos = dynamic(() => import("@/components/recipes/RecipePhotos"), { ssr: false });
+const RecipePhotos = dynamic(() => import("components/recipes/RecipeImageUploader"), { ssr: false });
 
 export default function RecipeDetailPage() {
   const { id } = useParams(); // ✅ available on /recipes/[id]

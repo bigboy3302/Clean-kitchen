@@ -15,14 +15,14 @@ service firebase.storage {
         && get(/databases/(default)/documents/recipes/$(recipeId)).data.uid == request.auth.uid;
     }
     /* =========================================================
-+       avatars/{uid}/... — profile photos
-+       Owner can write/delete; anyone signed-in can read (or make public if you want)
-+    ========================================================== */
-+    match /avatars/{uid}/{allPaths=**} {
-+      allow read: if true; // or: request.auth != null
-+      allow write, delete: if request.auth != null && request.auth.uid == uid;
-+      allow list: if request.auth != null && request.auth.uid == uid; // optional
-+    }
+       avatars/{uid}/... — profile photos
+       Owner can write/delete; anyone signed-in can read (or make public if you want)
+    ========================================================== */
+    match /avatars/{uid}/{allPaths=**} {
+      allow read: if true; // or: request.auth != null
+      allow write, delete: if request.auth != null && request.auth.uid == uid;
+      allow list: if request.auth != null && request.auth.uid == uid; // optional
+    }
 
     /* =========================================================
        POSTS media — store under: posts/{uid}/{postId}/...

@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
+    "target": "ES2022",
     "lib": [
       "dom",
       "dom.iterable",
@@ -9,11 +9,10 @@
     "allowJs": false,
     "skipLibCheck": true,
     "strict": true,
-    "noImplicitAny": true,
     "noEmit": true,
     "incremental": true,
     "module": "esnext",
-    "moduleResolution": "bundler",
+    "moduleResolution": "bundler", // works well with Next 13/14 ESM
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
@@ -28,17 +27,22 @@
       {
         "name": "next"
       }
+    ],
+    "types": [
+      "node"
     ]
   },
   "include": [
+    "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    "next-env.d.ts",
+    "**/*.js",
+    "**/*.jsx",
     ".next/types/**/*.ts"
-, "app/recipes/[id]/page.jsx"  ],
+  ],
   "exclude": [
     "node_modules",
-    "tailwind.config.*",
-    "postcss.config.*"
+    ".next",
+    "out"
   ]
 }

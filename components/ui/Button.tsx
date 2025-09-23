@@ -3,10 +3,15 @@
 import React from "react";
 
 type Props = React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "ghost";
+  variant?: "primary" | "secondary" | "ghost" | "danger";
   size?: "sm" | "md" | "lg";
 };
-
+const VARIANT = {
+  primary: "btn-primary",
+  secondary: "btn-secondary",
+  ghost: "btn-ghost",
+  danger: "btn-danger", // add a red style in your CSS
+};
 export default function Button({ variant = "primary", size = "md", className = "", ...rest }: Props) {
   return (
     <>
