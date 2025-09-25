@@ -1,26 +1,22 @@
-// firestore.rules
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    /* ---------- Helpers ---------- */
+    /* ---------- Helpers (expression-only) ---------- */
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // ensure the doc’s uid matches the signed-in user
     function creatingAsSelf() {
       return isSignedIn() && request.resource.data.uid == request.auth.uid;
     }
 
-    // prevent uid from being changed on updates
     function ownershipUnchanged() {
       return !('uid' in request.resource.data) ||
              request.resource.data.uid == resource.data.uid;
     }
 
-    // lightweight profanity guard (server-side) – expand as needed
     function isClean(str) {
       return !(str.matches('(?i).*(\\b(fuck|shit|bitch|asshole|nigger|retard|cunt)\\b).*'));
     }
@@ -31,7 +27,6 @@ service cloud.firestore {
              isClean(request.resource.data[field]);
     }
 
-    // Comments: "text" field optional, must be string ≤ 25k and clean
     function textOk() {
       return !('text' in request.resource.data)
              || request.resource.data.text == null
@@ -42,92 +37,134 @@ service cloud.firestore {
                 );
     }
 
+    // small validators for prefs/nav
+    function isStr(v, max) { return v is string && v.size() <= max; }
+    function isBool(v)     { return v is bool; }
+    function isOneOf(v, list) { return list.hasAny([v]); }
+
+    // for arrays: only allowed strings and length cap
+    function listAllowedStrings(arr, allowed, maxLen) {
+      return (arr is list)
+          && arr.size() > 0
+          && arr.size() <= maxLen
+          && arr.hasOnly(allowed);
+    }
+
+    // Validate users.* payload including prefs.nav (expression-only)
+    function validUserWrite() {
+      let new = request.resource.data;
+
+      let baseOk =
+        (new.username == null || new.username.matches('^[a-z0-9._-]{3,20}$')) &&
+        (new.firstName == null || isStr(new.firstName, 100)) &&
+        (new.lastName  == null || isStr(new.lastName,  100));
+
+      let prefs = new.prefs;
+      let prefsOk =
+        (prefs == null) ||
+        (
+          (prefs.units == null || isOneOf(prefs.units, ["metric","imperial"])) &&
+          (prefs.theme == null || isOneOf(prefs.theme, ["system","light","dark"])) &&
+          (prefs.emailNotifications == null || isBool(prefs.emailNotifications)) &&
+
+          // navbar prefs
+          (
+            prefs.nav == null ||
+            (
+              (prefs.nav.placement == null || isOneOf(prefs.nav.placement, ["header","top","bottom","floating"])) &&
+              (prefs.nav.accent    == null || isStr(prefs.nav.accent, 64)) &&
+              (prefs.nav.icon      == null || isStr(prefs.nav.icon,   64)) &&
+              (prefs.nav.compact   == null || isBool(prefs.nav.compact)) &&
+              (prefs.nav.glow      == null || isBool(prefs.nav.glow)) &&
+              (
+                prefs.nav.order == null ||
+                listAllowedStrings(
+                  prefs.nav.order,
+                  ["dashboard","pantry","recipes","fitness","profile"],
+                  5
+                )
+              )
+            )
+          )
+        );
+
+      return baseOk && prefsOk;
+    }
+
     /* =========================================================
-       users/{uid}
+       users/{uid}  (profile + prefs + navbar)
     ========================================================== */
     match /users/{uid} {
       // Only you can read your user profile
-      allow read:   if isSignedIn() && request.auth.uid == uid;
+      allow read: if isSignedIn() && request.auth.uid == uid;
 
-      // Create/update/delete only yourself; uid must match
+      // Create/update/delete only yourself; uid must match; payload validated
       allow create: if isSignedIn()
                     && request.auth.uid == uid
-                    && (!('uid' in request.resource.data) || request.resource.data.uid == uid);
+                    && (!('uid' in request.resource.data) || request.resource.data.uid == uid)
+                    && validUserWrite();
 
-      allow update, delete: if isSignedIn()
-                            && request.auth.uid == uid
-                            && (!('uid' in request.resource.data) || request.resource.data.uid == uid);
+      allow update: if isSignedIn()
+                    && request.auth.uid == uid
+                    && (!('uid' in request.resource.data) || request.resource.data.uid == uid)
+                    && validUserWrite();
+
+      allow delete: if isSignedIn() && request.auth.uid == uid;
     }
 
     /* =========================================================
        pantryItems/{id}
     ========================================================== */
-    /* ---------- pantryItems/{id} ---------- */
-match /pantryItems/{id} {
-  // Consider it expired if expiresAt exists and is in the past
-  function isExpired() {
-    return resource.data.expiresAt != null
-           && resource.data.expiresAt < request.time;
-  }
+    match /pantryItems/{id} {
+      function isExpired() {
+        return resource.data.expiresAt != null
+               && resource.data.expiresAt < request.time;
+      }
 
-  // Read only your own pantry
-  allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create: if creatingAsSelf();
+      allow update: if isSignedIn()
+                    && resource.data.uid == request.auth.uid
+                    && ownershipUnchanged()
+                    && !isExpired();
+      allow delete: if isSignedIn()
+                    && resource.data.uid == request.auth.uid;
+    }
 
-  // New docs must be created as yourself
-  allow create: if creatingAsSelf();
+    /* =========================================================
+       recipes/{id} (+photos subcollection)
+    ========================================================== */
+    match /recipes/{id} {
+      allow read: if true;
 
-  // Update must be by owner, uid immutable, and NOT expired
-  allow update: if isSignedIn()
-                && resource.data.uid == request.auth.uid
-                && ownershipUnchanged()
-                && !isExpired();
+      allow create: if isSignedIn()
+                    && request.resource.data.uid == request.auth.uid;
 
-  // Delete by owner (even if expired)
-  allow delete: if isSignedIn()
-                && resource.data.uid == request.auth.uid;
-}
+      allow update: if isSignedIn()
+                    && (
+                         resource.data.uid == request.auth.uid
+                      || resource.data.author.uid == request.auth.uid   // legacy support
+                    )
+                    && ownershipUnchanged();
 
+      allow delete: if isSignedIn()
+                    && (
+                         resource.data.uid == request.auth.uid
+                      || resource.data.author.uid == request.auth.uid
+                    );
 
-/* =========================================================
-   recipes/{id} (+photos subcollection)
-========================================================== */
-match /recipes/{id} {
-  allow read: if true;
+      match /photos/{pid} {
+        allow read: if true;
 
-  // Create: must set uid == auth.uid
-  allow create: if isSignedIn()
-                && request.resource.data.uid == request.auth.uid;
+        allow create, delete: if isSignedIn()
+                               && (
+                                    get(/databases/$(database)/documents/recipes/$(id)).data.uid == request.auth.uid
+                                 || get(/databases/$(database)/documents/recipes/$(id)).data.author.uid == request.auth.uid
+                               );
 
-  // Update: only owner; uid must not change
-  allow update: if isSignedIn()
-                && (
-                     resource.data.uid == request.auth.uid
-                  || resource.data.author.uid == request.auth.uid  // <-- legacy support
-                )
-                && ownershipUnchanged();
-
-  // Delete: only owner (legacy allowed via author.uid)
-  allow delete: if isSignedIn()
-                && (
-                     resource.data.uid == request.auth.uid
-                  || resource.data.author.uid == request.auth.uid  // <-- legacy support
-                );
-
-  // photos subcollection (gallery metadata docs)
-  match /photos/{pid} {
-    allow read: if true;
-
-    // Only recipe owner can add/remove photo docs (supports legacy)
-    allow create, delete: if isSignedIn()
-                           && (
-                                get(/databases/$(database)/documents/recipes/$(id)).data.uid == request.auth.uid
-                             || get(/databases/$(database)/documents/recipes/$(id)).data.author.uid == request.auth.uid
-                           );
-
-    // No updates to photo docs
-    allow update: if false;
-  }
-}
+        allow update: if false;
+      }
+    }
 
     /* =========================================================
        users/{uid}/favoriteRecipes/{rid}
@@ -142,27 +179,21 @@ match /recipes/{id} {
        posts/{postId} (+likes, +reposts, +comments)
     ========================================================== */
     match /posts/{postId} {
-      // Public read
       allow read: if true;
 
-      // Create: must set uid == auth.uid; optional "text" cleanliness
       allow create: if isSignedIn()
                     && request.resource.data.uid == request.auth.uid
                     && cleanOptional('text');
 
-      // Update: only owner; uid immutable
       allow update: if isSignedIn()
                     && resource.data.uid == request.auth.uid
                     && ownershipUnchanged();
 
-      // Delete: only owner (don't reference request.resource here)
       allow delete: if isSignedIn()
                     && resource.data.uid == request.auth.uid;
 
-      /* ---------- likes ---------- */
       match /likes/{uid} {
         allow read: if true;
-        // user can toggle their own like; post owner may delete for cleanup
         allow create, delete: if isSignedIn() && (
           request.auth.uid == uid ||
           request.auth.uid == get(/databases/$(database)/documents/posts/$(postId)).data.uid
@@ -170,10 +201,8 @@ match /recipes/{id} {
         allow update: if false;
       }
 
-      /* ---------- reposts ---------- */
       match /reposts/{uid} {
         allow read: if true;
-        // user can toggle their own repost; post owner may delete for cleanup
         allow create, delete: if isSignedIn() && (
           request.auth.uid == uid ||
           request.auth.uid == get(/databases/$(database)/documents/posts/$(postId)).data.uid
@@ -181,16 +210,13 @@ match /recipes/{id} {
         allow update: if false;
       }
 
-      /* ---------- comments (nested under posts) ---------- */
       match /comments/{cid} {
         allow read: if true;
 
-        // Author creates their own comment; enforce 25k cap + profanity check
         allow create: if isSignedIn()
                       && request.resource.data.uid == request.auth.uid
                       && textOk();
 
-        // Update: comment owner OR post owner; uid immutable; keep 25k cap
         allow update: if isSignedIn()
                       && (
                            request.auth.uid == resource.data.uid ||
@@ -199,7 +225,6 @@ match /recipes/{id} {
                       && (!('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid)
                       && textOk();
 
-        // Delete: comment owner OR post owner
         allow delete: if isSignedIn()
                       && (
                            request.auth.uid == resource.data.uid ||

@@ -405,22 +405,16 @@ html, body {
 .nav-center { flex:1; display:flex; justify-content:center; }
 
 /* Navbar container — server safe (no styled-jsx) */
+/* in styles/globals.css (already similar in your file) */
 .ck-navbar {
-  position: sticky;
-  top: 0;
-  z-index: 1000;
-  background: var(--bg2);
-  border-bottom: 1px solid var(--border);
+  height: 64px; /* fixed header height so nothing jumps */
 }
 .ck-navbar-inner {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 10px 16px;
   display: grid;
   grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 12px;
+  align-items: center;   /* vertical center */
 }
+
 .ck-brand {
   font-weight: 800;
   color: var(--text);

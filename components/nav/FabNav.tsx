@@ -2,199 +2,268 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import React, { useMemo, useRef, useState, useEffect } from "react";
+import { useNavPrefs, defaultNavPrefs } from "./useNavPrefs";
+import { db } from "@/lib/firebase"; // adjust path to your initialized Firestore
 
-type Item = {
-  href: string;
-  label: string;
-  hue: number; // just for a subtle individual tint
-  icon: JSX.Element;
-};
+type ItemKey = "dashboard" | "pantry" | "recipes" | "fitness" | "profile";
 
-// simple inline SVGs so we don't pull icon fonts
-const Icon = {
-  Home: (
-    <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" strokeWidth="1.8">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 10.5l9-7 9 7M5.25 9.75V20a.75.75 0 00.75.75h3.75a.75.75 0 00.75-.75v-4.5a.75.75 0 01.75-.75h2.25a.75.75 0 01.75.75V20a.75.75 0 00.75.75H18a.75.75 0 00.75-.75V9.75" />
-    </svg>
-  ),
-  Fridge: (
-    <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" strokeWidth="1.6">
-      <rect x="6" y="3" width="12" height="18" rx="2.2" />
-      <path d="M6 11.5h12" />
-      <circle cx="9.75" cy="8.25" r="0.9" fill="currentColor" />
-      <circle cx="9.75" cy="14.75" r="0.9" fill="currentColor" />
-    </svg>
-  ),
-  Book: (
-    <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" strokeWidth="1.8">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 5.25A2.25 2.25 0 016 3h11.25A2.25 2.25 0 0119.5 5.25v12A2.25 2.25 0 0117.25 19.5H6A2.25 2.25 0 013.75 17.25V5.25z" />
-      <path d="M8.25 6.75h7.5M8.25 9.75h7.5M8.25 12.75h4.5" />
-    </svg>
-  ),
-  Dumbbell: (
-    <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" strokeWidth="1.8">
-      <rect x="2.75" y="8.25" width="3" height="7.5" rx="0.8" />
-      <rect x="18.25" y="8.25" width="3" height="7.5" rx="0.8" />
-      <rect x="7.25" y="10.25" width="9.5" height="3.5" rx="0.9" />
-    </svg>
-  ),
-  User: (
-    <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" strokeWidth="1.8">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 8.25a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 20.25a8.25 8.25 0 0115 0" />
-    </svg>
-  ),
-  Dots: (
-    <svg viewBox="0 0 24 24" fill="currentColor">
-      <circle cx="6.5" cy="12" r="1.6" />
-      <circle cx="12" cy="12" r="1.6" />
-      <circle cx="17.5" cy="12" r="1.6" />
-    </svg>
-  ),
-  X: (
-    <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" strokeWidth="2">
-      <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
-    </svg>
-  ),
+const ALL_ITEMS: Record<ItemKey, { href: string; label: string; icon: JSX.Element }> = {
+  dashboard: {
+    href: "/dashboard",
+    label: "Dashboard",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true" width="40" height="40" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6a3 3 0 0 0-6 0v6H4a1 1 0 0 1-1-1v-9.5z" />
+      </svg>
+    ),
+  },
+  pantry: {
+    href: "/pantry",
+    label: "Pantry",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true" width="40" height="40" fill="none" stroke="currentColor" strokeWidth="1.6">
+        {/* Grocery bag */}
+        <path d="M6 8V6a3 3 0 1 1 6 0v2" />
+        <path d="M4 8h16l-1.2 12.4A2 2 0 0 1 16.81 22H7.19a2 2 0 0 1-1.99-1.6L4 8z" />
+        <path d="M9 8v2a3 3 0 1 0 6 0V8" />
+      </svg>
+    ),
+  },
+  recipes: {
+    href: "/recipes",
+    label: "Recipes",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true" width="40" height="40" fill="none" stroke="" strokeWidth="1.6">
+        <path d="M4 4h11a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3V4z" />
+        <path d="M7 4v13a3 3 0 0 0 3 3" />
+        <path d="M8 9h7M8 12h5" />
+      </svg>
+    ),
+  },
+  fitness: {
+    href: "/fitness",
+    label: "Fitness",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true" width="40" height="40" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <path d="M6 8v8M10 6v12M14 6v12M18 8v8" />
+        <path d="M8 12h8" />
+      </svg>
+    ),
+  },
+  profile: {
+    href: "/profile",
+    label: "Profile",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true" width="40" height="40" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <circle cx="12" cy="7" r="4" />
+        <path d="M4 21a8 8 0 0 1 16 0" />
+      </svg>
+    ),
+  },
 };
 
 export default function FabNav() {
+  const { nav } = useNavPrefs(db);
   const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
 
-  const items: Item[] = [
-    { href: "/dashboard", label: "Dashboard", hue: 12, icon: Icon.Home },
-    { href: "/pantry", label: "Pantry", hue: 210, icon: Icon.Fridge },
-    { href: "/recipes", label: "Recipes", hue: 295, icon: Icon.Book },
-    { href: "/fitness", label: "Fitness", hue: 265, icon: Icon.Dumbbell },
-    { href: "/profile", label: "Profile", hue: 240, icon: Icon.User },
-  ];
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (!wrapRef.current) return;
+      if (!wrapRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  // derive order with sensible defaults
+  const order = useMemo<ItemKey[]>(
+    () => (nav?.order && nav.order.length ? (nav.order as ItemKey[]) : defaultNavPrefs.order),
+    [nav?.order]
+  );
+  const split = Math.floor(order.length / 2);
+  const leftItems = order.slice(0, split);
+  const rightItems = order.slice(split);
+
+  const placement = nav?.placement ?? defaultNavPrefs.placement;
+  const posClass =
+    placement === "header" ? "pos-header" : placement === "top" ? "pos-top" : "pos-bottom"; // treat "floating" like bottom
+
+  const styleVars: React.CSSProperties = {
+    ["--pill" as any]: nav?.accent ?? defaultNavPrefs.accent,
+    ["--icon" as any]: nav?.icon ?? defaultNavPrefs.icon,
+    ["--h" as any]: (nav?.compact ?? defaultNavPrefs.compact) ? "48px" : "56px",
+    ["--w-open" as any]: (nav?.compact ?? defaultNavPrefs.compact) ? "460px" : "560px",
+    ["--glow" as any]: (nav?.glow ?? defaultNavPrefs.glow) ? "0 16px 40px rgba(203, 181, 181, 0.18)" : "0 8px 20px rgba(221, 182, 182, 0.08)",
+    ["--bdr" as any]: "color-mix(in oklab, #000 12%, var(--pill))",
+  };
 
   return (
-    <div className={`fabDock ${open ? "open" : ""}`}>
-      {/* pill rail */}
-      <div className="rail" aria-hidden={!open}>
-        <ul className="railList">
-          {items.map((it) => (
-            <li key={it.href} style={{ ["--h" as any]: it.hue }}>
-              <Link href={it.href} className="railBtn" onClick={() => setOpen(false)} aria-label={it.label}>
-                <span className="ico">{it.icon}</span>
-                <span className="txt">{it.label}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+    <nav aria-label="Main" className={`fabnav ${posClass}`} style={styleVars} ref={wrapRef}>
+      <div className={`shelf ${open ? "open" : ""}`} aria-hidden={!open}>
+        <div className="cols">
+          <div className="side left">
+            {leftItems.map((k) => {
+              const it = ALL_ITEMS[k];
+              return (
+                <Link key={k} href={it.href} className="btn" aria-label={it.label} onClick={() => setOpen(false)}>
+                  {it.icon}
+                  <span className="visually-hidden">{it.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+          <div className="spacer" aria-hidden="true" />
+          <div className="side right">
+            {rightItems.map((k) => {
+              const it = ALL_ITEMS[k];
+              return (
+                <Link key={k} href={it.href} className="btn" aria-label={it.label} onClick={() => setOpen(false)}>
+                  {it.icon}
+                  <span className="visually-hidden">{it.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
-      {/* central toggle */}
       <button
-        className="toggle"
-        aria-label={open ? "Close menu" : "Open menu"}
+        type="button"
+        className={`toggle ${open ? "open" : ""}`}
+        aria-label={open ? "Close navigation" : "Open navigation"}
+        aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        <span className="dot">{open ? Icon.X : Icon.Dots}</span>
+        <span className="dots">
+          <i />
+          <i />
+          <i />
+        </span>
       </button>
 
       <style jsx>{`
-        .fabDock {
-          justify-self: center;
+        .fabnav {
+          --pill: var(--primary);
+          --icon: #fff;
+          --h: 56px;
+          --w-open: 560px;
+          --glow: 0 16px 40px rgba(246, 244, 244, 0.18);
+          --bdr: color-mix(in oklab, #000 12%, var(--pill));
           position: relative;
-          height: 72px;
+          z-index: 50;
+        }
+        .pos-header {
+          height: var(--h);
           display: grid;
           place-items: center;
         }
-
-        /* glassy pill behind icons */
-        .rail {
-          position: absolute;
-          inset: 0;
-          width: 560px;
-          max-width: min(92vw, 560px);
-          height: 56px;
-          background: color-mix(in oklab, var(--bg2) 70%, transparent);
-          border: 1px solid var(--border);
-          border-radius: 999px;
-          box-shadow: 0 10px 30px color-mix(in oklab, #000 14%, transparent);
-          padding: 6px 60px; /* space for center button */
-          transform: scaleX(0);
-          transform-origin: center;
-          opacity: 0;
-          transition: transform .28s ease, opacity .25s ease;
-          backdrop-filter: blur(8px);
+        .pos-top,
+        .pos-bottom {
+          position: fixed;
+          left: 50%;
+          transform: translateX(-50%);
+          width: var(--w-open);
           pointer-events: none;
         }
-        .fabDock.open .rail { transform: scaleX(1); opacity: 1; pointer-events: auto; }
+        .pos-top { top: 14px; }
+        .pos-bottom { bottom: 14px; }
 
-        .railList {
-          list-style: none;
-          margin: 0;
-          padding: 0;
+        .shelf {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          height: var(--h);
+          width: var(--w-open);
+          transform: translate(-50%, -50%) scaleX(0);
+          transform-origin: 50% 50%;
+          border-radius: 999px;
+          background: var(--pill);
+          border: 1px solid var(--bdr);
+          box-shadow: var(--glow);
+          transition: transform 0.28s ease;
+          pointer-events: none;
+        }
+        .shelf.open { transform: translate(-50%, -50%) scaleX(1); pointer-events: auto; }
+
+        .cols {
+          height: 100%;
           display: grid;
-          grid-auto-flow: column;
+          grid-template-columns: 1fr var(--h) 1fr;
+          align-items: center;
+        }
+        .spacer { width: var(--h); height: 100%; }
+        .side {
+          display: flex;
           gap: 10px;
           align-items: center;
           justify-content: center;
+          padding: 0 12px;
         }
-        .railList li {
-          --accent: hsl(var(--h, 220) 85% 60%);
-          --accent-ghost: color-mix(in oklab, var(--accent) 18%, transparent);
-        }
-        .railBtn {
+
+        .btn {
           display: grid;
-          grid-template-columns: 28px auto;
-          gap: 8px;
-          align-items: center;
-          padding: 8px 12px;
-          text-decoration: none;
-          color: var(--text);
-          background: var(--bg2);
-          border: 1px solid var(--border);
+          place-items: center; /* << centers icons vertically + horizontally */
+          min-width: 54px;
+          height: calc(var(--h) - 16px);
+          padding: 8px 10px;
           border-radius: 12px;
-          transition: transform .12s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease;
-          box-shadow: 0 2px 0 0 #fff inset, 0 2px 0 0 color-mix(in oklab, #000 20%, transparent);
+          text-decoration: none;
+          color: var(--icon);
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          background: linear-gradient(180deg, rgba(240, 234, 234, 0.06), transparent);
+          transition: transform 0.12s ease, background 0.2s ease, border-color 0.2s ease;
         }
-        .railBtn:hover {
-          transform: translateY(-2px);
-          background: var(--accent-ghost);
-          border-color: color-mix(in oklab, var(--accent) 40%, var(--border));
-          box-shadow: 0 8px 22px color-mix(in oklab, var(--accent) 22%, transparent);
+        .btn:hover { transform: translateY(-2px); }
+        .btn:active { transform: translateY(-1px) scale(0.99); }
+        .btn svg { width: 22px; height: 22px; }
+
+        .visually-hidden {
+          position: absolute !important;
+          height: 1px; width: 1px;
+          overflow: hidden; clip: rect(1px, 1px, 1px, 1px);
+          white-space: nowrap; border: 0; padding: 0; margin: -1px;
         }
 
-        .ico {
-          width: 28px; height: 28px; display: grid; place-items: center;
-          color: var(--text);
-        }
-        .ico :global(svg) { width: 22px; height: 22px; }
-
-        .txt { font-weight: 600; font-size: 14px; color: var(--text); }
-
-        /* center toggle button */
         .toggle {
-          position: relative;
-          z-index: 2;
-          width: 64px;
-          height: 64px;
+          position: absolute;
+          left: 50%; top: 50%;
+          width: var(--h); height: var(--h);
+          transform: translate(-50%, -50%);
           border-radius: 999px;
-          border: 1px solid color-mix(in oklab, var(--primary) 40%, var(--border));
-          background: var(--primary);
-          color: var(--primary-contrast);
-          display: grid; place-items: center;
-          box-shadow: 0 10px 24px color-mix(in oklab, var(--primary) 30%, transparent);
+          border: 1px solid var(--bdr);
+          background: var(--pill);
+          color: var(--icon);
+          box-shadow: var(--glow);
           cursor: pointer;
-          transition: transform .08s ease, filter .18s ease;
+          display: grid;
+          place-items: center;
+          pointer-events: auto;
         }
-        .toggle:hover { filter: brightness(1.08); transform: translateY(-1px); }
-        .toggle:active { transform: translateY(0); }
+        .dots { position: relative; width: 22px; height: 22px; }
+        .dots i {
+          position: absolute; left: 50%; top: 50%;
+          width: 6px; height: 6px; margin: -3px 0 0 -3px;
+          background: var(--icon);
+          border-radius: 999px;
+          transition: transform 0.28s ease, height 0.28s ease, width 0.28s ease, border-radius 0.28s ease, opacity 0.2s ease;
+        }
+        .dots i:nth-child(1) { transform: translate(-8px, 0); }
+        .dots i:nth-child(2) { transform: translate(0, 0); }
+        .dots i:nth-child(3) { transform: translate(8px, 0); }
+        .toggle.open .dots i { width: 4px; height: 24px; border-radius: 2px; }
+        .toggle.open .dots i:nth-child(1) { transform: translate(0, 0) rotate(45deg); }
+        .toggle.open .dots i:nth-child(2) { opacity: 0; }
+        .toggle.open .dots i:nth-child(3) { transform: translate(0, 0) rotate(-45deg); }
 
-        .dot :global(svg){ width: 26px; height: 26px; }
-
-        /* collapse to compact on small screens */
-        @media (max-width: 640px) {
-          .rail { padding: 6px 58px; }
-          .txt { display: none; }
-          .railBtn { grid-template-columns: 28px; padding: 10px; }
+        .pos-top .shelf,
+        .pos-bottom .shelf,
+        .pos-top .toggle,
+        .pos-bottom .toggle {
+          pointer-events: auto;
         }
       `}</style>
-    </div>
+    </nav>
   );
 }
