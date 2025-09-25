@@ -18,12 +18,12 @@ import {
 import { doc, getDoc, runTransaction, setDoc, updateDoc } from "firebase/firestore";
 import { ref as sref, uploadBytes, getDownloadURL, listAll, deleteObject } from "firebase/storage";
 
-import ThemePicker from "@/components/theme/ThemePicker";
 import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 
 /* -------------------------------- types -------------------------------- */
+type ThemeChoice = "light" | "dark"; // ⬅️ removed "system"
 type UserDoc = {
   uid: string;
   email: string;
@@ -33,7 +33,7 @@ type UserDoc = {
   lastName?: string | null;
   prefs?: {
     units?: "metric" | "imperial";
-    theme?: "system" | "light" | "dark";
+    theme?: ThemeChoice | "system"; // read legacy "system", but we will map to "light"
     emailNotifications?: boolean;
   };
 };
@@ -75,7 +75,7 @@ export default function ProfilePage() {
 
   // prefs
   const [units, setUnits] = useState<"metric" | "imperial">("metric");
-  const [theme, setTheme] = useState<"system" | "light" | "dark">("system");
+  const [theme, setTheme] = useState<ThemeChoice>("light"); // ⬅️ default to light (no "system")
   const [emailNotifications, setEmailNotifications] = useState<boolean>(true);
 
   // avatar
@@ -118,7 +118,7 @@ export default function ProfilePage() {
             photoURL: me.photoURL || null,
             firstName: null,
             lastName: null,
-            prefs: { units: "metric", theme: "system", emailNotifications: true },
+            prefs: { units: "metric", theme: "light", emailNotifications: true }, // ⬅️ no system
           };
           await setDoc(ref, shell);
           setUserDoc(shell);
@@ -126,7 +126,7 @@ export default function ProfilePage() {
           setLastName("");
           setUsername("");
           setUnits("metric");
-          setTheme("system");
+          setTheme("light");
           setEmailNotifications(true);
         } else {
           const d = snap.data() as UserDoc;
@@ -135,7 +135,8 @@ export default function ProfilePage() {
           setLastName(d.lastName || "");
           setUsername(d.username || "");
           setUnits(d.prefs?.units || "metric");
-          setTheme(d.prefs?.theme || "system");
+          // map any legacy "system" to "light"
+          setTheme(d.prefs?.theme === "dark" ? "dark" : "light");
           setEmailNotifications(d.prefs?.emailNotifications ?? true);
         }
         setNewEmail(me.email || "");
@@ -259,7 +260,7 @@ export default function ProfilePage() {
             firstName: firstName.trim() || null,
             lastName: lastName.trim() || null,
             ...(uname || userDoc.username ? { username: uname || userDoc.username } : {}),
-            prefs: { units, theme, emailNotifications },
+            prefs: { units, theme, emailNotifications }, // ⬅️ only "light" | "dark"
           },
           { merge: true }
         );
@@ -386,14 +387,10 @@ export default function ProfilePage() {
     <main className="wrap">
       {/* Hero */}
       <section className="hero">
-        <div className="hero-bg" aria-hidden />
+        <div className="bg" aria-hidden />
         <div className="hero-inner">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={userDoc?.photoURL || "/default-avatar.png"}
-            alt="avatar"
-            className="hero-avatar"
-          />
+          <img src={userDoc?.photoURL || "/default-avatar.png"} alt="avatar" className="hero-avatar" />
           <div className="hero-meta">
             <h1 className="hero-title">{fullName(userDoc?.firstName, userDoc?.lastName) || "My profile"}</h1>
             <div className="hero-sub">
@@ -416,8 +413,11 @@ export default function ProfilePage() {
       ) : userDoc ? (
         <>
           {/* -------- Avatar -------- */}
-          <Card className="section glass">
-            <h2 className="h2">Avatar</h2>
+          <Card className="panel">
+            <div className="panel-h">
+              <div className="panel-ic">🖼️</div>
+              <h2>Avatar</h2>
+            </div>
             <div className="row aic">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={userDoc.photoURL || "/default-avatar.png"} alt="avatar" className="avatar" />
@@ -429,24 +429,21 @@ export default function ProfilePage() {
                   onChange={(e) => setFile(e.target.files?.[0] || null)}
                 />
                 <div className="actions">
-                  <Button variant="secondary" onClick={() => fileRef.current?.click()}>
-                    Choose
-                  </Button>
-                  <Button onClick={uploadAvatar} disabled={!file || busyUpload}>
-                    {busyUpload ? "Uploading…" : "Save"}
-                  </Button>
-                  <Button variant="secondary" onClick={removeAvatar} disabled={busyUpload}>
-                    Remove
-                  </Button>
+                  <Button variant="secondary" onClick={() => fileRef.current?.click()}>Choose</Button>
+                  <Button onClick={uploadAvatar} disabled={!file || busyUpload}>{busyUpload ? "Uploading…" : "Save"}</Button>
+                  <Button variant="secondary" onClick={removeAvatar} disabled={busyUpload}>Remove</Button>
                 </div>
                 {file ? <div className="muted small">Selected: {file.name}</div> : null}
               </div>
             </div>
           </Card>
 
-          {/* -------- Profile details -------- */}
-          <Card className="section glass">
-            <h2 className="h2">Details</h2>
+          {/* -------- Details -------- */}
+          <Card className="panel">
+            <div className="panel-h">
+              <div className="panel-ic">🧾</div>
+              <h2>Details</h2>
+            </div>
             <div className="grid">
               <Input label="First name" value={firstName} onChange={(e: any) => setFirstName(e.target.value)} />
               <Input label="Last name" value={lastName} onChange={(e: any) => setLastName(e.target.value)} />
@@ -458,15 +455,16 @@ export default function ProfilePage() {
               <Input label="UID" value={userDoc.uid} readOnly />
             </div>
             <div className="actions">
-              <Button onClick={saveProfile} disabled={busySave}>
-                {busySave ? "Saving…" : "Save changes"}
-              </Button>
+              <Button onClick={saveProfile} disabled={busySave}>{busySave ? "Saving…" : "Save changes"}</Button>
             </div>
           </Card>
 
-          {/* -------- Account (email / password) -------- */}
-          <Card className="section glass">
-            <h2 className="h2">Account</h2>
+          {/* -------- Account -------- */}
+          <Card className="panel">
+            <div className="panel-h">
+              <div className="panel-ic">🔐</div>
+              <h2>Account</h2>
+            </div>
             <div className="grid">
               <Input label="Current email" value={userDoc.email} readOnly />
               <div className="field">
@@ -485,27 +483,42 @@ export default function ProfilePage() {
             <div className="actions">
               <Button variant="secondary" onClick={sendVerify}>Send verification</Button>
               <Button variant="secondary" onClick={sendReset}>Send password reset</Button>
-              <Button onClick={updateEmail} disabled={busyEmail}>
-                {busyEmail ? "Updating…" : "Update email"}
-              </Button>
+              <Button onClick={updateEmail} disabled={busyEmail}>{busyEmail ? "Updating…" : "Update email"}</Button>
             </div>
           </Card>
 
-          {/* -------- Preferences (theme + units + emails) -------- */}
-          <Card className="section glass">
-            <h2 className="h2">Preferences</h2>
-
-            <ThemePicker />
+          {/* -------- Preferences (no system) -------- */}
+          <Card className="panel">
+            <div className="panel-h">
+              <div className="panel-ic">⚙️</div>
+              <h2>Preferences</h2>
+            </div>
 
             <div className="grid">
               <div className="field">
+                <label className="lab">Theme</label>
+                <div className="seg">
+                  {(["light", "dark"] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      className={`seg-btn ${theme === t ? "on" : ""}`}
+                      onClick={() => setTheme(t)}
+                    >
+                      {t === "light" ? "Light" : "Dark"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="field">
                 <label className="lab">Units</label>
-                <div className="chips">
+                <div className="seg">
                   {(["metric", "imperial"] as const).map((u) => (
                     <button
                       key={u}
                       type="button"
-                      className={`chip ${units === u ? "on" : ""}`}
+                      className={`seg-btn ${units === u ? "on" : ""}`}
                       onClick={() => setUnits(u)}
                     >
                       {u}
@@ -528,22 +541,21 @@ export default function ProfilePage() {
             </div>
 
             <div className="actions">
-              <Button onClick={saveProfile} disabled={busySave}>
-                {busySave ? "Saving…" : "Save preferences"}
-              </Button>
+              <Button onClick={saveProfile} disabled={busySave}>{busySave ? "Saving…" : "Save preferences"}</Button>
             </div>
           </Card>
 
           {/* -------- Danger zone -------- */}
-          <Card className="section glass danger">
-            <h2 className="h2">Danger zone</h2>
+          <Card className="panel danger">
+            <div className="panel-h">
+              <div className="panel-ic">🧨</div>
+              <h2>Danger zone</h2>
+            </div>
             <p className="muted small">
               Deleting your account removes your profile and signs you out. (Username reservation is kept to prevent impersonation.)
             </p>
             <div className="actions">
-              <Button variant="secondary" onClick={() => setShowDelete(true)}>
-                Delete my account…
-              </Button>
+              <Button variant="secondary" onClick={() => setShowDelete(true)}>Delete my account…</Button>
             </div>
           </Card>
 
@@ -572,9 +584,8 @@ export default function ProfilePage() {
         <div className="p">Profile not found.</div>
       )}
 
-      {/* SINGLE styled-jsx block */}
       <style jsx>{`
-        .wrap { max-width: 1000px; margin: 0 auto; padding: 18px 18px 48px; }
+        .wrap { max-width: 1040px; margin: 0 auto; padding: 16px 16px 48px; }
 
         /* ---------- HERO ---------- */
         .hero {
@@ -582,12 +593,17 @@ export default function ProfilePage() {
           border-radius: 22px;
           overflow: hidden;
           border: 1px solid var(--border);
-          margin: 6px 0 18px;
-          background: radial-gradient(1200px 320px at 10% -10%, color-mix(in oklab, var(--primary) 18%, transparent), transparent 60%),
-                      radial-gradient(900px 280px at 90% -20%, color-mix(in oklab, #60a5fa 14%, transparent), transparent 60%),
-                      var(--card-bg);
+          margin: 4px 0 20px;
+          background: var(--card-bg);
         }
-        .hero-bg { position:absolute; inset:0; backdrop-filter: blur(4px); opacity:.8; }
+        .bg {
+          position:absolute; inset:0;
+          background:
+            radial-gradient(800px 260px at -10% -10%, color-mix(in oklab, var(--primary) 20%, transparent), transparent 70%),
+            radial-gradient(700px 260px at 110% -20%, color-mix(in oklab, #60a5fa 14%, transparent), transparent 70%);
+          opacity:.7;
+          filter: blur(10px) saturate(1.05);
+        }
         .hero-inner {
           position: relative;
           display: grid;
@@ -597,50 +613,46 @@ export default function ProfilePage() {
           padding: 18px;
         }
         .hero-avatar {
-          width: 84px; height: 84px; border-radius: 20px; object-fit: cover;
-          border: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+          width: 90px; height: 90px; border-radius: 20px; object-fit: cover;
+          border: 1px solid color-mix(in oklab, var(--border) 65%, transparent);
           box-shadow: 0 10px 30px rgba(0,0,0,.08);
         }
-        .hero-title { margin: 0; font-size: 28px; font-weight: 900; letter-spacing: -0.02em; }
+        .hero-title { margin: 0; font-size: 30px; font-weight: 900; letter-spacing: -0.02em; }
         .hero-sub { display:flex; align-items:center; gap:8px; margin-top:4px; }
-        .pill { padding: 4px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg2); font-size: 12px; }
+        .pill { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg2); font-size: 12px; }
         .sep { opacity:.6; }
-
-        .hero-actions :global(button) {
-          box-shadow: 0 6px 18px rgba(2,6,23,.08);
-        }
-
-        /* ---------- CARDS ---------- */
-        .section { margin-bottom: 18px; }
-        .glass {
-          backdrop-filter: saturate(1.1) blur(3px);
-          border-radius: 18px !important;
-          border: 1px solid color-mix(in oklab, var(--border) 70%, transparent) !important;
-          background:
-            linear-gradient(180deg, color-mix(in oklab, #fff 3%, transparent), transparent) !important;
-          transition: transform .12s ease, box-shadow .2s ease;
-        }
-        .glass:hover { transform: translateY(-1px); box-shadow: 0 12px 30px rgba(2,6,23,.06); }
-
-        .h2 { font-size: 16px; font-weight: 800; margin: 0 0 10px; letter-spacing: .2px; }
-
-        .row { display: flex; gap: 16px; }
-        .aic{ align-items: center; }
-        .col { display: flex; flex-direction: column; gap: 10px; }
-        .actions { display: flex; gap: 10px; justify-content:flex-end; margin-top: 8px; }
-
-        .avatar { width: 96px; height: 96px; border-radius: 16px; object-fit: cover; border: 1px solid var(--border); }
-
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
         @media (max-width: 820px) {
           .hero-inner { grid-template-columns: auto 1fr; }
           .hero-actions { grid-column: 1 / -1; justify-self: end; }
-          .grid { grid-template-columns: 1fr; }
-          .row{flex-direction:column; align-items:flex-start;}
         }
 
-        .ok { background: color-mix(in oklab, #10b981 15%, transparent); color: #065f46; border: 1px solid color-mix(in oklab, #10b981 35%, transparent); border-radius: 10px; padding: 8px 10px; font-size: 13px; margin: 10px 0; }
-        .bad { background: color-mix(in oklab, #ef4444 15%, transparent); color: #7f1d1d; border: 1px solid color-mix(in oklab, #ef4444 35%, transparent); border-radius: 10px; padding: 8px 10px; font-size: 13px; margin: 10px 0; }
+        /* ---------- PANELS ---------- */
+        .panel {
+          backdrop-filter: saturate(1.05) blur(2px);
+          border-radius: 18px !important;
+          border: 1px solid color-mix(in oklab, var(--border) 70%, transparent) !important;
+          background:
+            linear-gradient(180deg, color-mix(in oklab, #fff 2.2%, transparent), transparent) !important;
+          transition: transform .12s ease, box-shadow .2s ease, border-color .2s ease;
+          margin-bottom: 18px;
+        }
+        .panel:hover { transform: translateY(-1px); box-shadow: 0 12px 30px rgba(2,6,23,.06); }
+        .panel-h { display:flex; align-items:center; gap:10px; padding: 12px 12px 0; }
+        .panel-h h2 { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: .2px; }
+        .panel-ic { width: 28px; height: 28px; display:grid; place-items:center; border-radius:10px; background: color-mix(in oklab, var(--primary) 18%, transparent); }
+
+        .row { display: flex; gap: 16px; padding: 12px; }
+        .aic{ align-items: center; }
+        .col { display: flex; flex-direction: column; gap: 10px; }
+        .actions { display: flex; gap: 10px; justify-content:flex-end; margin: 8px 12px 12px; }
+
+        .avatar { width: 96px; height: 96px; border-radius: 16px; object-fit: cover; border: 1px solid var(--border); }
+
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; padding: 12px; }
+        @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } .row{flex-direction:column; align-items:flex-start;} }
+
+        .ok { background: color-mix(in oklab, #10b981 15%, transparent); color: #065f46; border: 1px solid color-mix(in oklab, #10b981 35%, transparent); border-radius: 10px; padding: 8px 10px; font-size: 13px; margin: 12px 0; }
+        .bad { background: color-mix(in oklab, #ef4444 15%, transparent); color: #7f1d1d; border: 1px solid color-mix(in oklab, #ef4444 35%, transparent); border-radius: 10px; padding: 8px 10px; font-size: 13px; margin: 12px 0; }
 
         .muted { color: var(--muted); }
         .small { font-size:12px; }
@@ -649,10 +661,12 @@ export default function ProfilePage() {
         .lab{ font-size:.9rem; color:var(--text); font-weight:700; }
         .inp{ border:1px solid var(--border); background:var(--bg2); color:var(--text); border-radius:12px; padding:10px 12px; }
 
-        .chips{display:flex;gap:8px;flex-wrap:wrap}
-        .chip{border:1px solid var(--border);background:var(--bg2);color:var(--text);border-radius:999px;padding:6px 10px;cursor:pointer;transition:transform .06s ease}
-        .chip.on{background:var(--primary);color:var(--primary-contrast);border-color:transparent;transform:translateY(-1px)}
+        /* segmented control */
+        .seg { display:flex; gap:8px; background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:4px; width:max-content; }
+        .seg-btn { border:none; background:transparent; padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:600; }
+        .seg-btn.on { background:var(--primary); color:var(--primary-contrast); }
 
+        /* toggle */
         .switch{position:relative;width:48px;height:28px;display:inline-block}
         .switch input{display:none}
         .switch span{position:absolute;inset:0;background:var(--border);border-radius:999px;transition:.2s}
@@ -660,7 +674,7 @@ export default function ProfilePage() {
         .switch input:checked + span{background:var(--primary)}
         .switch input:checked + span:after{transform:translateX(20px)}
 
-        .danger{border:1px solid color-mix(in oklab, #ef4444 35%, var(--border));}
+        .danger{border:1px solid color-mix(in oklab, #ef4444 35%, var(--border)) !important;}
 
         /* Overlay */
         .ov{position:fixed;inset:0;background:rgba(2,6,23,.55);display:grid;place-items:center;padding:16px;z-index:2200}
