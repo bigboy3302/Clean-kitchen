@@ -1,0 +1,146 @@
+.fab {
+  position: relative;
+  width: 520px;
+  height: 80px;
+}
+
+/* Toggle (round) */
+.hamburger {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 64px;
+  height: 64px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--primary);
+  color: var(--primary-contrast);
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(2, 6, 23, .25);
+}
+
+.dots span {
+  position: absolute;
+  top: 46%;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #fff;
+  transition: all .28s ease;
+}
+
+.first  { left: 18px; }
+.second { left: 28px; transform: translateX(10px); }
+.third  { left: 46px; }
+
+/* morph to X when open */
+.open .first {
+  top: 14px; left: 28px;
+  height: 36px; width: 3px; border-radius: 3px;
+  transform-origin: top center; transform: rotate(-45deg);
+}
+.open .third {
+  top: 14px; left: 33px;
+  height: 36px; width: 3px; border-radius: 3px;
+  transform-origin: top center; transform: rotate(45deg);
+}
+.open .second { opacity: 0; transform: translateX(10px) scale(.1); }
+
+/* Expanding pill bar */
+.bar {
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  width: 440px;
+  height: 56px;
+  transform: translateX(-50%) scaleX(0);
+  transform-origin: center;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--bg2) 85%, var(--primary) 0%);
+  border: 1px solid var(--border);
+  box-shadow:
+    inset 0 2px 0 rgba(255,255,255,.45),
+    0 10px 28px rgba(2,6,23,.18);
+  transition: transform .28s ease;
+  pointer-events: none;
+}
+.open .bar {
+  transform: translateX(-50%) scaleX(1);
+  pointer-events: auto;
+}
+
+/* Items row */
+.actions {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  height: 100%;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  align-items: center;
+  justify-items: center;
+}
+
+.actions li {
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity .22s ease, transform .22s ease;
+  transition-delay: calc(80ms * var(--i));
+}
+.open .actions li {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Icon chip */
+.item {
+  --h: hsl(var(--hue, 200) 80% 60%);
+  --h2: hsl(var(--hue, 200) 90% 70%);
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,0)),
+    radial-gradient(120% 120% at 20% 10%, var(--h2), var(--h));
+  color: #fff;
+  border: 1px solid color-mix(in oklab, var(--h) 35%, transparent);
+  box-shadow:
+    inset 0 2px 0 rgba(255,255,255,.45),
+    0 6px 16px color-mix(in oklab, var(--h) 22%, transparent);
+  text-decoration: none;
+  transform: translateY(0) scale(.92);
+  transition: transform .16s ease, box-shadow .16s ease, filter .16s ease;
+  outline: none;
+}
+
+.item:hover,
+.item:focus-visible {
+  transform: translateY(-6px) scale(1.08);
+  box-shadow:
+    inset 0 2px 0 rgba(255,255,255,.45),
+    0 14px 28px color-mix(in oklab, var(--h) 35%, transparent);
+  filter: saturate(1.08);
+}
+
+.icon {
+  width: 70%;
+  height: 70%;
+  stroke: #fff;
+}
+
+.active {
+  box-shadow:
+    0 0 0 3px color-mix(in oklab, var(--h) 26%, transparent),
+    0 10px 22px color-mix(in oklab, var(--h) 22%, transparent),
+    inset 0 2px 0 rgba(255,255,255,.45);
+}
+
+/* Responsive */
+@media (max-width: 720px) {
+  .fab { width: 380px; }
+  .bar { width: 320px; }
+}

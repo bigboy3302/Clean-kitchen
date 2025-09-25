@@ -1,0 +1,204 @@
+/* styles/skins/app-flare.css
+   Sexy global skin that respects your theme tokens.
+   No hard-coded colors; everything uses CSS variables. */
+
+/* ---- subtle layered background ---- */
+html, body {
+  background:
+    radial-gradient(1600px 800px at 10% -10%, color-mix(in oklab, var(--primary) 6%, transparent), transparent 45%),
+    radial-gradient(1400px 680px at 100% -20%, color-mix(in oklab, var(--primary) 8%, transparent), transparent 50%),
+    var(--bg);
+}
+
+/* ---- navbar polish (glass + active-ish hover) ---- */
+.navbar {
+  background: color-mix(in oklab, var(--bg2) 86%, transparent);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: saturate(160%) blur(8px);
+}
+.navbar .nav-link {
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg2) 92%, transparent);
+  color: var(--text);
+  transition: transform .08s ease, background .2s, border-color .2s;
+}
+.navbar .nav-link:hover {
+  transform: translateY(-1px);
+  background: color-mix(in oklab, var(--primary) 12%, var(--bg2));
+  border-color: color-mix(in oklab, var(--primary) 35%, var(--border));
+}
+
+/* ---- cards (global) ---- */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border, var(--border));
+  box-shadow: 0 6px 18px color-mix(in oklab, #000 7%, transparent), 0 1px 0 color-mix(in oklab, #000 4%, transparent);
+  border-radius: 18px;
+}
+.card:hover {
+  box-shadow: 0 14px 38px color-mix(in oklab, #000 12%, transparent), 0 1px 0 color-mix(in oklab, #000 6%, transparent);
+}
+
+/* ---- buttons (matches your Button.tsx class names) ---- */
+.btn {
+  border-radius: 14px;
+  font-weight: 700;
+  border: 1px solid var(--btn-border, transparent);
+  background: var(--btn-bg, var(--primary));
+  color: var(--btn-fg, var(--primary-contrast));
+  transition: transform .06s ease, box-shadow .2s, background .2s;
+  box-shadow: 0 6px 16px color-mix(in oklab, var(--primary) 30%, transparent);
+}
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: translateY(1px); }
+
+.btn.secondary {
+  background: var(--bg2);
+  color: var(--text);
+  border-color: var(--border);
+  box-shadow: none;
+}
+.btn.secondary:hover {
+  background: color-mix(in oklab, var(--text) 4%, var(--bg2));
+}
+.btn.ghost {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border);
+  box-shadow: none;
+}
+.btn.ghost:hover { background: color-mix(in oklab, var(--text) 5%, transparent); }
+
+/* sizes from your Button.tsx */
+.btn.sm { padding: 6px 10px; font-size: .9rem; }
+.btn.md { padding: 8px 14px; font-size: 1rem; }
+.btn.lg { padding: 12px 18px; font-size: 1.05rem; }
+
+/* ---- inputs (shared) ---- */
+input, select, textarea {
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--text);
+  border-radius: 12px;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s, background .2s;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 6px color-mix(in oklab, var(--ring) 20%, transparent);
+}
+
+/* ---- “wave” search field (reusable) ---- */
+.wave-group { position: relative; }
+.wave-group .input {
+  font-size: 16px;
+  padding: 12px 12px 12px 6px;
+  display: block;
+  width: 100%;
+  border: none;
+  border-bottom: 2px solid color-mix(in oklab, var(--text) 28%, var(--border));
+  background: transparent;
+  color: var(--text);
+}
+.wave-group .input:focus { outline: none; }
+.wave-group .label {
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 600;
+  position: absolute;
+  pointer-events: none;
+  left: 6px;
+  top: 10px;
+  display: flex;
+  gap: 0;
+}
+.wave-group .label-char {
+  transition: .2s ease all;
+  transition-delay: calc(var(--index) * .05s);
+}
+.wave-group .input:focus ~ label .label-char,
+.wave-group .input:not(:placeholder-shown) ~ label .label-char {
+  transform: translateY(-22px);
+  font-size: 13px;
+  color: var(--primary);
+}
+.wave-group .bar { position: relative; display: block; width: 100%; }
+.wave-group .bar:before, .wave-group .bar:after {
+  content: '';
+  height: 2px; width: 0; bottom: 1px; position: absolute;
+  background: var(--primary);
+  transition: .2s ease all;
+}
+.wave-group .bar:before { left: 50%; }
+.wave-group .bar:after { right: 50%; }
+.wave-group .input:focus ~ .bar:before,
+.wave-group .input:focus ~ .bar:after { width: 50%; }
+
+/* ---- image polish: lighter overlays so photos don’t look black ---- */
+.img-soften {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+}
+.img-soften > img {
+  display: block; width: 100%; height: 100%; object-fit: cover;
+  transform: scale(1); transition: transform .8s ease;
+}
+.img-soften:after {
+  content:"";
+  position:absolute; inset:0;
+  background:
+    linear-gradient(to bottom, rgba(0,0,0,.04), rgba(0,0,0,.18) 50%, rgba(0,0,0,.28));
+  pointer-events: none;
+}
+.img-soften:hover > img { transform: scale(1.06); }
+
+/* ---- modal glow ---- */
+.overlay { background: color-mix(in oklab, #000 56%, transparent); }
+.modal {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  box-shadow: 0 28px 80px color-mix(in oklab, #000 40%, transparent);
+}
+
+/* ---- chips/tags ---- */
+.chip {
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--primary) 7%, var(--bg2));
+  color: var(--text);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-weight: 700;
+  font-size: .85rem;
+}
+.chip.active {
+  background: var(--primary);
+  color: var(--primary-contrast);
+  border-color: var(--primary);
+}
+
+/* ---- sticky topbars on pages ---- */
+.topbar {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 5;
+  padding-top: 6px; padding-bottom: 6px;
+}
+
+/* ---- subtle section titles ---- */
+.h2, .h3 {
+  color: var(--text);
+  letter-spacing: .2px;
+}
+
+/* ---- utility: grid container feels airier ---- */
+.container { padding-top: 28px; }
+
+/* ---- ConfirmDialog tune ---- */
+.ov { background: color-mix(in oklab, #000 55%, transparent); }
+.box {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  box-shadow: 0 20px 60px color-mix(in oklab, #000 40%, transparent);
+  border-radius: 16px;
+}

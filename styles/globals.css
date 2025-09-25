@@ -400,4 +400,30 @@ html, body {
 }
 
 
+.navbar { min-height: 64px; display:flex; align-items:center; }
+.navbar-inner { max-width:1100px; margin:0 auto; padding:10px 16px; display:flex; gap:12px; align-items:center; }
+.nav-center { flex:1; display:flex; justify-content:center; }
+
+/* Navbar container — server safe (no styled-jsx) */
+.ck-navbar {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+}
+.ck-navbar-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 10px 16px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 12px;
+}
+.ck-brand {
+  font-weight: 800;
+  color: var(--text);
+}
+
 

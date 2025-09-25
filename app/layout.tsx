@@ -1,32 +1,26 @@
 // app/layout.tsx
 import "@/styles/globals.css";
-import "@/components/ui/button.css";
-import type { ReactNode } from "react";
+import type { ReactNode, Metadata } from "react";
 
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import ThemeScript from "@/components/theme/ThemeScript";
+import FabNav from "@/components/nav/FabNav";
 
-export const metadata = { title: "Clean-Kitchen" };
+export const metadata: Metadata = { title: "Clean-Kitchen" };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
-        {/* set CSS variables ASAP to avoid flash */}
+        {/* Set CSS vars ASAP to avoid flash */}
         <ThemeScript />
 
-        {/* theme context for the whole app */}
+        {/* App-wide theme context */}
         <ThemeProvider>
-          <header className="navbar">
-            <div className="navbar-inner">
-              <div className="nav-brand">Clean-Kitchen</div>
-              <nav className="nav-links">
-                <a className="nav-link" href="/dashboard">Dashboard</a>
-                <a className="nav-link" href="/pantry">Pantry</a>
-                <a className="nav-link" href="/recipes">Recipes</a>
-                <a className="nav-link" href="/fitness">Fitness</a>
-                <a className="nav-link" href="/profile">Profile</a>
-              </nav>
+          <header className="ck-navbar">
+            <div className="ck-navbar-inner">
+              <div className="ck-brand">Clean-Kitchen</div>
+              <FabNav />
             </div>
           </header>
 
