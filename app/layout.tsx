@@ -5,6 +5,11 @@ import ThemeScript from "@/components/theme/ThemeScript";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import FabNav from "@/components/nav/FabNav";
 
+export const metadata = {
+  title: "Clean Kitchen",
+  description: "Plan, cook, and enjoy.",
+};
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
@@ -13,11 +18,20 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <ThemeProvider>
           <header className="ck-navbar">
             <div className="ck-navbar-inner">
-              <div className="ck-brand">Clean-Kitchen</div>
-              <FabNav /> {/* ← keep this only */}
+              <div aria-hidden />
+              <FabNav />
             </div>
           </header>
-          {children}
+
+          <main className="container section">
+            {children}
+          </main>
+
+          <footer className="section">
+            <div className="container muted" style={{ fontSize: 12 }}>
+              © {new Date().getFullYear()} Clean Kitchen
+            </div>
+          </footer>
         </ThemeProvider>
       </body>
     </html>

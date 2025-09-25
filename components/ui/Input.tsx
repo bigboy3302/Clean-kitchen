@@ -20,7 +20,8 @@ export default function Input({ label, className = "", ...rest }: Props) {
           padding:10px 12px;
           outline:none;
         }
-        .inp:focus{ box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 30%, transparent); border-color: var(--ring); }
+        // change the focus style line:
+.inp:focus{ box-shadow: 0 0 0 3px rgba(37,99,235,.25); border-color: var(--ring); }
       `}</style>
     </label>
   );
