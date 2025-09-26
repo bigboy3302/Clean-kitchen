@@ -1,432 +1,334 @@
-// components/posts/PostCard.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { auth, db } from "@/lib/firebase";
-import {
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-} from "firebase/firestore";
-import { hardDeletePost } from "@/lib/HardDelete";
-import { addMediaToPost, removeMediaFromPost, MediaItem } from "@/lib/postMedia";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import CommentsList from "@/components/comments/CommentsList";
 
-type Author = {
-  username?: string | null;
-  displayName?: string | null;
-  avatarURL?: string | null;
-} | null;
-
+type Author = { username?: string|null; displayName?: string|null; avatarURL?: string|null };
+type MediaItem = { type: "image"|"video"; url: string; w?: number; h?: number; duration?: number };
 type Post = {
-  id: string;
-  uid: string;
-  text?: string | null;
-  imageURL?: string | null;   // legacy single image
-  media?: MediaItem[];        // modern media array
-  createdAt?: any;
-  author?: Author;
-  isRepost?: boolean;
+  id?: string; uid?: string; text?: string|null; media?: MediaItem[];
+  author?: Author; createdAt?: { seconds?: number } | number | string | null;
+  likes?: number; reposts?: number;
 };
 
-type Props = { post: Post; meUid?: string | null };
+type Props = {
+  post: Post;
+  meUid?: string|null;
+  onEdit?: (post: Post, nextText: string) => Promise<void>|void;
+  onAddMedia?: (post: Post, files: File[]) => Promise<void>|void;
+  onDelete?: (post: Post) => Promise<void>|void;
+  onReport?: (post: Post) => Promise<void>|void;
+  onComment?: (post: Post, text: string) => Promise<void>|void;
+  onRepost?: (post: Post) => Promise<void>|void;
+  onToggleLike?: (post: Post, liked: boolean) => Promise<void>|void;
+};
 
-export default function PostCard({ post, meUid }: Props) {
-  const router = useRouter();
+function timeAgo(ts: Post["createdAt"]) {
+  if (!ts) return "";
+  const sec = typeof ts === "number" ? ts : typeof ts === "string" ? Math.floor(Date.parse(ts)/1000) : ts?.seconds ?? 0;
+  if (!sec) return "";
+  const diff = Math.max(1, Math.floor(Date.now()/1000 - sec));
+  const steps: [number,string][]= [[60,"s"],[60,"m"],[24,"h"],[7,"d"],[4.345,"w"],[12,"mo"],[Number.MAX_SAFE_INTEGER,"y"]];
+  let v = diff, i = 0; for (; i < steps.length-1 && v >= steps[i][0]; i++) v = Math.floor(v/steps[i][0]);
+  return `${v}${steps[i][1]}`;
+}
 
-  // counts
-  const [likes, setLikes] = useState(0);
-  const [reposts, setReposts] = useState(0);
-  const [comments, setComments] = useState(0);
+export default function PostCard({
+  post, meUid, onEdit, onAddMedia, onDelete, onReport, onComment, onRepost, onToggleLike,
+}: Props) {
+  const { text, media = [], author = {}, createdAt } = post || {};
+  const isOwner = meUid && post?.uid && meUid === post.uid;
 
-  // my interactions
-  const [iLiked, setILiked] = useState(false);
-  const [iReposted, setIReposted] = useState(false);
+  const createdAtLabel = useMemo(() => timeAgo(createdAt), [createdAt]);
+  const hasMedia = media && media.length > 0;
 
-  // busy flags
-  const [busyLike, setBusyLike] = useState(false);
-  const [busyRepost, setBusyRepost] = useState(false);
-  const [busyDelete, setBusyDelete] = useState(false);
-  const [adding, setAdding] = useState(false);
+  const [liked, setLiked] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [likes, setLikes] = useState<number>(() => Math.max(0, post?.likes || 0));
+  const [reposts, setReposts] = useState<number>(() => Math.max(0, post?.reposts || 0));
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const likeBurstRef = useRef<HTMLDivElement | null>(null);
 
-  // ui state
-  const [editing, setEditing] = useState(false);
-  const [textDraft, setTextDraft] = useState(post.text ?? "");
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0);
+  const [showComposer, setShowComposer] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const meUidLocal = meUid ?? auth.currentUser?.uid ?? null;
-  const isOwner = meUidLocal === post.uid;
+  const [editOpen, setEditOpen] = useState(false);
+  const [draftText, setDraftText] = useState(text || "");
 
-  // live counters
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   useEffect(() => {
-    const stopLikes = onSnapshot(collection(db, "posts", post.id, "likes"), s => setLikes(s.size));
-    const stopReposts = onSnapshot(collection(db, "posts", post.id, "reposts"), s => setReposts(s.size));
-    const stopComments = onSnapshot(collection(db, "posts", post.id, "comments"), s => setComments(s.size));
-    return () => { stopLikes(); stopReposts(); stopComments(); };
-  }, [post.id]);
+    const onDoc = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false); };
+    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") { setMenuOpen(false); setEditOpen(false); } };
+    if (menuOpen) document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onEsc);
+    return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onEsc); };
+  }, [menuOpen]);
 
-  // my like/repost flags
-  useEffect(() => {
-    if (!meUidLocal) { setILiked(false); setIReposted(false); return; }
-    const likeRef = doc(db, "posts", post.id, "likes", meUidLocal);
-    const repRef  = doc(db, "posts", post.id, "reposts", meUidLocal);
-    const stop1 = onSnapshot(likeRef, (snap) => setILiked(snap.exists()));
-    const stop2 = onSnapshot(repRef,  (snap) => setIReposted(snap.exists()));
-    return () => { stop1(); stop2(); };
-  }, [post.id, meUidLocal]);
-
-  async function toggleLike(e?: React.MouseEvent) {
-    e?.stopPropagation();
-    if (!meUidLocal) return setErr("Please sign in to like.");
-    setErr(null); setBusyLike(true);
-    try {
-      const ref = doc(db, "posts", post.id, "likes", meUidLocal);
-      if (iLiked) await deleteDoc(ref); else await setDoc(ref, { createdAt: serverTimestamp() });
-    } catch (e: any) {
-      setErr(`Failed to like: ${e?.code || e?.message || "unknown error"}`);
-    } finally { setBusyLike(false); }
-  }
-
-  async function toggleRepost(e?: React.MouseEvent) {
-    e?.stopPropagation();
-    if (!meUidLocal) return setErr("Please sign in to repost.");
-    setErr(null); setBusyRepost(true);
-    try {
-      const ref = doc(db, "posts", post.id, "reposts", meUidLocal);
-      if (iReposted) await deleteDoc(ref); else await setDoc(ref, { createdAt: serverTimestamp() });
-    } catch (e: any) {
-      setErr(`Failed to repost: ${e?.code || e?.message || "unknown error"}`);
-    } finally { setBusyRepost(false); }
-  }
-
-  /** OPEN CONFIRM MODAL */
-  function deletePost(e?: React.MouseEvent) {
-    e?.stopPropagation();
-    setErr(null);
-    setShowConfirm(true);
-  }
-
-  /** YOUR REQUESTED confirmDelete VERSION */
-  async function confirmDelete() {
-    const me = auth.currentUser?.uid || null;
-    if (!me) {
-      setErr("Please sign in.");
-      return;
-    }
-    if (post.uid !== me) {
-      setErr(`You can only delete your own post. (post.uid=${post.uid}, you=${me})`);
-      return;
-    }
-    setBusyDelete(true);
-    try {
-      await hardDeletePost(post.id, post.uid, post.media);
-      setShowConfirm(false);
-    } catch (e: any) {
-      setErr(e?.message || "Failed to delete.");
-    } finally {
-      setBusyDelete(false);
+  function onDoubleTap() {
+    if (!liked) {
+      setLiked(true);
+      setLikes(n => n + 1);
+      likeBurstRef.current?.classList.add("go");
+      setTimeout(() => likeBurstRef.current?.classList.remove("go"), 450);
+      onToggleLike?.(post, true);
     }
   }
-
-  async function saveEdit() {
-    if (!isOwner) return;
-    try {
-      await updateDoc(doc(db, "posts", post.id), {
-        text: textDraft.trim() || null,
-        updatedAt: serverTimestamp(),
-      });
-      setEditing(false);
-    } catch (e: any) {
-      setErr(`Failed to save: ${e?.code || e?.message || "unknown error"}`);
-    }
+  function toggleLike() {
+    setLiked(v => {
+      const next = !v;
+      setLikes(n => (next ? n + 1 : Math.max(0, n - 1)));
+      onToggleLike?.(post, next);
+      return next;
+    });
   }
 
-  const created = useMemo(() => {
-    const ts: any = post.createdAt;
-    if (!ts) return null;
-    if (typeof ts?.toDate === "function") return ts.toDate();
-    if (typeof ts?.seconds === "number") return new Date(ts.seconds * 1000);
-    return null;
-  }, [post.createdAt]);
-
-  const authorName =
-    post.author?.username ||
-    post.author?.displayName ||
-    (post.uid ? post.uid.slice(0, 6) : "Unknown");
-
-  function openThread() {
-    if (!showConfirm) router.push(`/posts/${post.id}`);
+  async function handleEditSave() {
+    const next = draftText.trim();
+    setEditOpen(false);
+    if (next !== text) await onEdit?.(post, next);
   }
-
-  // media to render (fallback to legacy imageURL)
-  const media: MediaItem[] =
-    Array.isArray(post.media) && post.media.length > 0
-      ? post.media.slice(0, 4)
-      : post.imageURL
-      ? [{ mid: "legacy", type: "image", url: post.imageURL, storagePath: "" } as any]
-      : [];
-
-  async function onPickMoreMedia(e: React.ChangeEvent<HTMLInputElement>) {
-    e.stopPropagation();
-    if (!isOwner || !meUidLocal) return;
+  function handleAddMediaClick() { fileInputRef.current?.click(); }
+  async function handleAddMediaChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
-    if (!files.length) return;
-
-    setErr(null);
-    setAdding(true);
-    setProgress(0);
-    try {
-      await addMediaToPost({
-        uid: meUidLocal,
-        postId: post.id,
-        files,
-        limit: 4,
-        onProgress: (p) => setProgress(p),
-      });
-    } catch (e: any) {
-      const msg = String(e?.message || e);
-      const low = msg.toLowerCase();
-      setErr(
-        low.includes("appcheck") || low.includes("permission")
-          ? "Upload blocked by App Check / permissions. Verify your debug token and Storage rules."
-          : msg
-      );
-    } finally {
-      setAdding(false);
-      setProgress(1);
-      (e.target as HTMLInputElement).value = "";
-    }
+    if (files.length) await onAddMedia?.(post, files);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    setMenuOpen(false);
+  }
+  async function submitComment() {
+    const t = commentText.trim(); if (!t) return;
+    setCommentText(""); await onComment?.(post, t);
+  }
+  async function doRepost() {
+    setReposts(n => n + 1);
+    await onRepost?.(post);
   }
 
-  async function onRemove(item: MediaItem, e?: React.MouseEvent) {
-    e?.stopPropagation();
-    if (!isOwner) return;
-    try { await removeMediaFromPost({ postId: post.id, item }); }
-    catch (e: any) { setErr(`Failed to remove media: ${e?.code || e?.message || "unknown error"}`); }
-  }
+  const displayName = author?.displayName || author?.username || "User";
+  const profileHref = `/u/${author?.username || ""}`;
 
   return (
-    <article
-      className="card"
-      role="button"
-      tabIndex={0}
-      onClick={openThread}
-      onKeyDown={(e) => { if (e.key === "Enter") openThread(); }}
-    >
-      <header className="head" onClick={(e) => e.stopPropagation()}>
-        <div className="who">
-          {post.author?.avatarURL
-            ? <img className="avatar" src={post.author.avatarURL} alt="" />
-            : <div className="avatar ph">{(authorName[0] || "U").toUpperCase()}</div>}
-          <div className="names">
-            <div className="name">{authorName}</div>
-            {created && (
-              <div className="time">
-                {created.toLocaleDateString()}{" "}
-                {created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+    <>
+      <article className="pc">
+        {/* HEADER */}
+        <header className="pc-head">
+          <div className="pc-left">
+            <Link href={profileHref} className="pc-avatar" aria-label={`${displayName} profile`}>
+              {author?.avatarURL ? <img src={author.avatarURL} alt="" /> : <span className="ph">{displayName.slice(0,1).toUpperCase()}</span>}
+            </Link>
+            <div className="pc-meta">
+              <div className="pc-name"><Link href={profileHref} className="pc-link">{displayName}</Link></div>
+              {createdAtLabel ? <div className="pc-time">{createdAtLabel}</div> : null}
+            </div>
+          </div>
+
+          <div className="pc-menu" ref={menuRef}>
+            <button className="menu-btn" aria-haspopup="menu" aria-expanded={menuOpen} aria-label="Post options" onClick={() => setMenuOpen(o => !o)}>
+              <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+            </button>
+            {menuOpen && (
+              <div className="menu" role="menu">
+                {isOwner ? (
+                  <>
+                    <button className="mi" role="menuitem" onClick={() => { setDraftText(post.text || ""); setEditOpen(true); setMenuOpen(false); }}>Edit post</button>
+                    <button className="mi" role="menuitem" onClick={handleAddMediaClick}>Add media</button>
+                    <hr className="sep" aria-hidden />
+                    <button className="mi danger" role="menuitem" onClick={() => onDelete?.(post)}>Delete</button>
+                  </>
+                ) : (
+                  <>
+                    <button className="mi" role="menuitem" onClick={() => onReport?.(post)}>Report</button>
+                    <button className="mi" role="menuitem">Hide</button>
+                  </>
+                )}
               </div>
             )}
+            <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple onChange={handleAddMediaChange} style={{display:"none"}} />
           </div>
-        </div>
+        </header>
 
-        {isOwner && !editing && (
-          <div className="ownerActions">
-            <button
-              className="btn"
-              onClick={(e) => { e.stopPropagation(); setEditing(true); setTextDraft(post.text ?? ""); }}
-            >
-              Edit
-            </button>
-
-            <label className="btn" onClick={(e) => e.stopPropagation()}>
-              {adding ? `Uploading… ${Math.round(progress * 100)}%` : "Add media"}
-              <input
-                type="file"
-                accept="image/*,video/*"
-                multiple
-                onChange={onPickMoreMedia}
-                style={{ display: "none" }}
-                disabled={adding}
-                aria-disabled={adding}
-              />
-            </label>
-
-            <button className="btn danger" onClick={deletePost}>
-              Delete
-            </button>
-          </div>
-        )}
-      </header>
-
-      {editing ? (
-        <div className="editWrap" onClick={(e) => e.stopPropagation()}>
-          <textarea className="ta" rows={3} value={textDraft} onChange={(e) => setTextDraft(e.target.value)} />
-          <div className="bar">
-            <button className="btn" onClick={() => setEditing(false)}>Cancel</button>
-            <button className="btn primary" onClick={saveEdit}>Save</button>
-          </div>
-        </div>
-      ) : (
-        <>
-          {post.text ? <p className="text">{post.text}</p> : null}
-
-          {media.length > 0 && (
-            <div className={`media grid-${Math.min(4, media.length)}`} onClick={(e) => e.stopPropagation()}>
-              {media.map((m, i) => (
-                <div key={m.mid ?? i} className="mCell">
-                  {m.type === "video"
-                    ? <video src={m.url} controls playsInline preload="metadata" />
-                    : <img src={m.url} alt="" />}
-                  {isOwner && m.storagePath ? (
-                    <button className="rm" onClick={(e) => onRemove(m, e)} title="Remove media">✕</button>
-                  ) : null}
+        {/* MEDIA or EMPTY-CENTERED TEXT */}
+        {hasMedia ? (
+          <div className={`pc-media ${media.length > 1 ? "multi" : ""}`} onDoubleClick={onDoubleTap}>
+            <div ref={likeBurstRef} className="burst" aria-hidden>
+              <svg viewBox="0 0 24 24" width="96" height="96"><path d="M12.1 8.64l-.1.1-.11-.11C10.14 6.8 7.1 6.8 5.35 8.56c-1.76 1.75-1.76 4.6 0 6.36l6.07 6.07c.32.32.85.32 1.18 0l6.06-6.07c1.76-1.76 1.76-4.6 0-6.36-1.76-1.76-4.8-1.76-6.56 0z" fill="currentColor"/></svg>
+            </div>
+            <div className="rail" tabIndex={0} aria-label="Post media">
+              {media.map((m,i)=>(
+                <div key={i} className="cell">
+                  {m.type === "video" ? <video src={m.url} controls playsInline preload="metadata" /> : <img src={m.url} alt="" />}
                 </div>
               ))}
             </div>
-          )}
-        </>
-      )}
+            {media.length>1 && <div className="dots" aria-hidden>{media.map((_,i)=><span key={i} className="dot" />)}</div>}
+          </div>
+        ) : (
+          text && (
+            <div className="pc-empty">
+              <p className="empty-text">{text}</p>
+            </div>
+          )
+        )}
 
-      {err ? <p className="bad" onClick={(e) => e.stopPropagation()}>{err}</p> : null}
+        {/* INFO */}
+        <div className="pc-info">
+          {hasMedia && text ? <p className="caption">{text}</p> : null}
+          {createdAtLabel ? <button className="timestamp" aria-label={`Posted ${createdAtLabel} ago`}>{createdAtLabel}</button> : null}
+        </div>
 
-      <footer className="bar" onClick={(e) => e.stopPropagation()}>
-        <button className="btn" onClick={openThread} title="Open thread">💬 {comments}</button>
-        <button
-          className={`btn ${iLiked ? "active" : ""}`}
-          onClick={toggleLike}
-          disabled={busyLike}
-          aria-pressed={iLiked}
-          aria-disabled={busyLike}
-          title="Like"
-        >
-          ❤️ {likes}
-        </button>
-        <button
-          className={`btn ${iReposted ? "active" : ""}`}
-          onClick={toggleRepost}
-          disabled={busyRepost}
-          aria-pressed={iReposted}
-          aria-disabled={busyRepost}
-          title="Repost"
-        >
-          🔁 {reposts}
-        </button>
-      </footer>
+        {/* ACTIONS */}
+        <div className="pc-actions">
+          <div className="left">
+            <button className={`icon ${liked ? "active" : ""}`} onClick={toggleLike} aria-pressed={liked} aria-label="Like">
+              <svg width="24" height="24" viewBox="0 0 24 24">
+                {liked
+                  ? <path d="M12.1 8.64l-.1.1-.11-.11C10.14 6.8 7.1 6.8 5.35 8.56c-1.76 1.75-1.76 4.6 0 6.36l6.07 6.07c.32.32.85.32 1.18 0l6.06-6.07c1.76-1.76 1.76-4.6 0-6.36-1.76-1.76-4.8-1.76-6.56 0z" fill="currentColor"/>
+                  : <path d="M12.1 8.64l-.1.1-.11-.11C10.14 6.8 7.1 6.8 5.35 8.56c-1.76 1.75-1.76 4.6 0 6.36l6.07 6.07c.32.32.85.32 1.18 0l6.06-6.07c1.76-1.76 1.76-4.6 0-6.36-1.76-1.76-4.8-1.76-6.56 0z" stroke="currentColor" strokeWidth="1.5" fill="none"/>}
+              </svg>
+            </button>
+            <span className="miniCount">{likes}</span>
 
-      {showConfirm && (
-        <div
-          className="overlay"
-          role="dialog"
-          aria-modal="true"
-          onClick={(e) => { e.stopPropagation(); setShowConfirm(false); }}
-          onKeyDown={(e) => { if (e.key === "Escape") setShowConfirm(false); }}
-        >
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="modalTitle">Delete post?</h3>
-            <p className="modalText">This action can’t be undone.</p>
-            <div className="modalRow">
-              <button className="btn" onClick={() => setShowConfirm(false)} disabled={busyDelete}>
-                Cancel
-              </button>
-              <button className="btn danger" onClick={confirmDelete} disabled={busyDelete} autoFocus>
-                {busyDelete ? "Deleting…" : "Delete"}
-              </button>
+            <button className="icon" aria-label="Comment" onClick={() => { setShowComposer(v=>!v); setTimeout(()=>composerRef.current?.focus(),0); }}>
+              <svg width="24" height="24" viewBox="0 0 24 24"><path d="M21 12a8.5 8.5 0 01-8.5 8.5H6l-3 3 .5-4.8A8.5 8.5 0 1121 12z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </button>
+
+            <button className="icon" aria-label="Repost" onClick={doRepost}>
+              <svg width="24" height="24" viewBox="0 0 24 24">
+                <path d="M7 7h8a4 4 0 014 4v1" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                <path d="M9 17H7a4 4 0 01-4-4v-1" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                <path d="M14 4l3 3-3 3M10 20l-3-3 3-3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </button>
+            <span className="miniCount">{reposts}</span>
+          </div>
+
+          <button className={`icon ${saved ? "active" : ""}`} onClick={() => setSaved(s=>!s)} aria-label="Save">
+            <svg width="24" height="24" viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 011 1v17l-7-4-7 4V4a1 1 0 011-1z" fill={saved?"currentColor":"none"} stroke="currentColor" strokeWidth="1.5"/></svg>
+          </button>
+        </div>
+
+        {/* Composer + live comments */}
+        {showComposer && (
+          <div className="composer">
+            <textarea
+              ref={composerRef}
+              rows={2}
+              placeholder="Write a comment…"
+              value={commentText}
+              onChange={(e)=>setCommentText(e.target.value)}
+            />
+            <button className="send" onClick={submitComment} disabled={!commentText.trim()}>Post</button>
+          </div>
+        )}
+        {post?.id ? (
+          <CommentsList postId={post.id!} meUid={meUid ?? undefined} postOwnerUid={post.uid ?? undefined} />
+        ) : null}
+      </article>
+
+      {/* Edit modal */}
+      {editOpen && (
+        <div className="overlay" role="dialog" aria-modal="true" onClick={()=>setEditOpen(false)}>
+          <div className="modal" onClick={(e)=>e.stopPropagation()}>
+            <div className="mhead">
+              <div className="mtitle">Edit post</div>
+              <button className="close" onClick={()=>setEditOpen(false)} aria-label="Close">✕</button>
+            </div>
+            <div className="mbody">
+              <textarea rows={5} value={draftText} onChange={(e)=>setDraftText(e.target.value)} />
+            </div>
+            <div className="mactions">
+              <button className="btn ghost" onClick={()=>setEditOpen(false)}>Cancel</button>
+              <button className="btn primary" onClick={handleEditSave}>Save</button>
             </div>
           </div>
         </div>
       )}
 
       <style jsx>{`
-        .card {
-          border: 1px solid var(--border);
-          background: var(--card-bg);
-          color: var(--text);
-          border-radius: 12px;
-          padding: 12px;
-          cursor: pointer;
-          box-shadow: 0 10px 30px color-mix(in oklab, #000 6%, transparent);
+        .pc{ position:relative; background:var(--card-bg); border:1px solid var(--border); border-radius:16px; overflow:visible; box-shadow:var(--shadow) }
+
+        .pc-head{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px }
+        .pc-left{ display:flex; align-items:center; gap:10px }
+        .pc-avatar{ width:40px; height:40px; border-radius:999px; overflow:hidden; display:block; border:1px solid var(--border); background:#000 }
+        .pc-avatar img{ width:100%; height:100%; object-fit:cover; display:block }
+        .ph{ width:40px; height:40px; border-radius:999px; display:grid; place-items:center; background:#f1f5f9; color:#0f172a; font-weight:800; border:1px solid #e2e8f0 }
+        :root[data-theme="dark"] .ph{ background:#111827; color:#e5e7eb; border-color:#1f2937 }
+        .pc-meta{ display:flex; flex-direction:column; line-height:1.1 }
+        .pc-name{ font-weight:700 }
+        .pc-link{ color: var(--text); text-decoration:none }
+        .pc-link:hover{ text-decoration:underline }
+        .pc-time{ font-size:12px; color: var(--muted); margin-top:2px }
+
+        .pc-menu{ position:relative; z-index:50 }
+        .menu-btn{ background:transparent; border:0; color:var(--muted); cursor:pointer; border-radius:8px; width:32px; height:32px; display:grid; place-items:center }
+        .menu{ position:absolute; top:calc(100% + 8px); right:0; min-width:200px; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); padding:6px; z-index:70 }
+        .mi{ width:100%; text-align:left; background:transparent; border:0; color: var(--text); padding:8px 10px; border-radius:8px; cursor:pointer }
+        .mi:hover{ background: rgba(2,6,23,.06) } :root[data-theme="dark"] .mi:hover{ background: rgba(255,255,255,.08) }
+        .mi.danger{ color:#e11d48 }
+        .sep{ height:1px; background: var(--border); border:0; margin:6px }
+
+        .pc-media{ position:relative }
+        .rail{ display:flex; gap:6px; overflow:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; padding:0 6px 6px }
+        .cell{ position:relative; flex: 0 0 100%; scroll-snap-align:center; border-radius:12px; overflow:hidden; border:1px solid var(--border); max-height:72vh; background:#000 }
+        .pc-media img, .pc-media video{ width:100%; height:100%; object-fit:cover; display:block }
+        .dots{ position:absolute; bottom:12px; left:0; right:0; display:flex; gap:6px; justify-content:center }
+        .dot{ width:6px; height:6px; border-radius:999px; background: rgba(255,255,255,.55) }
+        :root[data-theme="dark"] .dot{ background: rgba(255,255,255,.7) }
+
+        .burst{ position:absolute; inset:0; display:grid; place-items:center; color:#ef4444; opacity:0; transform: scale(.6); pointer-events:none }
+        .burst.go{ animation: pop .45s ease forwards }
+        @keyframes pop{ 0%{opacity:0; transform:scale(.6)} 70%{opacity:.9; transform:scale(1)} 100%{opacity:0; transform:scale(1.1)} }
+
+        .pc-empty{ display:grid; place-items:center; padding:32px 14px }
+        .empty-text{ margin:0; text-align:center; color: var(--text); white-space:pre-wrap }
+
+        .pc-info{ padding: 10px 12px 0 }
+        .caption{ margin:8px 0 0; color: var(--text); text-align:center; white-space:pre-wrap }
+        .timestamp{ background: transparent; border: 0; color: var(--muted); font-size: 12px; margin: 8px auto 0; padding: 0; display:block; text-align:center }
+
+        .pc-actions{ display:flex; align-items:center; justify-content:space-between; padding: 8px 8px 10px }
+        .pc-actions .left{ display:flex; gap:6px; align-items:center }
+        .miniCount{ font-size:12px; color: var(--muted); padding-right:6px }
+        .icon{
+          width:36px; height:36px; display:grid; place-items:center; border-radius:999px;
+          background: transparent; border: 0; color: var(--text); cursor: pointer;
+          transition: background .12s ease, opacity .12s ease, transform .06s ease;
         }
-        .card:focus { outline: 2px solid var(--primary); outline-offset: 2px; }
+        .icon:hover{ background: rgba(2,6,23,.06) }
+        :root[data-theme="dark"] .icon:hover{ background: rgba(255,255,255,.08) }
+        .icon:active{ transform: translateY(1px) }
+        .icon.active{ color:#ef4444 }
 
-        .head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
-        .who { display:flex; gap:10px; align-items:center; }
-        .avatar { width:36px; height:36px; border-radius:999px; object-fit:cover; border:1px solid var(--border); }
-        .avatar.ph { width:36px; height:36px; border-radius:999px; display:grid; place-items:center; background:var(--bg2); color:var(--text); font-weight:700; border:1px solid var(--border); }
-        .names { line-height:1.2; }
-        .name { font-weight:600; color:var(--text); }
-        .time { font-size:12px; color:var(--muted); }
-
-        .text { margin:8px 0; color:var(--text); white-space:pre-wrap; word-wrap:break-word; overflow-wrap:anywhere; }
-
-        .ownerActions { display:flex; gap:8px; align-items:center; }
-
-        .rm {
-          position:absolute; top:6px; right:6px;
-          border:none; background:var(--primary); color:var(--primary-contrast);
-          border-radius:8px; padding:2px 7px; cursor:pointer;
+        .composer{ display:grid; grid-template-columns: 1fr auto; gap:8px; padding: 0 12px 12px }
+        .composer textarea{
+          width:100%; border:1px solid var(--border); border-radius:12px; padding:10px 12px;
+          background: var(--bg); color: var(--text); resize: vertical; min-height: 38px;
         }
+        .composer .send{
+          border-radius:12px; border:0; padding:0 14px; background: var(--primary); color: var(--primary-contrast); font-weight:700; cursor:pointer;
+        }
+        .composer .send:disabled{ opacity:.6; cursor:not-allowed }
 
-        .media { margin-top:8px; display:grid; gap:8px; }
-        .media img, .media video {
-          width:100%; height:100%; object-fit:cover; display:block;
-          border-radius:10px; border:1px solid var(--border); background:#000;
+        .overlay{ position:fixed; inset:0; background: rgba(2,6,23,.55); display:grid; place-items:center; padding:16px; z-index: 1200 }
+        .modal{
+          width:100%; max-width:560px; background: var(--card-bg); border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow: var(--shadow);
         }
-        .media.grid-1 { grid-template-columns: 1fr; }
-        .media.grid-2 { grid-template-columns: 1fr 1fr; }
-        .media.grid-3 { grid-template-columns: 2fr 1fr; grid-auto-rows: 180px; }
-        .media.grid-3 .mCell:nth-child(1){ grid-row: 1 / span 2; }
-        .media.grid-4 { grid-template-columns: 1fr 1fr; grid-auto-rows: 160px; }
-        .mCell { position:relative; }
-
-        .editWrap { display:grid; gap:8px; margin-top:6px; }
-        .ta {
-          width:100%; border:1px solid var(--border); border-radius:10px; padding:8px 10px;
-          background: var(--bg2); color: var(--text);
+        .mhead{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:12px 14px; border-bottom:1px solid var(--border); background: var(--bg) }
+        .mtitle{ font-weight:800; color: var(--text) }
+        .close{ border:none; background:transparent; font-size:18px; color: var(--muted); cursor:pointer }
+        .mbody{ padding:14px }
+        .mbody textarea{
+          width:100%; border:1px solid var(--border); border-radius:12px; padding:10px 12px;
+          background: var(--bg); color: var(--text); min-height: 120px; resize: vertical;
         }
-
-        .bar { display:flex; gap:8px; margin-top:10px; }
-        .btn {
-          border:1px solid var(--border);
-          background: var(--bg2);
-          color: var(--text);
-          border-radius:10px;
-          padding:6px 10px;
-          cursor:pointer;
-        }
-        .btn:hover { border-color: var(--primary); background: color-mix(in oklab, var(--bg2) 75%, var(--primary) 25%); }
-        .btn.active, .btn.primary { background: var(--primary); color: var(--primary-contrast); border-color: var(--primary); }
-        .btn.primary:hover { opacity:.95; }
-        .btn.danger {
-          background: color-mix(in oklab, #ef4444 15%, var(--card-bg));
-          color: color-mix(in oklab, #7f1d1d 70%, var(--text) 30%);
-          border-color: color-mix(in oklab, #ef4444 35%, var(--border));
-        }
-
-        .bad {
-          margin-top:8px;
-          background: color-mix(in oklab, #ef4444 15%, transparent);
-          color: color-mix(in oklab, #7f1d1d 70%, var(--text) 30%);
-          border:1px solid color-mix(in oklab, #ef4444 35%, var(--border));
-          border-radius:8px; padding:6px 8px; font-size:12px;
-        }
-
-        .overlay { position:fixed; inset:0; background:rgba(2,6,23,.45); display:grid; place-items:center; padding:16px; z-index:1000; }
-        .modal {
-          width:100%; max-width:420px;
-          background:var(--card-bg);
-          border-radius:14px; border:1px solid var(--border);
-          box-shadow:0 24px 60px rgba(0,0,0,.2); padding:16px;
-        }
-        .modalTitle { margin:0 0 6px; font-size:18px; font-weight:800; color:var(--text); }
-        .modalText { margin:0 0 12px; color:var(--muted); }
-        .modalRow { display:flex; gap:10px; justify-content:flex-end; }
+        .mactions{ display:flex; justify-content:flex-end; gap:8px; padding: 0 14px 14px }
+        .btn{ border-radius:12px; font-weight:700; padding:8px 14px; cursor:pointer; border:1px solid var(--border); background: var(--bg); color: var(--text) }
+        .btn.primary{ background: var(--primary); color: var(--primary-contrast); border-color: transparent }
+        .btn.ghost:hover{ background: rgba(2,6,23,.06) } :root[data-theme="dark"] .btn.ghost:hover{ background: rgba(255,255,255,.08) }
       `}</style>
-    </article>
+    </>
   );
 }
