@@ -1,16 +1,35 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { NutritionInfo } from "@/lib/nutrition";
+import { useMemo } from "react";
 
-/** Accept your full pantry item shape loosely so TS never fights you. */
-export type FridgeItem = {
+type TSLike =
+  | { seconds: number; nanoseconds: number }
+  | Date
+  | null
+  | undefined;
+
+type Nutrition = {
+  carbs100g?: number | null;
+  sugars100g?: number | null;
+  fiber100g?: number | null;
+  protein100g?: number | null;
+  fat100g?: number | null;
+  satFat100g?: number | null;
+  salt100g?: number | null;
+  sodium100g?: number | null;
+  kcalPer100g?: number | null;
+  kcalPerServing?: number | null;
+  servingSize?: string | null;
+} | null;
+
+type Item = {
   id: string;
+  uid?: string;
   name: string;
   quantity?: number;
-  uid?: string;                    // optional on purpose
+  expiresAt?: TSLike;
   barcode?: string | null;
-  nutrition?: NutritionInfo | null;
+  nutrition?: Nutrition;
 };
 
 export default function Fridge({
@@ -20,184 +39,283 @@ export default function Fridge({
   onEdit,
   onDelete,
 }: {
-  items: FridgeItem[];
+  items: Item[];
   isOpen: boolean;
   onToggleOpen: (v: boolean) => void;
-  onEdit?: (item: FridgeItem) => void;
-  onDelete?: (item: FridgeItem) => void;
+  onEdit?: (it: Item) => void;
+  onDelete?: (it: Item) => void;
 }) {
-  const [open, setOpen] = useState(isOpen);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const total = items.length;
 
-  useEffect(() => setOpen(isOpen), [isOpen]);
+  // Decorative “peek” foods for the closed state
+  const foods = useMemo(() => {
+    const base = ["🥬", "🍎", "🥛", "🧀", "🥚", "🥦", "🍇", "🍓", "🥕", "🍗", "🍊", "🧃", "🥒", "🫐"];
+    const count = Math.min(10, Math.max(4, Math.ceil(total / 2)));
+    return Array.from({ length: count }, (_, i) => base[i % base.length]);
+  }, [total]);
 
-  function toggle() {
-    const v = !open;
-    setOpen(v);
-    onToggleOpen?.(v);
-  }
-
-  function hasMore(n?: NutritionInfo | null) {
-    if (!n) return false;
-    return [
-      n.carbs100g, n.sugars100g, n.fiber100g, n.protein100g,
-      n.fat100g, n.satFat100g, n.salt100g, n.sodium100g
-    ].some((v) => typeof v === "number");
-  }
+  const ajar = total > 0 && !isOpen;
 
   return (
-    <div className="fridge">
-      <button className="door" onClick={toggle} aria-expanded={open}>
-        <span className="handle" />
-        <span className="label">Fridge</span>
+    <div className="fridgeWrap">
+      <button
+        type="button"
+        className={`box ${isOpen ? "open" : ""} ${ajar ? "ajar" : ""}`}
+        onClick={() => onToggleOpen(!isOpen)}
+        aria-expanded={isOpen}
+        aria-label={isOpen ? "Close fridge" : "Open fridge"}
+      >
+        <span className="chrome" aria-hidden />
+        <span className="gasket" aria-hidden />
+        <span className="shelf s1" aria-hidden />
+        <span className="shelf s2" aria-hidden />
+        <span className="shelf s3" aria-hidden />
+
+        {/* Door + proper handle (no scrollbar look) */}
+        <span className="door" aria-hidden>
+          <span className="handle" aria-hidden />
+        </span>
+
+        {total > 0 && (
+          <span className="count" aria-hidden>
+            {total}
+          </span>
+        )}
+
+        {!isOpen && (
+          <div className="pile peek" aria-hidden>
+            {foods.map((g, i) => (
+              <span key={i} className="food" style={{ ["--i" as any]: i }}>
+                {g}
+              </span>
+            ))}
+          </div>
+        )}
       </button>
 
-      <div className={`tray ${open ? "open" : ""}`}>
-        {items.length === 0 ? (
-          <div className="empty">No items yet.</div>
-        ) : (
+      {isOpen && (
+        <div className="content">
           <ul className="grid">
-            {items.map((it) => {
-              const n = it.nutrition || {};
-              const chips: string[] = [];
-              if (typeof n.kcalPer100g === "number") chips.push(`${n.kcalPer100g} kcal/100g`);
-              if (typeof n.protein100g === "number") chips.push(`${n.protein100g}g protein`);
-              if (typeof n.fat100g === "number") chips.push(`${n.fat100g}g fat`);
-
-              const showMore = !!expanded[it.id];
+            {items.map((it, i) => {
+              const n = (it.nutrition || {}) as NonNullable<Nutrition>;
+              const hasCals =
+                n?.kcalPer100g != null || n?.kcalPerServing != null || n?.servingSize;
+              const hasMacros =
+                n?.carbs100g != null ||
+                n?.sugars100g != null ||
+                n?.fiber100g != null ||
+                n?.protein100g != null ||
+                n?.fat100g != null ||
+                n?.satFat100g != null ||
+                n?.salt100g != null ||
+                n?.sodium100g != null;
 
               return (
-                <li key={it.id} className="cell">
-                  <div className="name">{it.name}</div>
-
-                  <div className="meta">
-                    <span className="pill">Qty {it.quantity ?? 1}</span>
-                    {chips.map((c, i) => (
-                      <span key={i} className="pill">{c}</span>
-                    ))}
+                <li className="card" key={it.id} style={{ ["--i" as any]: i }}>
+                  <div className="top">
+                    <div className="title" title={it.name}>{it.name}</div>
+                    <div className="meta">
+                      <span>Qty: <strong>{it.quantity ?? 1}</strong></span>
+                      <span className="muted">Fresh</span>
+                    </div>
                   </div>
 
-                  <div className="row">
-                    {hasMore(n) && (
-                      <button
-                        className="mini"
-                        onClick={() =>
-                          setExpanded((m) => ({ ...m, [it.id]: !m[it.id] }))
-                        }
-                      >
-                        {showMore ? "Hide nutrition" : "More nutrition"}
-                      </button>
-                    )}
-                    {onEdit && (
-                      <button className="mini" onClick={() => onEdit(it)}>
-                        Edit
-                      </button>
-                    )}
-                    {onDelete && (
-                      <button className="mini danger" onClick={() => onDelete(it)}>
-                        Delete
-                      </button>
-                    )}
-                  </div>
+                  {hasCals && (
+                    <div className="badges">
+                      {n?.kcalPer100g != null && <span className="badge pill">kcal/100g {n.kcalPer100g}</span>}
+                      {n?.kcalPerServing != null && <span className="badge pill">kcal/serv {n.kcalPerServing}</span>}
+                      {n?.servingSize && <span className="badge pill">serving {n.servingSize}</span>}
+                    </div>
+                  )}
 
-                  {showMore && (
-                    <div className="more">
-                      <div className="gridMore">
-                        <div><span className="muted">Carbs/100g:</span> {n.carbs100g ?? "—"}</div>
-                        <div><span className="muted">Sugars/100g:</span> {n.sugars100g ?? "—"}</div>
-                        <div><span className="muted">Fiber/100g:</span> {n.fiber100g ?? "—"}</div>
-                        <div><span className="muted">Protein/100g:</span> {n.protein100g ?? "—"}</div>
-                        <div><span className="muted">Fat/100g:</span> {n.fat100g ?? "—"}</div>
-                        <div><span className="muted">Sat fat/100g:</span> {n.satFat100g ?? "—"}</div>
-                        <div><span className="muted">Salt/100g:</span> {n.salt100g ?? "—"}</div>
-                        <div><span className="muted">Sodium/100g:</span> {n.sodium100g ?? "—"}</div>
-                        <div><span className="muted">Barcode:</span> {it.barcode ?? "—"}</div>
-                      </div>
+                  {hasMacros && (
+                    <div className="nutri">
+                      <div>Carbs/100g: <strong>{n?.carbs100g ?? "—"}</strong></div>
+                      <div>Sugars/100g: <strong>{n?.sugars100g ?? "—"}</strong></div>
+                      <div>Fiber/100g: <strong>{n?.fiber100g ?? "—"}</strong></div>
+                      <div>Protein/100g: <strong>{n?.protein100g ?? "—"}</strong></div>
+                      <div>Fat/100g: <strong>{n?.fat100g ?? "—"}</strong></div>
+                      <div>Sat fat/100g: <strong>{n?.satFat100g ?? "—"}</strong></div>
+                      <div>Salt/100g: <strong>{n?.salt100g ?? "—"}</strong></div>
+                      <div>Sodium/100g: <strong>{n?.sodium100g ?? "—"}</strong></div>
+                      {it.barcode ? <div>Barcode: <strong>{it.barcode}</strong></div> : null}
+                    </div>
+                  )}
+
+                  {(onEdit || onDelete) && (
+                    <div className="row">
+                      {onEdit && <button className="btn secondary" onClick={() => onEdit(it)}>Edit</button>}
+                      {onDelete && <button className="btn danger" onClick={() => onDelete(it)}>Delete</button>}
                     </div>
                   )}
                 </li>
               );
             })}
           </ul>
-        )}
-      </div>
+        </div>
+      )}
 
       <style jsx>{`
-        .fridge { display:flex; align-items:center; gap:10px; }
-        .door {
-          position: relative;
-          width: 140px; height: 88px; border-radius: 16px;
-          background: linear-gradient(180deg, #f8fafc, #dbe1ea);
-          border: 1px solid #e5e7eb;
-          box-shadow: 0 12px 30px rgba(0,0,0,.06) inset, 0 6px 14px rgba(0,0,0,.05);
-          cursor: pointer;
-        }
-        .handle {
-          position: absolute; right: 12px; top: 18px; width: 6px; height: 52px; border-radius: 6px;
-          background: #b7c0cd;
-        }
-        .label {
-          position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%);
-          font-size: 12px; color: #64748b;
+        .fridgeWrap {
+          display: grid;
+          grid-template-columns: 230px 1fr;
+          gap: 16px;
+          align-items: start;
+          width: 100%;
         }
 
-        .tray {
-          min-width: 280px;
-          max-width: 560px;
+        /* FRIDGE BODY */
+        .box {
+          position: sticky;
+          top: 8px;
+          width: 220px;
+          height: 260px;
           border: 1px solid var(--border);
-          background: var(--card-bg);
-          border-radius: 14px;
-          padding: 10px;
-          box-shadow: 0 16px 40px rgba(0,0,0,.06);
-          transform-origin: top left;
-          transform: scale(.96);
-          opacity: 0;
-          pointer-events: none;
-          transition: .18s ease;
+          border-radius: 16px;
+          background:
+            radial-gradient(140% 80% at 50% -10%, #fff0 45%, rgba(255,255,255,0.55) 60%, #fff0 61%),
+            linear-gradient(180deg, #e0f2fe 0%, #dbeafe 40%, #c7d2fe 100%);
+          box-shadow: 0 16px 48px rgba(2, 6, 23, 0.18);
+          cursor: pointer;
+          perspective: 900px;
+          transform-style: preserve-3d;
+          transition: transform .5s cubic-bezier(.22,1,.36,1), filter .25s ease;
+          overflow: hidden;
         }
-        .tray.open { transform: scale(1); opacity: 1; pointer-events: auto; }
+        .box:hover { filter: brightness(1.04); }
+        .box.open { transform: translateY(-2px) rotateX(5deg); }
 
-        .empty { color: var(--muted); font-size: 13px; padding: 4px 6px; }
+        .chrome { position:absolute; inset:6px; border-radius:14px; border:1px solid rgba(255,255,255,.5); box-shadow: inset 0 1px 0 rgba(255,255,255,.35); }
+        .gasket { position:absolute; inset:14px 14px 14px 40px; border-radius:10px; border:1px dashed rgba(2,6,23,.06); }
 
-        .grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-        .cell {
+        .shelf { position:absolute; left:24px; right:56px; height:2px; background: rgba(2,6,23,.12); opacity:.6; }
+        .shelf.s1 { top: 78px; }
+        .shelf.s2 { top: 128px; }
+        .shelf.s3 { top: 178px; }
+
+        /* DOOR + HANDLE (no accidental scrollbars) */
+        .door {
+          position:absolute; top:0; bottom:0; right:0; width:106px;
+          background: linear-gradient(180deg, #e2e8f0 0%, #e5e7eb 40%, #e2e8f0 100%);
+          border-left: 1px solid rgba(15,23,42,.08);
+          border-radius: 0 16px 16px 0;
+          transform-origin: 100% 50%;
+          transform: rotateY(0deg);
+          box-shadow: inset 0 0 0 1px rgba(255,255,255,.3);
+          transition: transform .55s cubic-bezier(.22,1,.36,1);
+          will-change: transform;
+          overflow: hidden; /* ensure no scrollbars */
+        }
+        .box.ajar .door { transform: rotateY(-14deg); }
+        .box.open .door { transform: rotateY(-58deg); }
+
+        .handle {
+          position:absolute;
+          top: 40px;
+          left: 10px;
+          width: 10px;
+          height: 112px;
+          border-radius: 8px;
+          background: linear-gradient(180deg, #93a8c0, #6b7f96);
+          box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+        }
+
+        .count {
+          position: absolute;
+          top: 8px; left: 8px;
+          min-width: 26px; height: 24px; padding: 0 8px;
+          display:grid; place-items:center;
+          background: #0ea5e9; color: #0b1220;
+          font-size: 12px; font-weight: 900; border-radius: 999px;
+          box-shadow: 0 4px 12px rgba(14,165,233,.35);
+        }
+
+        /* Peek foods */
+        .pile { position:absolute; left:22px; right:58px; bottom:18px; top:26px; pointer-events:none; transform: translateZ(2px); }
+        .food {
+          position:absolute; font-size:20px; filter: drop-shadow(0 2px 6px rgba(0,0,0,.15));
+          animation: chill 2.6s ease-in-out infinite; animation-delay: calc(var(--i) * 70ms);
+        }
+        .food:nth-child(1)  { left: 6px;  bottom: 10px; }
+        .food:nth-child(2)  { left: 30px; bottom: 12px; }
+        .food:nth-child(3)  { left: 54px; bottom: 14px; }
+        .food:nth-child(4)  { left: 78px; bottom: 16px; }
+        .food:nth-child(5)  { left: 16px; bottom: 48px; }
+        .food:nth-child(6)  { left: 46px; bottom: 52px; }
+        .food:nth-child(7)  { left: 74px; bottom: 56px; }
+        .food:nth-child(8)  { left: 12px; bottom: 92px; }
+        .food:nth-child(9)  { left: 40px; bottom: 94px; }
+        .food:nth-child(10) { left: 70px; bottom: 98px; }
+
+        @keyframes chill { 0%,100%{ transform: translateY(0) } 50%{ transform: translateY(-1px) } }
+
+        /* CONTENT GRID */
+        .content {
+          border: 1px solid var(--border);
+          border-radius: 16px;
+          background: var(--card-bg);
+          box-shadow: 0 2px 12px rgba(16,24,40,.06), 0 16px 36px rgba(16,24,40,.08);
+          padding: 14px;
+          animation: contentIn .28s ease-out both;
+        }
+        @keyframes contentIn { from{opacity:0; transform: translateY(6px);} to{opacity:1; transform: translateY(0);} }
+
+        .grid {
+          list-style:none; margin:0; padding:0;
+          display:grid; gap:14px; grid-template-columns: repeat(3, minmax(0,1fr));
+        }
+        @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+        @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+
+        .card {
           border: 1px solid var(--border);
           background: var(--bg2);
-          border-radius: 12px;
-          padding: 10px;
+          border-radius: 16px;
+          padding: 16px;
+          min-height: 140px;
+          box-shadow: 0 2px 10px rgba(16,24,40,.06), 0 16px 34px rgba(16,24,40,.08);
+          opacity: 0; transform: translateY(10px) scale(.98);
+          animation: cardPop .46s cubic-bezier(.18,.89,.32,1.28) forwards;
+          animation-delay: calc((var(--i,0)) * 70ms);
         }
-        .name { font-weight: 700; }
-        .meta { display:flex; flex-wrap:wrap; gap:6px; margin: 6px 0; }
-        .pill {
+        .card:hover { transform: translateY(-2px) scale(1.01); transition: transform .18s ease; }
+
+        .top { display:grid; gap:4px; }
+        .title { font-weight:800; font-size:15px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .meta { display:flex; gap:10px; flex-wrap:wrap; font-size:13px; color:var(--muted); }
+
+        .badges { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 4px; }
+        .badge {
           border: 1px solid var(--border);
-          background: #f1f5f9;
+          padding: 5px 8px;
           border-radius: 999px;
-          padding: 3px 8px;
           font-size: 12px;
           color: #0f172a;
+          background: #eef2ff;
+          /* 🔧 kill any global underline styles */
+          text-decoration: none !important;
         }
-        .row { display:flex; gap:8px; }
-        .mini {
-          border:1px solid var(--border);
-          background: var(--card-bg);
-          border-radius:10px;
-          padding:6px 10px;
-          font-size: 12px;
-          cursor: pointer;
-        }
-        .mini:hover { background: color-mix(in oklab, var(--primary) 10%, var(--bg2)); }
-        .mini.danger { color:#b91c1c; border-color:#fecaca; background:#fff5f5; }
-        .mini.danger:hover { background:#ffecec; }
+        .badge * { text-decoration: none !important; }
 
-        .more { margin-top: 8px; }
-        .gridMore {
-          display:grid;
+        .nutri {
+          margin-top: 8px;
+          display:grid; gap:6px 12px;
           grid-template-columns: repeat(2, minmax(0,1fr));
-          gap: 6px 12px;
           font-size: 13px;
         }
-        @media (max-width: 560px) { .gridMore { grid-template-columns: 1fr; } }
-        .muted { color:#64748b; }
+        @media (max-width: 560px) { .nutri { grid-template-columns: 1fr; } }
+
+        .row { display:flex; gap:10px; justify-content:flex-end; margin-top:10px; }
+        .btn { border:1px solid var(--border); background:var(--bg2); padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:600; }
+        .btn.secondary:hover { background: color-mix(in oklab, var(--bg2) 85%, var(--primary) 15%); }
+        .btn.danger { color:#fff; background:#e11d48; border-color:#e11d48; }
+        .btn.danger:hover { filter: brightness(.97); }
+
+        @keyframes cardPop {
+          0%{ opacity:0; transform: translateY(16px) scale(.96); }
+          60%{ opacity:1; transform: translateY(-3px) scale(1.02); }
+          100%{ opacity:1; transform: translateY(0) scale(1); }
+        }
       `}</style>
     </div>
   );

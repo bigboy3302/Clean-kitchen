@@ -10,14 +10,14 @@ import {
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
+
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
-import PantryCard, { PantryCardItem } from "@/components/pantry/PantryCard";
-import BarcodeScanner from "@/components/pantry/BarcodeScanner";
 import PantryHelpButton from "@/components/pantry/PantryHelpButton";
 import { fetchNutritionByBarcode, NutritionInfo } from "@/lib/nutrition";
 import Fridge from "@/components/pantry/Fridge";
 import TrashCan from "@/components/pantry/TrashCan";
+import CameraModal from "@/components/pantry/CameraModal";
 
 /* ------------ helpers ------------- */
 const looksLikeBarcode = (s: string) => /^\d{6,}$/.test(s);
@@ -72,15 +72,11 @@ type Item = {
 export default function PantryPage() {
   const router = useRouter();
 
-  // add-form
+  // form
   const [name, setName] = useState("");
   const [qty, setQty] = useState<number>(1);
   const [date, setDate] = useState<string>("");
   const [barcode, setBarcode] = useState<string>("");
-
-  // scanner
-  const [scannerKey, setScannerKey] = useState(0);
-  const [scannerAutoStart, setScannerAutoStart] = useState(false);
 
   // nutrition
   const [nutrition, setNutrition] = useState<NutritionInfo | null>(null);
@@ -94,17 +90,15 @@ export default function PantryPage() {
   const stopRef = useRef<null | (() => void)>(null);
 
   const minDate = todayStr();
-  const todayStart = useMemo(startOfToday, []); // ✅ single
+  const todayZero = useMemo(startOfToday, []);
 
+  // widgets open/close
   const [fridgeOpen, setFridgeOpen] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
 
-  // edit modal
-  const [editOpen, setEditOpen] = useState(false);
-  const [editItem, setEditItem] = useState<Item | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editQty, setEditQty] = useState<number>(1);
-  const [editDate, setEditDate] = useState("");
+  // camera modal
+  const [camOpen, setCamOpen] = useState(false);
+  const [scannerKey, setScannerKey] = useState(0);
 
   /* auth + live items */
   useEffect(() => {
@@ -146,9 +140,9 @@ export default function PantryPage() {
     return () => clearTimeout(id);
   }, [barcode]);
 
-  function handleDetected(code: string) {
+  function onDetectedFromCam(code: string) {
     setBarcode(code);
-    setScannerAutoStart(false);
+    setCamOpen(false);
   }
 
   /* add / merge */
@@ -216,93 +210,96 @@ export default function PantryPage() {
         });
       }
 
-      // reset + quick fridge pop
+      // reset + little fridge “pop”
       setName(""); setQty(1); setDate(""); setBarcode(""); setNutrition(null); setNutriErr(null);
-      setScannerAutoStart(false); setScannerKey((k) => k + 1);
-      setFridgeOpen(true); setTimeout(()=>setFridgeOpen(false), 1200);
+      setFridgeOpen(true); setTimeout(()=>setFridgeOpen(false), 1000);
     } catch (e: any) {
       setErr(e?.message ?? "Failed to add item.");
     } finally { setBusy(false); }
   }
 
   async function saveItem(id: string, patch: { name: string; quantity: number; expiresAt: any }) {
-    const cleaned = capFirst(normalizeProductName(patch.name || ""));
-    const toWrite: any = {
-      name: cleaned,
-      nameKey: cleaned.toLowerCase(),
-      quantity: Number(patch.quantity) || 1,
-      expiresAt: null,
-    };
-    if (patch.expiresAt) {
-      if (typeof patch.expiresAt?.toDate === "function") toWrite.expiresAt = patch.expiresAt;
-      else if (typeof patch.expiresAt?.seconds === "number") toWrite.expiresAt = Timestamp.fromDate(new Date(patch.expiresAt.seconds * 1000));
-      else if (typeof patch.expiresAt === "string" && !Number.isNaN(Date.parse(patch.expiresAt)))
-        toWrite.expiresAt = Timestamp.fromDate(new Date(`${patch.expiresAt}T00:00:00`));
+    setErr(null);
+    try {
+      const cleaned = capFirst(normalizeProductName(patch.name || ""));
+      const toWrite: any = {
+        name: cleaned,
+        nameKey: cleaned.toLowerCase(),
+        quantity: Number(patch.quantity) || 1,
+        expiresAt: null,
+      };
+      if (patch.expiresAt) {
+        if (typeof patch.expiresAt?.toDate === "function") toWrite.expiresAt = patch.expiresAt;
+        else if (typeof patch.expiresAt?.seconds === "number") toWrite.expiresAt = Timestamp.fromDate(new Date(patch.expiresAt.seconds * 1000));
+        else if (typeof patch.expiresAt === "string" && !Number.isNaN(Date.parse(patch.expiresAt))) toWrite.expiresAt = Timestamp.fromDate(new Date(`${patch.expiresAt}T00:00:00`));
+      }
+      await updateDoc(doc(db, "pantryItems", id), toWrite);
+    } catch (e: any) {
+      setErr(e?.message ?? "Failed to save changes."); throw e;
     }
-    await updateDoc(doc(db, "pantryItems", id), toWrite);
   }
 
   async function removeItem(id: string) {
+    setErr(null);
     try { await deleteDoc(doc(db, "pantryItems", id)); }
     catch (e) {
       const code = (e as FirebaseError).code || "";
-      throw new Error(code === "permission-denied" ? "You can only delete items you own." : (e as any)?.message ?? "Failed to delete.");
+      setErr(code === "permission-denied" ? "You can only delete items you own." : (e as any)?.message ?? "Failed to delete."); throw e;
     }
   }
+
+  // inline edit/delete for widgets
+  async function editFromWidget(it: any) {
+    const newName = prompt("Edit name", it.name ?? "") ?? it.name ?? "";
+    const newQty = Number(prompt("Edit quantity", String(it.quantity ?? 1)) ?? (it.quantity ?? 1));
+    await saveItem(it.id, { name: newName, quantity: newQty, expiresAt: it.expiresAt ?? null });
+  }
+  function deleteFromWidget(it: any) { return removeItem(it.id); }
 
   /* split */
   const active: Item[] = [];
   const expired: Item[] = [];
   items.forEach((it) => {
     const d = toDate(it.expiresAt);
-    if (d && d < todayStart) expired.push(it);
+    if (d && d < todayZero) expired.push(it);
     else active.push(it);
   });
 
-  /* open edit modal (from Fridge or cards) */
-  function openEdit(it: Item) {
-    setEditItem(it);
-    setEditName(it.name);
-    setEditQty(it.quantity || 1);
-    const d = toDate(it.expiresAt);
-    setEditDate(d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` : "");
-    setEditOpen(true);
-  }
-  async function confirmEdit() {
-    if (!editItem) return;
-    await saveItem(editItem.id, {
-      name: editName.trim(),
-      quantity: editQty,
-      expiresAt: editDate || null,
-    });
-    setEditOpen(false);
-    setEditItem(null);
-  }
-
   return (
     <main className="wrap">
-      {/* HEADER */}
       <header className="hero">
         <div className="left">
           <h1 className="title tracking-in-contract-bck-top">Pantry</h1>
-          <p className="sub">
-            Store groceries in your <strong>Fridge</strong>, keep an eye on <strong>Expired</strong> items.
-          </p>
+          <p className="sub">Store groceries in your <strong>Fridge</strong>, keep an eye on <strong>Expired</strong> items.</p>
         </div>
         <div className="right"><PantryHelpButton /></div>
       </header>
 
-      {/* ADD PRODUCT */}
-      <section className="addCard">
+      {/* ADD PRODUCT — modern card */}
+      <section className="card addCard">
+        <div className="bgOrbs" aria-hidden />
         <div className="addHead">
-          <div className="addIcon">➕</div>
           <div>
-            <div className="addTitle">Add product</div>
-            <div className="addSub">Scan barcodes, merge duplicates automatically.</div>
+            <h2 className="cardTitle">Add product</h2>
+            <p className="muted small">Scan groceries, merge duplicates, and keep track of what’s fresh.</p>
           </div>
+
+          {/* small round camera icon */}
+          <button
+            type="button"
+            className="camIcon"
+            title="Scan with camera"
+            onClick={() => { setScannerKey((k) => k + 1); setCamOpen(true); }}
+            aria-label="Open camera"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 7h2l1.2-2.4A2 2 0 0 1 9 3h6a2 2 0 0 1 1.8 1.1L18 6h2a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H4a3 3 0 0 1-3-3V10a3 3 0 0 1 3-3Z" stroke="currentColor" strokeWidth="1.6"/>
+              <circle cx="12" cy="13" r="4" stroke="currentColor" strokeWidth="1.6"/>
+            </svg>
+          </button>
         </div>
 
-        <div className="addGrid">
+        <div className="grid2">
           <Input label="Name" value={name} onChange={(e:any)=>setName(e.target.value)} placeholder="Pasta" />
           <Input label="Quantity" type="number" min={1} value={String(qty)} onChange={(e:any)=>setQty(Number(e.target.value))} />
           <div>
@@ -310,30 +307,22 @@ export default function PantryPage() {
             <input className="textInput" type="date" min={minDate} value={date} onChange={(e)=>setDate(e.currentTarget.value)} />
           </div>
           <div className="barcodeRow">
-            <Input label="Barcode" value={barcode} onChange={(e:any)=>setBarcode(String(e.target.value).trim())} placeholder="Scan or type digits" />
-            <button type="button" className="btn ghost" onClick={() => { setBarcode(""); setNutrition(null); setNutriErr(null); }}>
-              Clear
-            </button>
-          </div>
-          <div className="scannerCol">
-            <label className="label">Scan with camera</label>
-            <BarcodeScanner key={scannerKey} autoStart={scannerAutoStart} onDetected={handleDetected} />
-            <div className="rowHint">
-              {nutriBusy ? <span className="muted small">Looking up nutrition…</span> : null}
-              {nutriErr ? <span className="error small">{nutriErr}</span> : null}
-            </div>
+            <Input label="Barcode" value={barcode} onChange={(e:any)=>setBarcode(String(e.target.value).trim())} placeholder="Type or scan digits" />
+            <button type="button" className="btn" onClick={() => { setBarcode(""); setNutrition(null); setNutriErr(null); }}>Clear</button>
           </div>
         </div>
 
         {(nutrition?.name || nutrition?.kcalPer100g || nutrition?.kcalPerServing) && (
           <div className="nutri">
-            <div className="nutTitle">Nutrition (auto from barcode)</div>
+            <div className="nutTitle">Nutrition (from barcode)</div>
             <div className="nutGrid">
               <div><span className="muted">Name:</span> <strong>{normalizeProductName(nutrition?.name || "")}</strong></div>
               <div><span className="muted">kcal / 100g:</span> <strong>{nutrition?.kcalPer100g ?? "—"}</strong></div>
               <div><span className="muted">kcal / serving:</span> <strong>{nutrition?.kcalPerServing ?? "—"}</strong></div>
               <div><span className="muted">Serving size:</span> <strong>{nutrition?.servingSize ?? "—"}</strong></div>
             </div>
+            {nutriBusy && <p className="muted small">Looking up nutrition…</p>}
+            {nutriErr && <p className="error small">{nutriErr}</p>}
           </div>
         )}
 
@@ -345,174 +334,153 @@ export default function PantryPage() {
         </div>
       </section>
 
-      {/* ACTIVE + FRIDGE */}
+      {/* ACTIVE — Fridge always visible */}
       <section className="list">
-        <div className="sectionHead">
+        <div className="secHead">
           <h2 className="secTitle">Active</h2>
+          <span className="secBadge">{active.length}</span>
+        </div>
+
+        <div className={`widgetRow ${active.length === 0 ? "widgetRow--empty" : ""}`}>
           <Fridge
-            items={active}
+            items={active}                 // [] allowed
             isOpen={fridgeOpen}
             onToggleOpen={setFridgeOpen}
-            onEdit={(it) => openEdit(it)}
-            onDelete={(it) => removeItem(it.id)}
+            onEdit={editFromWidget}
+            onDelete={deleteFromWidget}
           />
+          {active.length === 0 && <div className="empty hint">Add something to your fridge to see it here.</div>}
         </div>
-
-        {active.length === 0 ? (
-          <div className="empty">No active items.</div>
-        ) : (
-          <div className="gridCards">
-            {active.map((it) => (
-              <PantryCard
-                key={it.id}
-                item={it as unknown as PantryCardItem}
-                onDelete={() => removeItem(it.id)}
-                onSave={(patch) => saveItem(it.id, patch)}
-              />
-            ))}
-          </div>
-        )}
       </section>
 
-      {/* EXPIRED + TRASHCAN */}
-      <section className="list" style={{ marginTop: 20 }}>
-        <div className="sectionHead">
+      {/* EXPIRED — TrashCan always visible */}
+      <section className="list">
+        <div className="secHead">
           <h2 className="secTitle">Expired</h2>
-        <TrashCan
-            items={expired.map(a => ({ id: a.id, name: a.name }))}
+          <br />
+          <br />
+          <br />
+          <span className="secBadge warn">{expired.length}</span>
+        </div>
+
+        <div className={`widgetRow ${expired.length === 0 ? "widgetRow--empty" : ""}`}>
+          <TrashCan
+            items={expired}                // [] allowed
             isOpen={trashOpen}
             onToggleOpen={setTrashOpen}
+            onEdit={editFromWidget}
+            onDelete={deleteFromWidget}
           />
+          {expired.length === 0 && <div className="empty hint">No expired items. 🎉</div>}
         </div>
-
-        {expired.length === 0 ? (
-          <div className="empty">Nothing expired 🎉</div>
-        ) : (
-          <div className="gridCards">
-            {expired.map((it) => (
-              <PantryCard
-                key={it.id}
-                item={{ ...it, name: it.name } as unknown as PantryCardItem}
-                onDelete={() => removeItem(it.id)}
-                onSave={(patch) => saveItem(it.id, patch)}
-              />
-            ))}
-          </div>
-        )}
       </section>
 
-      {/* EDIT MODAL */}
-      {editOpen && editItem && (
-        <div className="overlay" onClick={()=>setEditOpen(false)} role="dialog" aria-modal="true">
-          <div className="modal" onClick={(e)=>e.stopPropagation()}>
-            <div className="mhead">
-              <div className="mtitle">Edit “{editItem.name}”</div>
-              <button className="x" onClick={()=>setEditOpen(false)}>×</button>
-            </div>
-            <div className="mbody">
-              <div className="gridM">
-                <label className="lbl">Name
-                  <input className="txt" value={editName} onChange={(e)=>setEditName(e.target.value)} />
-                </label>
-                <label className="lbl">Quantity
-                  <input className="txt" type="number" min={1} value={String(editQty)} onChange={(e)=>setEditQty(Number(e.target.value)||1)} />
-                </label>
-                <label className="lbl">Expiry date
-                  <input className="txt" type="date" value={editDate} onChange={(e)=>setEditDate(e.target.value)} />
-                </label>
-              </div>
-            </div>
-            <div className="mfoot">
-              <Button variant="secondary" onClick={()=>setEditOpen(false)}>Cancel</Button>
-              <Button onClick={confirmEdit}>Save</Button>
-            </div>
-          </div>
-        </div>
+      {/* CAMERA POPUP */}
+      {camOpen && (
+        <CameraModal
+          key={`cam-${scannerKey}`}
+          open={camOpen}
+          onClose={() => setCamOpen(false)}
+          onDetected={(code) => onDetectedFromCam(code)}
+        />
       )}
 
       <style jsx>{`
         .wrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 80px; }
 
-        .hero { display:grid; grid-template-columns: 1fr auto; align-items:center; margin: 4px 0 18px; }
+        .hero {
+          display:grid; grid-template-columns: 1fr auto; align-items:center;
+          margin: 4px 0 18px;
+        }
         .title { font-size: 34px; font-weight: 900; letter-spacing: -0.02em; margin: 0; color: var(--text); }
         .sub { color: var(--muted); margin: 6px 0 0; }
-        .right { display:flex; gap:8px; align-items:center; }
+        .right { display:flex; align-items:center; gap:8px; }
 
-        /* ADD CARD — modern */
-        .addCard {
+        .card {
+          position: relative;
           border:1px solid var(--border);
-          background:
-            radial-gradient(1200px 300px at 0% -30%, color-mix(in oklab, var(--primary) 8%, transparent) , transparent),
-            var(--card-bg);
-          border-radius: 20px;
-          padding: 16px;
-          box-shadow: 0 16px 40px rgba(0,0,0,.06);
-          margin-bottom: 22px;
+          background: var(--card-bg);
+          border-radius:18px; padding:18px;
+          box-shadow: 0 2px 12px rgba(16,24,40,.06), 0 16px 36px rgba(16,24,40,.08);
         }
-        .addHead { display:flex; align-items:center; gap:12px; margin-bottom: 14px; }
-        .addIcon { width:34px; height:34px; border-radius:10px; display:grid; place-items:center;
-                   background: color-mix(in oklab, var(--primary) 14%, var(--bg2));
-                   border:1px solid var(--border); font-weight:800; }
-        .addTitle { font-weight:800; }
-        .addSub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+        .addCard {
+          overflow: hidden;
+          isolation: isolate;
+        }
+        .bgOrbs {
+          position:absolute; inset:-1px;
+          background:
+            radial-gradient(800px 280px at -10% -10%, color-mix(in oklab, var(--primary) 10%, transparent), transparent 60%),
+            radial-gradient(600px 260px at 110% 10%, color-mix(in oklab, #60a5fa 12%, transparent), transparent 60%);
+          filter: blur(6px);
+          opacity: .7;
+          pointer-events: none;
+          z-index: 0;
+        }
+        .addHead { position:relative; z-index:1; display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+        .cardTitle { font-size: 18px; font-weight: 800; color: var(--text); }
 
-        .addGrid { display:grid; grid-template-columns:1fr 140px 200px 1fr 1fr; gap:12px 16px; align-items:start; }
-        @media (max-width: 1100px){ .addGrid{ grid-template-columns:1fr 120px 180px 1fr; } }
-        @media (max-width: 900px){ .addGrid{ grid-template-columns:1fr 1fr; } }
-        @media (max-width: 560px){ .addGrid{ grid-template-columns:1fr; } }
+        .camIcon {
+          width: 40px; height: 40px; border-radius: 999px;
+          display:grid; place-items:center;
+          background: var(--primary); color: var(--primary-contrast);
+          border: 1px solid color-mix(in oklab, var(--primary) 30%, var(--border));
+          box-shadow: 0 8px 24px rgba(0,0,0,.18);
+          cursor: pointer; transition: transform .15s ease, filter .15s ease;
+        }
+        .camIcon:hover { filter: brightness(1.05); transform: translateY(-1px); }
+
+        .grid2 { position:relative; z-index:1; display:grid; grid-template-columns:1fr 140px 200px 1fr; gap:12px 16px; align-items:start; }
+        @media (max-width: 980px){ .grid2{ grid-template-columns:1fr 1fr; } }
+        @media (max-width: 560px){ .grid2{ grid-template-columns:1fr; } }
 
         .label { display:block; margin-bottom:6px; font-size:.9rem; color:var(--text); font-weight:600; }
-        .textInput { width:100%; border:1px solid var(--border); border-radius:12px; padding:10px 12px; font-size:14px; background: var(--bg2); color: var(--text); }
+        .textInput {
+          width:100%; border:1px solid var(--border); border-radius:14px; padding:11px 12px; font-size:14px;
+          background: color-mix(in oklab, var(--bg2) 85%, white 15%); color: var(--text);
+          backdrop-filter: blur(6px);
+        }
         .textInput:focus { outline:none; border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 25%, transparent); }
 
         .barcodeRow { display:grid; grid-template-columns: 1fr auto; gap:8px; align-items:end; }
-        .btn { border:1px solid var(--border); background:var(--bg2); padding:8px 12px; border-radius:10px; cursor:pointer; color: var(--text); }
-        .btn.ghost:hover{ background: color-mix(in oklab, var(--bg2) 85%, var(--primary) 15%); }
-
-        .scannerCol { display:grid; gap:8px; }
-        .rowHint { display:flex; gap:12px; align-items:center; }
-        .muted { color: var(--muted); }
-        .small { font-size:12px; }
+        .btn {
+          border:1px solid var(--border); background:var(--bg2);
+          padding:10px 14px; border-radius:12px; cursor:pointer; color: var(--text); font-weight:600;
+          transition: background .12s ease, transform .05s ease;
+        }
+        .btn:hover{ background: color-mix(in oklab, var(--bg2) 85%, var(--primary) 15%); }
+        .btn:active{ transform: translateY(1px); }
 
         .nutri {
-          margin-top: 12px;
-          border:1px dashed var(--border);
+          position:relative; z-index:1;
+          margin-top: 12px; padding: 12px;
+          border:1px solid color-mix(in oklab, var(--border) 70%, transparent);
+          border-radius: 14px;
           background: color-mix(in oklab, var(--bg) 92%, var(--primary) 8%);
-          border-radius:14px;
-          padding:10px 12px;
         }
         .nutTitle { font-weight:800; margin-bottom:6px; color: var(--text); }
         .nutGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px 12px; }
         @media (max-width:560px){ .nutGrid{ grid-template-columns:1fr; } }
 
-        .actions { margin-top:12px; display:flex; gap:12px; justify-content:flex-end; }
+        .actions { margin-top:14px; display:flex; gap:12px; justify-content:flex-end; }
 
-        /* SECTION */
-        .list { margin-top: 18px; }
-        .sectionHead { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom: 8px; }
+        .list { margin-top: 24px; }
+        .secHead { display:flex; align-items:center; gap:10px; }
         .secTitle { font-size:16px; font-weight:800; margin: 0; color: var(--text); }
+        .secBadge { display:inline-grid; place-items:center; min-width:26px; height:22px; padding:0 8px; border-radius:999px; font-size:12px; font-weight:700; color:#0f172a; background:#e5f0ff; border:1px solid #cfe1ff; }
+        .secBadge.warn { background:#ffe5e5; border-color:#ffcfcf; }
 
-        .gridCards { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:16px; }
-        @media (max-width: 900px){ .gridCards{ grid-template-columns:repeat(2, minmax(0,1fr)); } }
-        @media (max-width: 600px){ .gridCards{ grid-template-columns:1fr; } }
+        .widgetRow { display:flex; align-items:flex-start; gap:16px; }
+        .widgetRow--empty { gap: 24px; align-items: center; }
+
         .empty { color: var(--muted); font-size:14px; padding:16px; text-align:center; border:1px dashed var(--border); border-radius:12px; background: var(--bg); }
+        .empty.hint { background: transparent; }
 
-        .error { background: color-mix(in oklab, #ef4444 15%, var(--card-bg)); color:#7f1d1d; border:1px solid color-mix(in oklab, #ef4444 35%, var(--border)); border-radius:8px; padding:8px 10px; font-size:13px; }
+        .muted { color: var(--muted); }
+        .small { font-size:12px; }
+        .error { margin-top:8px; background: color-mix(in oklab, #ef4444 15%, var(--card-bg)); color:#7f1d1d; border:1px solid color-mix(in oklab, #ef4444 35%, var(--border)); border-radius:8px; padding:8px 10px; font-size:13px; }
 
-        /* EDIT MODAL */
-        .overlay { position:fixed; inset:0; background:rgba(2,6,23,.55); display:grid; place-items:center; padding:16px; z-index:1200;}
-        .modal { width:100%; max-width:520px; background: var(--card-bg); border-radius:16px; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.35); border:1px solid var(--border); }
-        .mhead { display:grid; grid-template-columns:1fr auto; align-items:center; gap:8px; padding:12px 14px; border-bottom:1px solid var(--border); background: var(--bg2); }
-        .mtitle { font-weight:800; color: var(--text); }
-        .x { border:none; background:transparent; font-size:22px; color: var(--muted); cursor:pointer; }
-        .mbody { padding:14px; }
-        .gridM { display:grid; grid-template-columns:1fr 120px 1fr; gap:12px 16px; }
-        @media (max-width:640px){ .gridM{ grid-template-columns:1fr; } }
-        .lbl { display:grid; gap:6px; font-size:.9rem; color:var(--text); font-weight:600; }
-        .txt { width:100%; border:1px solid var(--border); border-radius:12px; padding:10px 12px; background: var(--bg2); color: var(--text); }
-        .mfoot { padding:12px 14px; border-top:1px solid var(--border); display:flex; gap:10px; justify-content:flex-end; }
-
-        /* headline entrance animation */
+        /* headline animation */
         .tracking-in-contract-bck-top {
           -webkit-animation: tracking-in-contract-bck-top 1s cubic-bezier(0.215,0.610,0.355,1.000) both;
                   animation: tracking-in-contract-bck-top 1s cubic-bezier(0.215,0.610,0.355,1.000) both;

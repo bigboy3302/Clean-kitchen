@@ -1,4 +1,3 @@
-// app/layout.tsx
 import "@/styles/globals.css";
 import type { ReactNode } from "react";
 import ThemeScript from "@/components/theme/ThemeScript";
@@ -16,6 +15,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <ThemeScript />
         <ThemeProvider>
+          {/* The header uses the navbar tokens from CSS */}
           <header className="ck-navbar">
             <div className="ck-navbar-inner">
               <div aria-hidden />
@@ -23,14 +23,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             </div>
           </header>
 
-          <main className="container section">
-            {children}
-          </main>
+          <main className="container section">{children}</main>
 
           <footer className="section">
-            <div className="container muted" style={{ fontSize: 12 }}>
-              © {new Date().getFullYear()} Clean Kitchen
-            </div>
+            <div className="container muted" style={{ fontSize: 12 }} />
           </footer>
         </ThemeProvider>
       </body>

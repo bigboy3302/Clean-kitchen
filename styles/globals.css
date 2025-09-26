@@ -24,6 +24,7 @@
   --lh-tight: 1.2;
 }
 
+
 /* Dark theme */
 :root[data-theme="dark"] {
   --primary: #60a5fa;
@@ -244,3 +245,4 @@ input:focus, select:focus, textarea:focus {
 .shadow { box-shadow: var(--shadow) }
 .rounded { border-radius: var(--radius) }
 .hidden { display: none !important }
+

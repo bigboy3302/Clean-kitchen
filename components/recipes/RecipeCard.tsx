@@ -232,7 +232,7 @@ export default function RecipeCard({
 
         .chips { position:absolute; left:0; top:0; display:flex; gap:8px; padding:16px; z-index:1; }
         .pill { width:60px; height:60px; border-radius:999px; display:grid; place-items:center;
-          background:rgba(255,253,112,.85); text-align:center; box-shadow:0 6px 16px rgba(122, 82, 82, 0.18); }
+          background:rgba(159, 229, 53, 0.85); text-align:center; box-shadow:0 6px 16px rgba(122, 82, 82, 0.18); }
         .pill h3{ margin:0; font-size:22px; line-height:1; margin-top:2px; }
         .pill span{ font-size:9px; font-weight:800; margin-top:-6px; }
 

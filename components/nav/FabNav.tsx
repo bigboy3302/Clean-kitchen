@@ -1,10 +1,9 @@
-// components/nav/FabNav.tsx
 "use client";
 
 import Link from "next/link";
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import { useNavPrefs, defaultNavPrefs } from "./useNavPrefs";
-import { db } from "@/lib/firebase"; // adjust path to your initialized Firestore
+import { db } from "@/lib/firebase";
 
 type ItemKey = "dashboard" | "pantry" | "recipes" | "fitness" | "profile";
 
@@ -23,7 +22,6 @@ const ALL_ITEMS: Record<ItemKey, { href: string; label: string; icon: JSX.Elemen
     label: "Pantry",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true" width="40" height="40" fill="none" stroke="currentColor" strokeWidth="1.6">
-        {/* Grocery bag */}
         <path d="M6 8V6a3 3 0 1 1 6 0v2" />
         <path d="M4 8h16l-1.2 12.4A2 2 0 0 1 16.81 22H7.19a2 2 0 0 1-1.99-1.6L4 8z" />
         <path d="M9 8v2a3 3 0 1 0 6 0V8" />
@@ -33,8 +31,9 @@ const ALL_ITEMS: Record<ItemKey, { href: string; label: string; icon: JSX.Elemen
   recipes: {
     href: "/recipes",
     label: "Recipes",
+    // FIX: stroke must be "currentColor" (it was empty before)
     icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true" width="40" height="40" fill="none" stroke="" strokeWidth="1.6">
+      <svg viewBox="0 0 24 24" aria-hidden="true" width="40" height="40" fill="none" stroke="currentColor" strokeWidth="1.6">
         <path d="M4 4h11a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3V4z" />
         <path d="M7 4v13a3 3 0 0 0 3 3" />
         <path d="M8 9h7M8 12h5" />
@@ -77,7 +76,6 @@ export default function FabNav() {
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
-  // derive order with sensible defaults
   const order = useMemo<ItemKey[]>(
     () => (nav?.order && nav.order.length ? (nav.order as ItemKey[]) : defaultNavPrefs.order),
     [nav?.order]
@@ -88,14 +86,17 @@ export default function FabNav() {
 
   const placement = nav?.placement ?? defaultNavPrefs.placement;
   const posClass =
-    placement === "header" ? "pos-header" : placement === "top" ? "pos-top" : "pos-bottom"; // treat "floating" like bottom
+    placement === "header" ? "pos-header" : placement === "top" ? "pos-top" : "pos-bottom";
 
+  // Use user prefs if set, otherwise fall back to theme tokens
   const styleVars: React.CSSProperties = {
-    ["--pill" as any]: nav?.accent ?? defaultNavPrefs.accent,
-    ["--icon" as any]: nav?.icon ?? defaultNavPrefs.icon,
+    ["--pill" as any]: nav?.accent ?? "var(--navbar-bg)",
+    ["--icon" as any]: nav?.icon ?? "var(--navbar-fg)",
     ["--h" as any]: (nav?.compact ?? defaultNavPrefs.compact) ? "48px" : "56px",
     ["--w-open" as any]: (nav?.compact ?? defaultNavPrefs.compact) ? "460px" : "560px",
-    ["--glow" as any]: (nav?.glow ?? defaultNavPrefs.glow) ? "0 16px 40px rgba(203, 181, 181, 0.18)" : "0 8px 20px rgba(221, 182, 182, 0.08)",
+    ["--glow" as any]: (nav?.glow ?? defaultNavPrefs.glow)
+      ? "0 16px 40px rgba(0,0,0,.22)"
+      : "0 8px 20px rgba(0,0,0,.10)",
     ["--bdr" as any]: "color-mix(in oklab, #000 12%, var(--pill))",
   };
 
@@ -145,37 +146,26 @@ export default function FabNav() {
 
       <style jsx>{`
         .fabnav {
-          --pill: var(--primary);
-          --icon: #fff;
+          --pill: var(--navbar-bg);      /* theme token fallback */
+          --icon: var(--navbar-fg);      /* theme token fallback */
           --h: 56px;
           --w-open: 560px;
-          --glow: 0 16px 40px rgba(246, 244, 244, 0.18);
+          --glow: 0 16px 40px rgba(0,0,0,.18);
           --bdr: color-mix(in oklab, #000 12%, var(--pill));
           position: relative;
           z-index: 50;
         }
-        .pos-header {
-          height: var(--h);
-          display: grid;
-          place-items: center;
-        }
-        .pos-top,
-        .pos-bottom {
-          position: fixed;
-          left: 50%;
-          transform: translateX(-50%);
-          width: var(--w-open);
-          pointer-events: none;
+        .pos-header { height: var(--h); display: grid; place-items: center; }
+        .pos-top, .pos-bottom {
+          position: fixed; left: 50%; transform: translateX(-50%);
+          width: var(--w-open); pointer-events: none;
         }
         .pos-top { top: 14px; }
         .pos-bottom { bottom: 14px; }
 
         .shelf {
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          height: var(--h);
-          width: var(--w-open);
+          position: absolute; left: 50%; top: 50%;
+          height: var(--h); width: var(--w-open);
           transform: translate(-50%, -50%) scaleX(0);
           transform-origin: 50% 50%;
           border-radius: 999px;
@@ -184,51 +174,34 @@ export default function FabNav() {
           box-shadow: var(--glow);
           transition: transform 0.28s ease;
           pointer-events: none;
+          color: var(--icon);
         }
         .shelf.open { transform: translate(-50%, -50%) scaleX(1); pointer-events: auto; }
 
-        .cols {
-          height: 100%;
-          display: grid;
-          grid-template-columns: 1fr var(--h) 1fr;
-          align-items: center;
-        }
+        .cols { height: 100%; display: grid; grid-template-columns: 1fr var(--h) 1fr; align-items: center; }
         .spacer { width: var(--h); height: 100%; }
-        .side {
-          display: flex;
-          gap: 10px;
-          align-items: center;
-          justify-content: center;
-          padding: 0 12px;
-        }
+        .side { display: flex; gap: 10px; align-items: center; justify-content: center; padding: 0 12px; }
 
         .btn {
-          display: grid;
-          place-items: center; /* << centers icons vertically + horizontally */
-          min-width: 54px;
-          height: calc(var(--h) - 16px);
-          padding: 8px 10px;
-          border-radius: 12px;
-          text-decoration: none;
+          display: grid; place-items: center;
+          min-width: 54px; height: calc(var(--h) - 16px);
+          padding: 8px 10px; border-radius: 12px; text-decoration: none;
           color: var(--icon);
-          border: 1px solid rgba(255, 255, 255, 0.18);
-          background: linear-gradient(180deg, rgba(240, 234, 234, 0.06), transparent);
-          transition: transform 0.12s ease, background 0.2s ease, border-color 0.2s ease;
+          border: 1px solid color-mix(in oklab, var(--icon) 20%, transparent);
+          background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,0));
+          transition: transform .12s ease, background .2s ease, border-color .2s ease;
         }
         .btn:hover { transform: translateY(-2px); }
         .btn:active { transform: translateY(-1px) scale(0.99); }
-        .btn svg { width: 22px; height: 22px; }
+        .btn svg { width: 22px; height: 22px; stroke: currentColor; } /* important */
 
         .visually-hidden {
-          position: absolute !important;
-          height: 1px; width: 1px;
-          overflow: hidden; clip: rect(1px, 1px, 1px, 1px);
-          white-space: nowrap; border: 0; padding: 0; margin: -1px;
+          position: absolute !important; height: 1px; width: 1px; overflow: hidden;
+          clip: rect(1px, 1px, 1px, 1px); white-space: nowrap; border: 0; padding: 0; margin: -1px;
         }
 
         .toggle {
-          position: absolute;
-          left: 50%; top: 50%;
+          position: absolute; left: 50%; top: 50%;
           width: var(--h); height: var(--h);
           transform: translate(-50%, -50%);
           border-radius: 999px;
@@ -236,16 +209,13 @@ export default function FabNav() {
           background: var(--pill);
           color: var(--icon);
           box-shadow: var(--glow);
-          cursor: pointer;
-          display: grid;
-          place-items: center;
-          pointer-events: auto;
+          cursor: pointer; display: grid; place-items: center; pointer-events: auto;
         }
         .dots { position: relative; width: 22px; height: 22px; }
         .dots i {
           position: absolute; left: 50%; top: 50%;
           width: 6px; height: 6px; margin: -3px 0 0 -3px;
-          background: var(--icon);
+          background: currentColor;
           border-radius: 999px;
           transition: transform 0.28s ease, height 0.28s ease, width 0.28s ease, border-radius 0.28s ease, opacity 0.2s ease;
         }
@@ -257,12 +227,7 @@ export default function FabNav() {
         .toggle.open .dots i:nth-child(2) { opacity: 0; }
         .toggle.open .dots i:nth-child(3) { transform: translate(0, 0) rotate(-45deg); }
 
-        .pos-top .shelf,
-        .pos-bottom .shelf,
-        .pos-top .toggle,
-        .pos-bottom .toggle {
-          pointer-events: auto;
-        }
+        .pos-top .shelf, .pos-bottom .shelf, .pos-top .toggle, .pos-bottom .toggle { pointer-events: auto; }
       `}</style>
     </nav>
   );
