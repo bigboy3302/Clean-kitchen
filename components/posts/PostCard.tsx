@@ -1,15 +1,29 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import CommentsList from "@/components/comments/CommentsList";
+import { db } from "@/lib/firebase";
+import { collection, onSnapshot, query } from "firebase/firestore";
 
 type Author = { username?: string|null; displayName?: string|null; avatarURL?: string|null };
-type MediaItem = { type: "image"|"video"; url: string; w?: number; h?: number; duration?: number };
-type Post = {
-  id?: string; uid?: string; text?: string|null; media?: MediaItem[];
-  author?: Author; createdAt?: { seconds?: number } | number | string | null;
-  likes?: number; reposts?: number;
+
+// Media item mirrors what we write from uploads
+type MediaItem = {
+  type: "image"|"video";
+  url: string;
+  w?: number; h?: number; duration?: number;
+};
+
+export type Post = {
+  id: string;
+  uid?: string | null;
+  text?: string|null;
+  media?: MediaItem[];
+  author?: Author | null;
+  createdAt?: { seconds?: number } | number | string | null;
+  // counts may or may not be present; we’ll show live counts from subcollections anyway
+  likes?: number;
+  reposts?: number;
 };
 
 type Props = {
@@ -26,11 +40,17 @@ type Props = {
 
 function timeAgo(ts: Post["createdAt"]) {
   if (!ts) return "";
-  const sec = typeof ts === "number" ? ts : typeof ts === "string" ? Math.floor(Date.parse(ts)/1000) : ts?.seconds ?? 0;
+  const sec =
+    typeof ts === "number"
+      ? ts
+      : typeof ts === "string"
+        ? Math.floor(Date.parse(ts)/1000)
+        : ts?.seconds ?? 0;
   if (!sec) return "";
   const diff = Math.max(1, Math.floor(Date.now()/1000 - sec));
   const steps: [number,string][]= [[60,"s"],[60,"m"],[24,"h"],[7,"d"],[4.345,"w"],[12,"mo"],[Number.MAX_SAFE_INTEGER,"y"]];
-  let v = diff, i = 0; for (; i < steps.length-1 && v >= steps[i][0]; i++) v = Math.floor(v/steps[i][0]);
+  let v = diff, i = 0;
+  for (; i < steps.length-1 && v >= steps[i][0]; i++) v = Math.floor(v/steps[i][0]);
   return `${v}${steps[i][1]}`;
 }
 
@@ -38,27 +58,57 @@ export default function PostCard({
   post, meUid, onEdit, onAddMedia, onDelete, onReport, onComment, onRepost, onToggleLike,
 }: Props) {
   const { text, media = [], author = {}, createdAt } = post || {};
-  const isOwner = meUid && post?.uid && meUid === post.uid;
+  const isOwner = !!(meUid && post?.uid && meUid === post.uid);
 
   const createdAtLabel = useMemo(() => timeAgo(createdAt), [createdAt]);
   const hasMedia = media && media.length > 0;
 
-  const [liked, setLiked] = useState(false);
+  // LIVE state (counts & whether I liked/reposted)
+  const [likes, setLikes] = useState<number>(Math.max(0, post?.likes || 0));
+  const [reposts, setReposts] = useState<number>(Math.max(0, post?.reposts || 0));
+  const [liked, setLiked] = useState<boolean>(false);
+  const [hasReposted, setHasReposted] = useState<boolean>(false);
+
+  // menu & misc
   const [saved, setSaved] = useState(false);
-  const [likes, setLikes] = useState<number>(() => Math.max(0, post?.likes || 0));
-  const [reposts, setReposts] = useState<number>(() => Math.max(0, post?.reposts || 0));
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const likeBurstRef = useRef<HTMLDivElement | null>(null);
 
+  // comments (inline composer on card)
   const [showComposer, setShowComposer] = useState(false);
   const [commentText, setCommentText] = useState("");
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
+  // edit
   const [editOpen, setEditOpen] = useState(false);
   const [draftText, setDraftText] = useState(text || "");
-
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // subscribe to likes + reposts subcollections so counts + my state survive refresh
+  useEffect(() => {
+    if (!post?.id) return;
+
+    // Likes
+    const likesCol = collection(db, "posts", post.id, "likes");
+    const stopLikes = onSnapshot(query(likesCol), (snap) => {
+      setLikes(snap.size);
+      if (meUid) {
+        setLiked(snap.docs.some(d => d.id === meUid));
+      }
+    });
+
+    // Reposts
+    const repostsCol = collection(db, "posts", post.id, "reposts");
+    const stopReposts = onSnapshot(query(repostsCol), (snap) => {
+      setReposts(snap.size);
+      if (meUid) {
+        setHasReposted(snap.docs.some(d => d.id === meUid));
+      }
+    });
+
+    return () => { stopLikes(); stopReposts(); };
+  }, [post?.id, meUid]);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false); };
@@ -103,6 +153,8 @@ export default function PostCard({
     setCommentText(""); await onComment?.(post, t);
   }
   async function doRepost() {
+    if (hasReposted) return; // guard double-clicks
+    setHasReposted(true);
     setReposts(n => n + 1);
     await onRepost?.(post);
   }
@@ -195,7 +247,7 @@ export default function PostCard({
               <svg width="24" height="24" viewBox="0 0 24 24"><path d="M21 12a8.5 8.5 0 01-8.5 8.5H6l-3 3 .5-4.8A8.5 8.5 0 1121 12z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </button>
 
-            <button className="icon" aria-label="Repost" onClick={doRepost}>
+            <button className="icon" aria-label="Repost" onClick={doRepost} disabled={hasReposted} title={hasReposted ? "You’ve already reposted" : "Repost"}>
               <svg width="24" height="24" viewBox="0 0 24 24">
                 <path d="M7 7h8a4 4 0 014 4v1" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
                 <path d="M9 17H7a4 4 0 01-4-4v-1" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
@@ -210,7 +262,7 @@ export default function PostCard({
           </button>
         </div>
 
-        {/* Composer + live comments */}
+        {/* Composer + live comments toggle */}
         {showComposer && (
           <div className="composer">
             <textarea
@@ -223,9 +275,6 @@ export default function PostCard({
             <button className="send" onClick={submitComment} disabled={!commentText.trim()}>Post</button>
           </div>
         )}
-        {post?.id ? (
-          <CommentsList postId={post.id!} meUid={meUid ?? undefined} postOwnerUid={post.uid ?? undefined} />
-        ) : null}
       </article>
 
       {/* Edit modal */}
@@ -249,7 +298,6 @@ export default function PostCard({
 
       <style jsx>{`
         .pc{ position:relative; background:var(--card-bg); border:1px solid var(--border); border-radius:16px; overflow:visible; box-shadow:var(--shadow) }
-
         .pc-head{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px }
         .pc-left{ display:flex; align-items:center; gap:10px }
         .pc-avatar{ width:40px; height:40px; border-radius:999px; overflow:hidden; display:block; border:1px solid var(--border); background:#000 }
@@ -261,7 +309,6 @@ export default function PostCard({
         .pc-link{ color: var(--text); text-decoration:none }
         .pc-link:hover{ text-decoration:underline }
         .pc-time{ font-size:12px; color: var(--muted); margin-top:2px }
-
         .pc-menu{ position:relative; z-index:50 }
         .menu-btn{ background:transparent; border:0; color:var(--muted); cursor:pointer; border-radius:8px; width:32px; height:32px; display:grid; place-items:center }
         .menu{ position:absolute; top:calc(100% + 8px); right:0; min-width:200px; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); padding:6px; z-index:70 }
@@ -269,7 +316,6 @@ export default function PostCard({
         .mi:hover{ background: rgba(2,6,23,.06) } :root[data-theme="dark"] .mi:hover{ background: rgba(255,255,255,.08) }
         .mi.danger{ color:#e11d48 }
         .sep{ height:1px; background: var(--border); border:0; margin:6px }
-
         .pc-media{ position:relative }
         .rail{ display:flex; gap:6px; overflow:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; padding:0 6px 6px }
         .cell{ position:relative; flex: 0 0 100%; scroll-snap-align:center; border-radius:12px; overflow:hidden; border:1px solid var(--border); max-height:72vh; background:#000 }
@@ -277,18 +323,14 @@ export default function PostCard({
         .dots{ position:absolute; bottom:12px; left:0; right:0; display:flex; gap:6px; justify-content:center }
         .dot{ width:6px; height:6px; border-radius:999px; background: rgba(255,255,255,.55) }
         :root[data-theme="dark"] .dot{ background: rgba(255,255,255,.7) }
-
         .burst{ position:absolute; inset:0; display:grid; place-items:center; color:#ef4444; opacity:0; transform: scale(.6); pointer-events:none }
         .burst.go{ animation: pop .45s ease forwards }
         @keyframes pop{ 0%{opacity:0; transform:scale(.6)} 70%{opacity:.9; transform:scale(1)} 100%{opacity:0; transform:scale(1.1)} }
-
         .pc-empty{ display:grid; place-items:center; padding:32px 14px }
         .empty-text{ margin:0; text-align:center; color: var(--text); white-space:pre-wrap }
-
         .pc-info{ padding: 10px 12px 0 }
         .caption{ margin:8px 0 0; color: var(--text); text-align:center; white-space:pre-wrap }
         .timestamp{ background: transparent; border: 0; color: var(--muted); font-size: 12px; margin: 8px auto 0; padding: 0; display:block; text-align:center }
-
         .pc-actions{ display:flex; align-items:center; justify-content:space-between; padding: 8px 8px 10px }
         .pc-actions .left{ display:flex; gap:6px; align-items:center }
         .miniCount{ font-size:12px; color: var(--muted); padding-right:6px }
@@ -301,7 +343,6 @@ export default function PostCard({
         :root[data-theme="dark"] .icon:hover{ background: rgba(255,255,255,.08) }
         .icon:active{ transform: translateY(1px) }
         .icon.active{ color:#ef4444 }
-
         .composer{ display:grid; grid-template-columns: 1fr auto; gap:8px; padding: 0 12px 12px }
         .composer textarea{
           width:100%; border:1px solid var(--border); border-radius:12px; padding:10px 12px;
@@ -311,7 +352,6 @@ export default function PostCard({
           border-radius:12px; border:0; padding:0 14px; background: var(--primary); color: var(--primary-contrast); font-weight:700; cursor:pointer;
         }
         .composer .send:disabled{ opacity:.6; cursor:not-allowed }
-
         .overlay{ position:fixed; inset:0; background: rgba(2,6,23,.55); display:grid; place-items:center; padding:16px; z-index: 1200 }
         .modal{
           width:100%; max-width:560px; background: var(--card-bg); border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow: var(--shadow);

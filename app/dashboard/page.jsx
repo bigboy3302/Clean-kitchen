@@ -1,4 +1,3 @@
-// app/dashboard/page.jsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -20,6 +19,9 @@ import {
   getDoc,
   setDoc,
   deleteDoc,
+  runTransaction,
+  limit as fsLimit,
+  increment,              // <-- added
 } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 
@@ -89,6 +91,21 @@ export default function DashboardPage() {
   const [myPosts, setMyPosts] = useState([]);
   const [myRecipes, setMyRecipes] = useState([]);
   const [recentPosts, setRecentPosts] = useState([]);
+  const [trending, setTrending] = useState([]);
+
+  useEffect(() => {
+    // Trending by reposts (global top 10)
+    const tQ = query(
+      collection(db, "posts"),
+      orderBy("reposts", "desc"),
+      orderBy("createdAt", "desc"),
+      fsLimit(10)
+    );
+    const stopT = onSnapshot(tQ, (snap) => {
+      setTrending(snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) })));
+    });
+    return () => stopT();
+  }, []);
 
   useEffect(() => {
     if (!uid) return;
@@ -136,7 +153,7 @@ export default function DashboardPage() {
 
   const [pText, setPText] = useState("");
   const [pFiles, setPFiles] = useState([]);
-  const [pPreviews, setPPreviews] = useState([]); // [{url,type}]
+ const [pPreviews, setPPreviews] = useState([]); // [{url,type}]
   const [busyPost, setBusyPost] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -194,6 +211,8 @@ export default function DashboardPage() {
         media: [],
         createdAt: serverTimestamp(),
         isRepost: false,
+        likes: 0,
+        reposts: 0,
         author,
       }));
 
@@ -242,7 +261,7 @@ export default function DashboardPage() {
 
   /* --------- PostCard handlers ---------- */
 
-  // Like: create if missing, delete if exists (rules forbid update)
+  // Like: doc id MUST equal uid; create if missing; delete if exists
   async function handleToggleLike(post, liked){
     if (!uid || !post?.id) return;
     const likeRef = doc(db, "posts", post.id, "likes", uid);
@@ -254,19 +273,21 @@ export default function DashboardPage() {
     }
   }
 
-  // one-time repost per user
+  // one-time repost per user — enforced via TRANSACTION (reads before writes)
   async function handleRepost(post){
     if (!uid || !post?.id) return;
-    const rpRef = doc(db, "posts", post.id, "reposts", uid);
-    const snap = await getDoc(rpRef);
-    if (snap.exists()) return;
-    await setDoc(rpRef, { uid, createdAt: serverTimestamp() });
-    try {
+    await runTransaction(db, async (tx) => {
       const pRef = doc(db, "posts", post.id);
-      const pSnap = await getDoc(pRef);
-      const curr = (pSnap.data()?.reposts || 0) + 1;
-      await updateDoc(pRef, { reposts: curr });
-    } catch {}
+      const rRef = doc(db, "posts", post.id, "reposts", uid);
+
+      // READS FIRST
+      const rSnap = await tx.get(rRef);
+      if (rSnap.exists()) return; // already reposted → no-op
+
+      // WRITES (after all reads)
+      tx.set(rRef, { uid, createdAt: serverTimestamp() });
+      tx.update(pRef, { reposts: increment(1) });
+    });
   }
 
   async function handleEdit(post, nextText){
@@ -311,7 +332,6 @@ export default function DashboardPage() {
       {/* HEADER — renamed to Home + animation */}
       <header className="head">
         <div className="title tracking-in-contract-bck-top">Home</div>
-        <p className="sub">Add posts, browse your recipes, and manage your pantry.</p>
       </header>
 
       {/* HERO */}
@@ -325,73 +345,98 @@ export default function DashboardPage() {
         </p>
       </Card>
 
-      {/* FEED */}
-      {recentPosts.length > 0 && (
-        <Section title="Recent posts" subtitle="Latest from the community">
-          <div className="list">
-            {recentPosts.map((p) => (
-              <PostCard
-                key={p.id}
-                post={p}
-                meUid={uid}
-                onEdit={handleEdit}
-                onAddMedia={handleAddMedia}
-                onDelete={handleDelete}
-                onReport={handleReport}
-                onComment={handleComment}
-                onRepost={handleRepost}
-                onToggleLike={handleToggleLike}
-              />
-            ))}
-          </div>
-        </Section>
-      )}
-
-      {(myPosts.length > 0 || myRecipes.length > 0) && (
-        <Section>
-          <div className="twoCol">
-            {myPosts.length > 0 && (
-              <div>
-                <h3 className="subhead">My posts</h3>
-                <div className="list">
-                  {myPosts.map((p) => (
-                    <PostCard
-                      key={p.id}
-                      post={p}
-                      meUid={uid}
-                      onEdit={handleEdit}
-                      onAddMedia={handleAddMedia}
-                      onDelete={handleDelete}
-                      onReport={handleReport}
-                      onComment={handleComment}
-                      onRepost={handleRepost}
-                      onToggleLike={handleToggleLike}
-                    />
-                  ))}
-                </div>
+      {/* FEED + TRENDING */}
+      <div className="layout">
+        <div className="mainCol">
+          {recentPosts.length > 0 && (
+            <Section title="Recent posts" subtitle="Latest from the community">
+              <div className="list">
+                {recentPosts.map((p) => (
+                  <PostCard
+                    key={p.id}
+                    post={p}
+                    meUid={uid}
+                    onEdit={handleEdit}
+                    onAddMedia={handleAddMedia}
+                    onDelete={handleDelete}
+                    onReport={handleReport}
+                    onComment={handleComment}
+                    onRepost={handleRepost}
+                    onToggleLike={handleToggleLike}
+                  />
+                ))}
               </div>
-            )}
+            </Section>
+          )}
 
-            {myRecipes.length > 0 && (
-              <div>
-                <h3 className="subhead">My recipes</h3>
-                <ul className="recipes">
-                  {myRecipes.map((r) => (
-                    <li key={r.id} className="recipeItem">
-                      <Link href={`/recipes/${r.id}`} className="recipeLink">
-                        <div className="recipeTitle">{r.title || "Untitled"}</div>
-                        {r.description ? <div className="recipeDesc">{r.description}</div> : null}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
+          {(myPosts.length > 0 || myRecipes.length > 0) && (
+            <Section>
+              <div className="twoCol">
+                {myPosts.length > 0 && (
+                  <div>
+                    <h3 className="subhead">My posts</h3>
+                    <div className="list">
+                      {myPosts.map((p) => (
+                        <PostCard
+                          key={p.id}
+                          post={p}
+                          meUid={uid}
+                          onEdit={handleEdit}
+                          onAddMedia={handleAddMedia}
+                          onDelete={handleDelete}
+                          onReport={handleReport}
+                          onComment={handleComment}
+                          onRepost={handleRepost}
+                          onToggleLike={handleToggleLike}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {myRecipes.length > 0 && (
+                  <div>
+                    <h3 className="subhead">My recipes</h3>
+                    <ul className="recipes">
+                      {myRecipes.map((r) => (
+                        <li key={r.id} className="recipeItem">
+                          <Link href={`/recipes/${r.id}`} className="recipeLink">
+                            <div className="recipeTitle">{r.title || "Untitled"}</div>
+                            {r.description ? <div className="recipeDesc">{r.description}</div> : null}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </Section>
-      )}
+            </Section>
+          )}
+        </div>
 
-      {/* Floating + (keep your existing FAB to create posts) */}
+        <aside className="sideCol">
+          <Card>
+            <h3 className="trendTitle">Trending by reposts</h3>
+            {trending.length === 0 ? (
+              <p className="muted">No trending posts yet.</p>
+            ) : (
+              <ol className="trendList">
+                {trending.map((p, i) => (
+                  <li key={p.id} className="trendItem">
+                    <span className="rank">{i+1}</span>
+                    <Link href={`/posts/${p.id}`} className="tlink">
+                      <span className="ttitle">{(p.text || "Untitled").slice(0, 60)}</span>
+                      <span className="tmeta">{p.reposts || 0} reposts</span>
+                    </Link>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </Card>
+        </aside>
+      </div>
+
+      {/* Floating + (FAB) */}
       <button className="fab" onClick={() => setOpen(true)} aria-label="Create post">
         <span aria-hidden>+</span>
       </button>
@@ -441,36 +486,33 @@ export default function DashboardPage() {
 
       <style jsx>{`
         .page { padding-bottom: 96px; }
-
-        /* ---------- Page header ---------- */
+        .layout{ display:grid; grid-template-columns: minmax(0,1fr) 320px; gap:16px; align-items:start; margin-top:16px }
+        @media (max-width: 1100px){ .layout{ grid-template-columns: 1fr } .sideCol{ order:-1 } }
         .head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin: 10px auto 14px; max-width: 1100px; padding: 0 4px; }
         .title { font-weight: 900; font-size: 34px; letter-spacing: -0.02em; color: var(--text); }
         .sub { color: var(--muted); margin: 0; }
-
-        /* ---------- Hero card ---------- */
         .hero { padding: 24px; border-radius: 18px; background: var(--card-bg); border:1px solid var(--border); box-shadow: 0 20px 50px rgba(0,0,0,.06); }
         .heroTitle { font-size: 22px; font-weight: 800; margin: 0 0 8px; color: var(--text); }
         .brand { background: linear-gradient(90deg, var(--primary), color-mix(in oklab, var(--text) 55%, transparent)); -webkit-background-clip: text; color: transparent; }
         .heroText { color: var(--muted); margin: 0 }
         .wave { display:inline-block; transform-origin: 70% 70%; animation: wave 1.8s ease-in-out 1; }
-        @keyframes wave { 0%{transform: rotate(0)} 15%{transform: rotate(18deg)} 30%{transform: rotate(-8deg)} 45%{transform: rotate(14deg)} 60%{transform: rotate(-4deg)} 75%{transform: rotate(10deg)} 100%{transform: rotate(0)} }
-
-        /* ---------- Feed layout ---------- */
         .list { display: grid; gap: 18px; }
         :global(.list > *) { max-width: 640px; width: 100%; margin: 0 auto; }
-
         .twoCol { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
         @media (max-width: 900px){ .twoCol { grid-template-columns:1fr; } }
-
-        /* ---------- Recipes mini-list ---------- */
         .recipes { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px }
         .recipeItem { border:1px solid var(--border); border-radius: 12px; background: var(--card-bg) }
         .recipeLink { display:block; padding: 10px 12px; text-decoration:none; color: inherit }
         .recipeLink:hover { background: var(--bg); }
         .recipeTitle { font-weight: 700 }
         .recipeDesc { color: var(--muted); font-size: 14px; margin-top: 2px }
-
-        /* ---------- FAB ---------- */
+        .trendTitle{ font-weight:800; margin:0 0 8px }
+        .trendList{ list-style:none; margin:0; padding:0; display:grid; gap:8px }
+        .trendItem{ display:grid; grid-template-columns: 24px 1fr; gap:8px; align-items:start }
+        .rank{ width:24px; height:24px; border-radius:8px; display:grid; place-items:center; font-size:12px; background:var(--bg2); color:var(--text); border:1px solid var(--border) }
+        .tlink{ text-decoration:none; color:inherit; display:flex; flex-direction:column }
+        .ttitle{ font-weight:600 }
+        .tmeta{ font-size:12px; color: var(--muted) }
         .fab {
           position: fixed; right: 24px; bottom: 24px; width: 56px; height: 56px; border-radius: 9999px;
           background: var(--primary); color: var(--primary-contrast); border: none; font-size: 30px; display: grid; place-items: center;
@@ -478,8 +520,6 @@ export default function DashboardPage() {
           transition: transform .12s ease, opacity .12s ease;
         }
         .fab:hover { transform: translateY(-2px); opacity: .96; }
-
-        /* ---------- Modal ---------- */
         .overlay { position: fixed; inset: 0; background: rgba(2,6,23,.55); display: grid; place-items: center; padding: 16px; z-index: 1200; }
         .modal { width: 100%; max-width: 760px; background: var(--card-bg); border-radius: 16px; overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,.35); border: 1px solid var(--border); }
         .headRow { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); background: var(--bg); }
@@ -489,14 +529,10 @@ export default function DashboardPage() {
         .field { margin-bottom: 12px }
         .label { display: block; margin-bottom: 6px; font-size: .9rem; color: var(--text); font-weight: 600 }
         .ta { width: 100%; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--bg); color: var(--text); font-size: 14px; }
-
         .actions { display: flex; gap: 12px }
         .end { justify-content: flex-end }
-
         .ok  { margin: 10px 0 0; background: rgba(16,185,129, .12); color: #065f46; border: 1px solid rgba(16,185,129,.28); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
         .bad { margin: 10px 0 0; background: rgba(239,68,68, .12); color: #7f1d1d; border: 1px solid rgba(239,68,68,.28); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
-
-        /* Media preview grid in modal */
         .mediaPreview { display: grid; gap: 6px; margin-top: 8px }
         .mediaPreview img, .mediaPreview video { width: 100%; height: 100%; display: block; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); background:#000; }
         .mediaPreview.mcount-1 { grid-template-columns: 1fr; grid-auto-rows: 160px }
@@ -504,21 +540,11 @@ export default function DashboardPage() {
         .mediaPreview.mcount-3 { grid-template-columns: 2fr 1fr; grid-auto-rows: 110px }
         .mediaPreview.mcount-3 .mCell:nth-child(1){ grid-row: 1 / span 2; height: 226px }
         .mediaPreview.mcount-4 { grid-template-columns: 1fr 1fr; grid-auto-rows: 110px }
-
-        /* ---------- Animista: tracking-in-contract-bck-top ---------- */
-        .tracking-in-contract-bck-top {
-          -webkit-animation: tracking-in-contract-bck-top 1s cubic-bezier(0.215,0.610,0.355,1.000) both;
-                  animation: tracking-in-contract-bck-top 1s cubic-bezier(0.215,0.610,0.355,1.000) both;
-        }
-        @-webkit-keyframes tracking-in-contract-bck-top {
-          0%   { letter-spacing:1em; -webkit-transform:translateZ(400px) translateY(-300px); transform:translateZ(400px) translateY(-300px); opacity:0; }
-          40%  { opacity:.6; }
-          100% { -webkit-transform:translateZ(0) translateY(0); transform:translateZ(0) translateY(0); opacity:1; }
-        }
+        .tracking-in-contract-bck-top { animation: tracking-in-contract-bck-top 1s cubic-bezier(0.215,0.610,0.355,1.000) both; }
         @keyframes tracking-in-contract-bck-top {
-          0%   { letter-spacing:1em; -webkit-transform:translateZ(400px) translateY(-300px); transform:translateZ(400px) translateY(-300px); opacity:0; }
+          0%   { letter-spacing:1em; transform:translateZ(400px) translateY(-300px); opacity:0; }
           40%  { opacity:.6; }
-          100% { -webkit-transform:translateZ(0) translateY(0); transform:translateZ(0) translateY(0); opacity:1; }
+          100% { transform:translateZ(0) translateY(0); opacity:1; }
         }
       `}</style>
     </Container>

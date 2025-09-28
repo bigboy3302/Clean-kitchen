@@ -1,9 +1,11 @@
+// app/posts/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, orderBy, query, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import Card from "@/components/ui/Card";
+import PostCard from "@/components/posts/PostCard";
 
 type PostDoc = {
   id: string;
@@ -33,8 +35,12 @@ export default function PostsPage() {
         {posts.map((p) => (
           <Card key={p.id}>
             <div className="post">
+              {/* if you want to show with PostCard component, coerce uid null→undefined: */}
+              <PostCard post={{ ...p, uid: p.uid ?? undefined }} />
+              {/* Or keep your simple legacy render below:
               {p.text ? <p className="text">{p.text}</p> : null}
               {p.imageURL ? <img className="img" src={p.imageURL} alt="" /> : null}
+              */}
             </div>
           </Card>
         ))}

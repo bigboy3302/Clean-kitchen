@@ -38,9 +38,7 @@ function classify(file: File): "image" | "video" | "reject" {
   if (ALLOWED_VIDEO.has(file.type) || file.type.startsWith("video/")) return "video";
   return "reject";
 }
-function safeName(name: string) {
-  return name.replace(/[^\w.\-()+@]/g, "_");
-}
+function safeName(name: string) { return name.replace(/[^\w.\-()+@]/g, "_"); }
 function getImageDims(file: File): Promise<{w:number;h:number}> {
   return new Promise((res, rej) => {
     const img = new Image();
