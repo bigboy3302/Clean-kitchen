@@ -1,4 +1,4 @@
-// components/fitness/WorkoutGrid.tsx
+
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -119,7 +119,7 @@ export default function WorkoutGrid({
     return `${cap(sel)} exercises`;
   }, [debouncedQ, sel]);
 
-  // stream by ID (no key exposed)
+ 
   function imgById(id: string, res = 360) {
     return `/api/workouts/gif?id=${encodeURIComponent(id)}&res=${res}`;
   }

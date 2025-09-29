@@ -1,7 +1,7 @@
-// components/profile/ProfileNavSettings.tsx
+
 import React from "react";
-import { useNavPrefs } from "../nav/useNavPrefs"; // ← fixed path
-import { db } from "@/lib/firebase";              // ← adjust if different
+import { useNavPrefs } from "../nav/useNavPrefs"; 
+import { db } from "@/lib/firebase";              
 
 export default function ProfileNavSettings() {
   const { nav, save, loading, error } = useNavPrefs(db);

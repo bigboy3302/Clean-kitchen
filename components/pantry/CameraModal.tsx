@@ -12,7 +12,7 @@ export default function CameraModal({
   onClose: () => void;
   onDetected: (code: string) => void;
 }) {
-  // lock page scroll while open
+
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = open ? "hidden" : prev || "";
@@ -29,7 +29,7 @@ export default function CameraModal({
           <button className="x" onClick={onClose} aria-label="Close">×</button>
         </div>
 
-        {/* Scanner auto-starts because it mounts only when modal is open */}
+ 
         <div className="body">
           <BarcodeScanner autoStart onDetected={onDetected} maxHeight={420} />
         </div>

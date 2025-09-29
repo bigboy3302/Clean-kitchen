@@ -619,8 +619,6 @@ export default function RecipesPage() {
       <div className="topbar">
         <h1 className="title">Recipes</h1>
         <div className="right">
-          <button className="linkBtn" onClick={() => setShowPantryPicker(true)}>Find with my pantry</button>
-          <button className="linkBtn" onClick={() => setShowWizard(true)}>Create recipe</button>
           <button className="linkBtn" onClick={() => setShowFavs(true)}>favorites</button>
         </div>
       </div>
@@ -659,6 +657,7 @@ export default function RecipesPage() {
           <div className="actionsRow">
             <Button variant="secondary" onClick={() => setShowPantryPicker(true)}>Find with my pantry</Button>
             <Button onClick={() => setShowWizard(true)}>Create recipe</Button>
+            <Button className="linkBtn" onClick={() => setShowFavs(true)}>Favorites</Button>
           </div>
         </div>
 

@@ -33,7 +33,7 @@ function NavLink({
           : "text-gray-700 hover:bg-gray-900/5 hover:text-gray-900"
       )}
     >
-      {/* lucide uses currentColor; class controls color; strokeWidth improves visibility */}
+     
       <Icon className="h-5 w-5 shrink-0" strokeWidth={1.8} aria-hidden />
       <span>{label}</span>
     </Link>

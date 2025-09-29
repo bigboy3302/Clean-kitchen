@@ -1,4 +1,4 @@
-// components/nav/useNavPrefs.ts
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
@@ -9,8 +9,8 @@ export type NavOrderItem = "dashboard" | "pantry" | "recipes" | "fitness" | "pro
 
 export interface NavPrefs {
   placement?: NavPlacement;
-  accent?: string | null; // pill color
-  icon?: string | null;   // icon color
+  accent?: string | null;
+  icon?: string | null;   
   compact?: boolean;
   glow?: boolean;
   order?: NavOrderItem[];
@@ -86,5 +86,5 @@ export function useNavPrefs(db: Firestore) {
   return { uid, nav, loading, error, save, replace };
 }
 
-// also export default for convenience
+
 export default useNavPrefs;

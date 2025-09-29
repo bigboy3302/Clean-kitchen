@@ -5,7 +5,7 @@ import { create } from "zustand";
 import { auth } from "@/lib/firebase";
 
 export type AuthState = {
-  user: User | null | undefined; // undefined kamēr ielādējas
+  user: User | null | undefined;
   setUser: (u: User | null) => void;
 };
 

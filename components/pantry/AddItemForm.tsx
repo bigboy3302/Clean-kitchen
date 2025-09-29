@@ -1,4 +1,4 @@
-// components/pantry/AddItemForm.tsx
+
 "use client";
 
 import { useState } from "react";
@@ -6,14 +6,13 @@ import { addDoc, collection, serverTimestamp, Timestamp } from "firebase/firesto
 import { auth, db } from "@/lib/firebase";
 
 function toTitleCase(s: string) {
-  // Capitalize first letter of every word
   return s.replace(/\w\S*/g, (t) => t.charAt(0).toUpperCase() + t.slice(1));
 }
 
 export default function AddItemForm() {
   const [name, setName] = useState("");
   const [qty, setQty] = useState<number | "">("");
-  const [dateStr, setDateStr] = useState<string>(""); // yyyy-mm-dd
+  const [dateStr, setDateStr] = useState<string>(""); 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -34,7 +33,7 @@ export default function AddItemForm() {
 
     let expiresAt: Timestamp | null = null;
     if (dateStr) {
-      // Convert yyyy-mm-dd → local Date → Firestore Timestamp
+  
       const d = new Date(dateStr + "T00:00:00");
       expiresAt = Timestamp.fromDate(d);
     }
@@ -45,7 +44,7 @@ export default function AddItemForm() {
         uid: user.uid,
         name: cleanName,
         quantity: typeof qty === "number" ? qty : null,
-        expiresAt,                // Firestore Timestamp (or null)
+        expiresAt,                
         createdAt: serverTimestamp(),
       });
       setName("");

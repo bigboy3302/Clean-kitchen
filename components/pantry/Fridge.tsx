@@ -47,7 +47,7 @@ export default function Fridge({
 }) {
   const total = items.length;
 
-  // Decorative “peek” foods for the closed state
+
   const foods = useMemo(() => {
     const base = ["🥬", "🍎", "🥛", "🧀", "🥚", "🥦", "🍇", "🍓", "🥕", "🍗", "🍊", "🧃", "🥒", "🫐"];
     const count = Math.min(10, Math.max(4, Math.ceil(total / 2)));
@@ -71,7 +71,6 @@ export default function Fridge({
         <span className="shelf s2" aria-hidden />
         <span className="shelf s3" aria-hidden />
 
-        {/* Door + proper handle (no scrollbar look) */}
         <span className="door" aria-hidden>
           <span className="handle" aria-hidden />
         </span>

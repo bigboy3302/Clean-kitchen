@@ -1,4 +1,4 @@
-/* Page layout */
+
 .page {
   max-width: 1100px;
   margin: 0 auto;
@@ -24,13 +24,12 @@
   color: #6c7280;
 }
 
-/* Toolbar area */
+
 .toolbar {
   display: flex;
   gap: 10px;
 }
 
-/* Alerts / empty state */
 .alert {
   padding: 10px 12px;
   border-radius: 12px;
@@ -47,7 +46,6 @@
   color: #596077;
 }
 
-/* Grid of cards */
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -55,7 +53,6 @@
   margin-top: 12px;
 }
 
-/* Item bits */
 .itemHeader {
   display: flex;
   align-items: center;
@@ -84,11 +81,9 @@
 .itemMeta { margin-bottom: 12px; }
 .muted { color: #79819a; }
 
-/* Reusable vertical stack + gaps */
 .stack { display: flex; flex-direction: column; }
 .gap { gap: 12px; }
 
-/* Modal footer */
 .modalActions {
   display: flex;
   justify-content: flex-end;

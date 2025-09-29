@@ -1,11 +1,7 @@
-// components/theme/ThemeScript.tsx
+
 "use client";
 import { useEffect } from "react";
 
-/**
- * Runs once, ASAP on the client to set data-theme & CSS vars from localStorage.
- * This reduces light/dark flash before React hydrates.
- */
 export default function ThemeScript() {
   useEffect(() => {
     try {

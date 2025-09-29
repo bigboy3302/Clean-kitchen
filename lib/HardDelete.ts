@@ -1,4 +1,4 @@
-// lib/HardDelete.ts
+
 "use client";
 
 import { auth, db, storage } from "@/lib/firebase";
@@ -28,7 +28,6 @@ async function deleteDirRecursively(dirRef: StorageReference): Promise<void> {
   await Promise.all(prefixes.map((p) => deleteDirRecursively(p)));
 }
 
-/** ---------- POSTS ---------- */
 export async function hardDeletePost(
   postId: string,
   _postOwnerUidFromUI?: string,
@@ -51,7 +50,6 @@ export async function hardDeletePost(
     throw new Error(`permission-denied: you (${myUid}) do not own this post (${owner}).`);
   }
 
-  // clear subcollections while parent exists
   for (const sub of ["likes", "reposts", "comments"] as const) {
     try {
       const subSnap = await getDocs(collection(db, "posts", postId, sub));
@@ -59,7 +57,6 @@ export async function hardDeletePost(
     } catch {}
   }
 
-  // best-effort storage cleanup
   try {
     if (Array.isArray(media)) {
       await Promise.all(
@@ -72,11 +69,9 @@ export async function hardDeletePost(
     await deleteDirRecursively(root).catch(() => {});
   } catch {}
 
-  // delete doc
   await deleteDoc(postRef);
 }
 
-/** ---------- RECIPES ---------- */
 export async function hardDeleteRecipe(recipeId: string) {
   const myUid = auth.currentUser?.uid || null;
   if (!myUid) throw new Error("not-signed-in");
@@ -89,20 +84,19 @@ export async function hardDeleteRecipe(recipeId: string) {
   const owner = data?.uid ?? data?.author?.uid ?? null;
 
   if (!owner) {
-    // Rules require uid to authorize client delete
+
     throw new Error("permission-denied: recipe has no uid field (legacy).");
   }
   if (owner !== myUid) {
     throw new Error(`permission-denied: you (${myUid}) do not own this recipe (${owner}).`);
   }
 
-  // clear photos subcollection first
+
   try {
     const photos = await getDocs(collection(db, "recipes", recipeId, "photos"));
     await Promise.all(photos.docs.map((d) => deleteDoc(d.ref).catch(() => {})));
   } catch {}
 
-  // best-effort storage cleanup (covers cover + gallery)
   try {
     const root1 = sref(storage, `recipeImages/${owner}/${recipeId}`);
     await deleteDirRecursively(root1).catch(() => {});
@@ -110,6 +104,5 @@ export async function hardDeleteRecipe(recipeId: string) {
     await deleteDirRecursively(root2).catch(() => {});
   } catch {}
 
-  // delete doc
   await deleteDoc(ref);
 }

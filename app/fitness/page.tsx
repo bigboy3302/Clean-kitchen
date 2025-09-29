@@ -1,4 +1,4 @@
-// app/fitness/page.tsx
+
 "use client";
 import WorkoutGrid from "@/components/fitness/WorkoutGrid";
 import { useMemo, useState } from "react";

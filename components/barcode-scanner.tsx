@@ -21,7 +21,7 @@ export default function BarcodeScanner({ onDetected }:{ onDetected?:(text:string
         while (!stop) {
           const result = await codeReader.decodeOnceFromVideoDevice(undefined, videoRef.current!);
           onDetected?.(result.getText());
-          stop = true; // vienreiz skenējam
+          stop = true; 
         }
       } catch (e: any) {
         setError(e?.message ?? "Kameras pieeja liegta.");

@@ -1,10 +1,10 @@
-// lib/upload.ts
+
 import { auth, storage } from "@/lib/firebase";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 
 export type UploadedMedia = {
-  url: string;          // HTTPS download URL
-  storagePath: string;  // the path we can later delete
+  url: string;          
+  storagePath: string; 
 };
 
 export async function uploadPostImage(opts: {

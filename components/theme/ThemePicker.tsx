@@ -1,4 +1,4 @@
-// components/theme/ThemePicker.tsx
+
 "use client";
 
 import { useTheme } from "./ThemeProvider";

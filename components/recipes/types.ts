@@ -1,6 +1,5 @@
 export type Ingredient = {
   name: string;
-  /** When empty we omit this key entirely (never `undefined` in Firestore). */
   measure?: string | null;
 };
 

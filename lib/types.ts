@@ -13,8 +13,8 @@ export interface PantryItem {
   name: string;
   category?: string;
   quantity: { amount: number; unit: string };
-  expiryDate?: string;  // ISO
-  addedAt: string;      // ISO
+  expiryDate?: string;  
+  addedAt: string;      
   photoUrl?: string;
   barcode?: string;
   confidence?: number;

@@ -1,6 +1,6 @@
-// lib/workouts/types.ts
+
 export type Exercise = {
-    id: string;           // ExerciseDB provides numeric/string id
+    id: string;          
     name: string;
     bodyPart: string;
     target: string;

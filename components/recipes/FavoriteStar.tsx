@@ -1,4 +1,4 @@
-// components/recipes/FavoriteStar.tsx
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -6,9 +6,9 @@ import { auth, db } from "@/lib/firebase";
 import { doc, onSnapshot, serverTimestamp, setDoc, deleteDoc } from "firebase/firestore";
 
 type Props = {
-  rid: string;                 // recipe id (use "api:<id>" for API recipes)
-  payload?: Record<string, any>; // optional fields to store with favorite
-  meUid?: string | null;       // pass current user uid if you have it
+  rid: string;               
+  payload?: Record<string, any>; 
+  meUid?: string | null;      
   size?: "sm" | "md";
 };
 

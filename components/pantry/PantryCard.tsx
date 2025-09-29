@@ -15,11 +15,11 @@ export type PantryCardItem = {
   createdAt?: TSLike;
   expiresAt?: TSLike;
 
-  // new (optional) stored data:
+
   barcode?: string | null;
   nutrition?: NutritionInfo | null;
 
-  // legacy flat fields (still show if present)
+
   kcalPer100g?: number | null;
   kcalPerServing?: number | null;
   servingSize?: string | null;
@@ -84,7 +84,7 @@ export default function PantryCard({ item, onDelete, onSave }: Props) {
 
   const minDate = todayStr();
 
-  // keep local edits in sync when switching cards or toggling editing off
+
   useEffect(() => {
     if (!editing) {
       setName(item.name);
@@ -132,7 +132,7 @@ export default function PantryCard({ item, onDelete, onSave }: Props) {
     }
   }
 
-  // pick nutrition either from nested object or legacy flat props
+  
   const n =
     item.nutrition || {
       kcalPer100g: item.kcalPer100g ?? null,
@@ -183,7 +183,7 @@ export default function PantryCard({ item, onDelete, onSave }: Props) {
                 Edit
               </Button>
               <Button
-                variant="secondary" // keep to supported variants to satisfy TS
+                variant="secondary" 
                 size="sm"
                 type="button"
                 onClick={(e) => {

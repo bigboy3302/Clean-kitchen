@@ -18,7 +18,6 @@ type Metrics = {
 };
 
 function calcTDEE({weight=0,height=0,age=0,sex="male",activity="light"}: Metrics){
-  // Mifflin-St Jeor BMR
   const s = sex==="male" ? 5 : -161;
   const bmr = (10*weight)+(6.25*height)-(5*age)+s;
   const mult = activity==="sedentary"?1.2: activity==="light"?1.375: activity==="moderate"?1.55: activity==="active"?1.725: 1.9;
@@ -32,7 +31,6 @@ export default function FitnessPlanPage(){
   const [editing,setEditing]=useState(false);
   const [msg,setMsg]=useState<string|null>(null);
 
-  // form state
   const [height,setHeight]=useState<string>("");
   const [weight,setWeight]=useState<string>("");
   const [age,setAge]=useState<string>("");
@@ -55,7 +53,6 @@ export default function FitnessPlanPage(){
         };
         setMetrics(m);
         if (!m.height || !m.weight || !m.age || !m.sex || !m.activity || !m.goal) {
-          // prefill
           setHeight((m.height ?? "").toString());
           setWeight((m.weight ?? "").toString());
           setAge((m.age ?? "").toString());
@@ -87,7 +84,7 @@ export default function FitnessPlanPage(){
 
   if (loading) return <p>Ielādē…</p>;
 
-  // guest
+
   if(!userId){
     return (
       <div className="card card--pad">
@@ -97,7 +94,7 @@ export default function FitnessPlanPage(){
     );
   }
 
-  // form
+
   if (editing){
     return (
       <div className="card card--pad">
@@ -143,7 +140,7 @@ export default function FitnessPlanPage(){
     );
   }
 
-  // plan
+
   const tdee = calcTDEE(metrics ?? {});
   const cal = metrics?.goal==="bulk" ? tdee+250 : metrics?.goal==="cut" ? tdee-300 : tdee;
   const protein = Math.round((metrics?.weight ?? 0)*2); // g

@@ -9,7 +9,7 @@ import AuthShell from "@/components/auth/AuthShell";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 
-/** Noņem diakritikas, atstāj a-z0-9_. */
+
 function slugifyName(s: string) {
   return s
     .normalize("NFD")
@@ -20,7 +20,7 @@ function slugifyName(s: string) {
     .replace(/\s+/g, "_");
 }
 
-/** Kandidāti no vārda/uzvārda + random sufiksi */
+
 function makeUsernameCandidates(first: string, last: string, max = 12) {
   const f = slugifyName(first);
   const l = slugifyName(last);
@@ -59,7 +59,7 @@ export default function OnboardingPage() {
   const [last, setLast] = useState("");
   const [username, setUsername] = useState("");
 
-  // JAUNIE lauki
+  
   const [weightKg, setWeightKg] = useState<number | "">("");
   const [heightCm, setHeightCm] = useState<number | "">("");
   const [age, setAge] = useState<number | "">("");
@@ -73,7 +73,6 @@ export default function OnboardingPage() {
 
   const initialisedRef = useRef(false);
 
-  // auto-fill no localStorage/displayName
   useEffect(() => {
     if (!u) {
       router.replace("/auth/login");
@@ -100,10 +99,10 @@ export default function OnboardingPage() {
         setFirst(parts[0]);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
   }, [u, router]);
 
-  // ģenerē kandidātus + atlasa pirmo brīvo
+
   useEffect(() => {
     const list = makeUsernameCandidates(first, last, 12);
     setSuggestions(list);

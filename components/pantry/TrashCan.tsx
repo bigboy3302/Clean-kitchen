@@ -58,7 +58,7 @@ export default function TrashCan({
         <span className="lid" aria-hidden />
         {total > 0 && <span className="count">{total}</span>}
 
-        {/* little peel of food sticking out for peek state */}
+      
         {!isOpen && total > 0 && (
           <span className="peel" aria-hidden>🥫🥡🍞</span>
         )}

@@ -29,7 +29,7 @@ export default function PostComposer() {
 
     setBusy(true);
     try {
-      // author snapshot (optional)
+      
       let author = { username: null as string|null, displayName: null as string|null, avatarURL: null as string|null };
       try {
         const snap = await getDoc(doc(db, "users", user.uid));

@@ -1,4 +1,4 @@
-// components/ui/Meter.tsx
+
 "use client";
 
 type Props = {

@@ -1,4 +1,4 @@
-// components/recipes/RecipeImageUploader.tsx
+
 "use client";
 
 import { useState } from "react";
@@ -9,10 +9,10 @@ type Props = {
   uid: string;
   recipeId: string;
   initialCoverUrl?: string | null;
-  onCoverSaved?: (url: string) => void;          // e.g. write to Firestore: recipes/{recipeId}.coverUrl
-  onGalleryAdd?: (item: { id: string; url: string }) => void; // e.g. push to Firestore subarray or subcollection
+  onCoverSaved?: (url: string) => void;        
+  onGalleryAdd?: (item: { id: string; url: string }) => void; 
   onGalleryRemove?: (id: string) => void;
-  gallery?: { id: string; url: string }[];       // render current gallery thumbs
+  gallery?: { id: string; url: string }[];       
 };
 
 export default function RecipeImageUploader({

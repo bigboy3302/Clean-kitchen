@@ -1,4 +1,4 @@
-// components/pantry/BarcodeScanner.tsx
+
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -7,23 +7,21 @@ import { DecodeHintType, BarcodeFormat } from "@zxing/library";
 
 type Props = {
   onDetected: (code: string) => void;
-  /** start the camera automatically */
   autoStart?: boolean;
-  /** max video height in px (visual size only) */
   maxHeight?: number;
 };
 
 export default function BarcodeScanner({
   onDetected,
   autoStart = true,
-  maxHeight = 560, // larger preview
+  maxHeight = 560, 
 }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
   const [running, setRunning] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Decode hints: focus on common retail formats + try harder on tough scans
+
   const hints = useMemo(() => {
     const m = new Map();
     m.set(DecodeHintType.POSSIBLE_FORMATS, [
@@ -39,13 +37,11 @@ export default function BarcodeScanner({
     return m;
   }, []);
 
-  // Reader options (THIS replaces the old numeric arg)
+ 
   const readerOpts = useMemo(
     () => ({
-      delayBetweenScanAttempts: 200,  // ms between attempts
-      delayBetweenScanSuccess: 500,   // brief pause after a success
-      // tryPlayVideo: true,          // (optional) defaults are fine
-      // unMuteVideoElement: true,
+      delayBetweenScanAttempts: 200,  
+      delayBetweenScanSuccess: 500,   
     }),
     []
   );
@@ -53,7 +49,6 @@ export default function BarcodeScanner({
   useEffect(() => {
     if (autoStart) startCamera();
     return () => stopCamera();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function startCamera() {
@@ -76,15 +71,14 @@ export default function BarcodeScanner({
         audio: false,
       };
 
-      // ✅ pass hints + options object
       const reader = new BrowserMultiFormatReader(hints, readerOpts);
       const controls = await reader.decodeFromConstraints(
         constraints,
         videoRef.current!,
         (result) => {
           if (result) {
-            stopCamera();                 // stop after first hit
-            onDetected(result.getText()); // send the code up
+            stopCamera();                
+            onDetected(result.getText()); 
           }
         }
       );

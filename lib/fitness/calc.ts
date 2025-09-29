@@ -1,4 +1,3 @@
-// lib/fitness/calc.ts
 
 export type Sex = "male" | "female";
 export type Goal = "bulk" | "cut" | "maintain";
@@ -10,9 +9,7 @@ export type Activity =
   | "veryActive";
 
 export function mifflinStJeor(sex: Sex, age: number, heightCm: number, weightKg: number): number {
-  // BMR (kcal/day)
-  // male:   10W + 6.25H – 5A + 5
-  // female: 10W + 6.25H – 5A – 161
+
   const base = 10 * weightKg + 6.25 * heightCm - 5 * age;
   return Math.round(sex === "male" ? base + 5 : base - 161);
 }
@@ -33,31 +30,30 @@ export function tdee(bmr: number, act: Activity): number {
 }
 
 export function targetCalories(tdeeVal: number, goal: Goal): number {
-  // default adjustments
+
   const adj =
     goal === "bulk" ? 1.15 :
     goal === "cut" ? 0.80 : 1.0;
 
-  // guard rails: don't recommend lower than 1.2 * BMR in extreme cases
+
   return Math.round(tdeeVal * adj);
 }
 
 export type MacroTargets = {
-  calories: number; // per day
+  calories: number; 
   proteinG: number;
   fatG: number;
   carbsG: number;
 };
 
 export function macroTargets(weightKg: number, goal: Goal, calories: number): MacroTargets {
-  // protein by goal
+
   const proteinPerKg =
     goal === "cut" ? 2.2 :
     goal === "bulk" ? 1.6 : 1.8;
 
   const proteinG = Math.round(proteinPerKg * weightKg);
 
-  // fat as % calories by goal
   const fatPct =
     goal === "cut" ? 0.25 :
     goal === "bulk" ? 0.30 : 0.30;
@@ -65,7 +61,6 @@ export function macroTargets(weightKg: number, goal: Goal, calories: number): Ma
   const fatCal = Math.round(calories * fatPct);
   const fatG = Math.round(fatCal / 9);
 
-  // carbs = remaining calories
   const caloriesLeft = calories - (proteinG * 4 + fatG * 9);
   const carbsG = Math.max(0, Math.round(caloriesLeft / 4));
 
@@ -119,6 +114,6 @@ export function goalSuitability(age: number, goal: Goal): Suitability {
     }
     return { status: "good", message: "Maintaining with strength, protein, and mobility is a solid plan." };
   }
-  // 18–59
+  
   return { status: "good", message: "This goal is reasonable. Balance training, recovery, and nutrition." };
 }

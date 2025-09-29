@@ -1,4 +1,4 @@
-// app/pantry/page.tsx
+
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -19,7 +19,6 @@ import Fridge from "@/components/pantry/Fridge";
 import TrashCan from "@/components/pantry/TrashCan";
 import CameraModal from "@/components/pantry/CameraModal";
 
-/* ------------ helpers ------------- */
 const looksLikeBarcode = (s: string) => /^\d{6,}$/.test(s);
 const capFirst = (s: string) => s.replace(/^\p{L}/u, (m) => m.toUpperCase());
 const todayStr = () => {
@@ -56,7 +55,7 @@ function normalizeProductName(raw: string): string {
   );
 }
 
-/* ------------ types ------------- */
+
 type Item = {
   id: string;
   uid: string;
@@ -72,18 +71,16 @@ type Item = {
 export default function PantryPage() {
   const router = useRouter();
 
-  // form
+  
   const [name, setName] = useState("");
   const [qty, setQty] = useState<number>(1);
   const [date, setDate] = useState<string>("");
   const [barcode, setBarcode] = useState<string>("");
 
-  // nutrition
   const [nutrition, setNutrition] = useState<NutritionInfo | null>(null);
   const [nutriBusy, setNutriBusy] = useState(false);
   const [nutriErr, setNutriErr] = useState<string | null>(null);
 
-  // state
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [items, setItems] = useState<Item[]>([]);
@@ -91,12 +88,9 @@ export default function PantryPage() {
 
   const minDate = todayStr();
   const todayZero = useMemo(startOfToday, []);
-
-  // widgets open/close
   const [fridgeOpen, setFridgeOpen] = useState(false);
-  const [trashOpen, setTrashOpen] = useState(false);
 
-  // camera modal
+  const [trashOpen, setTrashOpen] = useState(false);
   const [camOpen, setCamOpen] = useState(false);
   const [scannerKey, setScannerKey] = useState(0);
 
@@ -145,7 +139,7 @@ export default function PantryPage() {
     setCamOpen(false);
   }
 
-  /* add / merge */
+  
   const isPast = (s: string) => !!s && s < minDate;
 
   async function addOrMergeItem() {
@@ -166,7 +160,7 @@ export default function PantryPage() {
 
       const nameKey = cleanedName.toLowerCase();
 
-      // match by barcode first
+     
       let existingId: string | null = null;
       if (barcode) {
         const s1 = await getDocs(query(
@@ -177,7 +171,7 @@ export default function PantryPage() {
         ));
         if (!s1.empty) existingId = s1.docs[0].id;
       }
-      // else by nameKey
+      
       if (!existingId) {
         const s2 = await getDocs(query(
           collection(db, "pantryItems"),
@@ -210,7 +204,7 @@ export default function PantryPage() {
         });
       }
 
-      // reset + little fridge “pop”
+      
       setName(""); setQty(1); setDate(""); setBarcode(""); setNutrition(null); setNutriErr(null);
       setFridgeOpen(true); setTimeout(()=>setFridgeOpen(false), 1000);
     } catch (e: any) {
@@ -248,7 +242,7 @@ export default function PantryPage() {
     }
   }
 
-  // inline edit/delete for widgets
+
   async function editFromWidget(it: any) {
     const newName = prompt("Edit name", it.name ?? "") ?? it.name ?? "";
     const newQty = Number(prompt("Edit quantity", String(it.quantity ?? 1)) ?? (it.quantity ?? 1));
@@ -256,7 +250,7 @@ export default function PantryPage() {
   }
   function deleteFromWidget(it: any) { return removeItem(it.id); }
 
-  /* split */
+ 
   const active: Item[] = [];
   const expired: Item[] = [];
   items.forEach((it) => {
@@ -275,7 +269,6 @@ export default function PantryPage() {
         <div className="right"><PantryHelpButton /></div>
       </header>
 
-      {/* ADD PRODUCT — modern card */}
       <section className="card addCard">
         <div className="bgOrbs" aria-hidden />
         <div className="addHead">
@@ -284,7 +277,7 @@ export default function PantryPage() {
             <p className="muted small">Scan groceries, merge duplicates, and keep track of what’s fresh.</p>
           </div>
 
-          {/* small round camera icon */}
+          
           <button
             type="button"
             className="camIcon"
@@ -334,7 +327,7 @@ export default function PantryPage() {
         </div>
       </section>
 
-      {/* ACTIVE — Fridge always visible */}
+  
       <section className="list">
         <div className="secHead">
           <h2 className="secTitle">Active</h2>
@@ -343,7 +336,7 @@ export default function PantryPage() {
 
         <div className={`widgetRow ${active.length === 0 ? "widgetRow--empty" : ""}`}>
           <Fridge
-            items={active}                 // [] allowed
+            items={active}               
             isOpen={fridgeOpen}
             onToggleOpen={setFridgeOpen}
             onEdit={editFromWidget}
@@ -353,7 +346,7 @@ export default function PantryPage() {
         </div>
       </section>
 
-      {/* EXPIRED — TrashCan always visible */}
+ 
       <section className="list">
         <div className="secHead">
           <h2 className="secTitle">Expired</h2>
@@ -365,7 +358,7 @@ export default function PantryPage() {
 
         <div className={`widgetRow ${expired.length === 0 ? "widgetRow--empty" : ""}`}>
           <TrashCan
-            items={expired}                // [] allowed
+            items={expired}                
             isOpen={trashOpen}
             onToggleOpen={setTrashOpen}
             onEdit={editFromWidget}
@@ -375,7 +368,6 @@ export default function PantryPage() {
         </div>
       </section>
 
-      {/* CAMERA POPUP */}
       {camOpen && (
         <CameraModal
           key={`cam-${scannerKey}`}

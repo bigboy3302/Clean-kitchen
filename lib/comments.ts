@@ -1,4 +1,4 @@
-// lib/comments.ts
+
 import { db } from "@/lib/firebase";
 import {
   addDoc,
@@ -14,7 +14,6 @@ export async function addComment(opts: { postId: string; uid: string; text: stri
   const trimmed = text.trim().slice(0, 25000);
   if (!trimmed) return;
 
-  // (optional) light author copy
   let author:
     | { displayName?: string | null; username?: string | null; avatarURL?: string | null }
     | null = null;
@@ -32,7 +31,7 @@ export async function addComment(opts: { postId: string; uid: string; text: stri
         avatarURL: u.photoURL || null,
       };
     }
-  } catch { /* ok if profile is missing */ }
+  } catch { /* vis safe ja profile is missing */ }
 
   await addDoc(collection(db, "posts", postId, "comments"), {
     uid,

@@ -15,7 +15,7 @@ export default function RecipeCard({ r }: { r: Recipe }) {
   return (
     <div className="group overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:shadow-md">
       {r.thumbnail ? (
-        // eslint-disable-next-line @next/next/no-img-element
+       
         <img src={r.thumbnail} alt={r.title} className="h-40 w-full object-cover" />
       ) : (
         <div className="h-40 w-full bg-gray-100" />

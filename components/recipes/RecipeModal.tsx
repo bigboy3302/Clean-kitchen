@@ -8,7 +8,7 @@ type Props = {
   onClose: () => void;
   isFavorite?: boolean;
   onToggleFavorite?: (r: CommonRecipe) => void;
-  zIndex?: number; // default 2000, higher than favorites overlay
+  zIndex?: number; 
 };
 
 function parseNumber(txt: string): number | null {
@@ -44,7 +44,7 @@ export default function RecipeModal({
 }: Props) {
   const [servings, setServings] = useState<number>(1);
 
-  // lock wheel scroll on background (extra safety; page also locks body)
+  
   useEffect(() => {
     const stop = (e: WheelEvent) => e.preventDefault();
     document.addEventListener("wheel", stop, { passive: false });
@@ -107,7 +107,6 @@ export default function RecipeModal({
             </div>
           </div>
         ) : (
-          // Fallback (no image): keep a simple row
           <div className="row">
             {recipe.category ? <span className="chip alt">{recipe.category}</span> : null}
             {recipe.area ? <span className="chip alt">{recipe.area}</span> : null}

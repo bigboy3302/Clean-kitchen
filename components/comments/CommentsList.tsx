@@ -1,4 +1,4 @@
-// components/comments/CommentsList.tsx
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -68,7 +68,6 @@ export default function CommentsList({
 
   useEffect(() => {
     if (!postId) return;
-    // Simple live subscription; we slice locally for “Show more”
     const q = query(
       collection(db, "posts", postId, "comments"),
       orderBy("createdAt", "asc")

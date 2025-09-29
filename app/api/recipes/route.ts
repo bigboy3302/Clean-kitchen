@@ -1,4 +1,4 @@
-// app/api/recipes/route.ts
+
 import { NextResponse } from "next/server";
 
 const BASE = "https://www.themealdb.com/api/json/v1/1";
@@ -41,7 +41,7 @@ function mealToRecipe(m: Meal): Recipe {
   };
 }
 
-/* ---------------- utils ---------------- */
+
 function sanitizeIngredient(raw: string): string {
   const s = raw
     .toLowerCase()
@@ -72,7 +72,7 @@ function coreTerm(raw: string): string {
   return map[s] || s;
 }
 
-/* ---------------- remote helpers ---------------- */
+
 async function j<T = any>(url: string): Promise<T> {
   const r = await fetch(url, { cache: "no-store" });
   if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`);
@@ -134,7 +134,6 @@ async function searchByIngredientsAND(ings: string[], limit = 30, mode: "interse
     }
     ids = Array.from(base);
     if (ids.length === 0) {
-      // graceful fallback: try union when intersection is empty
       const u = new Set<string>();
       perTerm.forEach((arr) => arr.forEach((id) => u.add(id)));
       ids = Array.from(u);
@@ -149,26 +148,25 @@ async function searchByIngredientsAND(ings: string[], limit = 30, mode: "interse
   return await lookupMany(ids, limit);
 }
 
-/* ---------------- handler ---------------- */
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
 
     const q = (searchParams.get("q") || "").trim();
-    const ingredientsParam = (searchParams.get("ingredients") || "").trim(); // "tomato,onion"
+    const ingredientsParam = (searchParams.get("ingredients") || "").trim(); 
     const randomParam = searchParams.get("random");
     const idParam = (searchParams.get("id") || "").trim();
     const area = (searchParams.get("area") || "").trim().toLowerCase();
-    const limit = Math.min(Math.max(Number(searchParams.get("limit") || 0) || 0, 1), 60); // 1..60
+    const limit = Math.min(Math.max(Number(searchParams.get("limit") || 0) || 0, 1), 60); 
     const mode = (searchParams.get("mode") || "intersect") as "intersect" | "union";
 
-    // single lookup
+   
     if (idParam) {
       const one = await lookupOne(idParam);
       return NextResponse.json({ ok: true, recipes: one ? [one] : [] });
     }
 
-    // random N
+   
     if (randomParam) {
       const n = Math.min(Math.max(parseInt(randomParam, 10) || 1, 1), 24);
       let list = await randomMeals(n);
@@ -176,7 +174,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: true, recipes: list });
     }
 
-    // by name
+  
     if (q) {
       let list = await searchByName(q);
       if (area) list = list.filter((r) => (r.area || "").toLowerCase() === area);
@@ -184,7 +182,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: true, recipes: list });
     }
 
-    // AND ingredients
+  
     if (ingredientsParam) {
       const ings = ingredientsParam.split(",").map((s) => s.trim()).filter(Boolean);
       let list = await searchByIngredientsAND(ings, limit || 30, mode);
@@ -193,7 +191,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: true, recipes: list });
     }
 
-    // default: nothing
+   
     return NextResponse.json({ ok: true, recipes: [] });
   } catch (e: any) {
     return NextResponse.json(

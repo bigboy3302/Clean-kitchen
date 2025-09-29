@@ -1,4 +1,4 @@
-// components/fitness/WorkoutModal.tsx
+
 "use client";
 
 import type { Exercise } from "@/lib/workouts/types";
@@ -21,7 +21,6 @@ export default function WorkoutModal({ exercise, goal, onClose, zIndex = 2200 }:
           <button className="x" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           className="gif"
           src={imgById(exercise.id)}
@@ -35,7 +34,6 @@ export default function WorkoutModal({ exercise, goal, onClose, zIndex = 2200 }:
         />
         <div id="gif-fallback" className="fallback" style={{ display: "none" }}>
           GIF preview unavailable.
-          {/* Offer opening our own proxy in a new tab (still uses your server, no key leak) */}
           <a
             href={imgById(exercise.id)}
             target="_blank"

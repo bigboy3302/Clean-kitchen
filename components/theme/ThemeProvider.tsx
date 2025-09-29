@@ -1,4 +1,4 @@
-// components/theme/ThemeProvider.tsx
+
 "use client";
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
@@ -61,22 +61,19 @@ function applyCssVars(p: Palette, dataTheme?: "light" | "dark" | "custom") {
   el.style.setProperty("--muted", p.muted);
   el.style.setProperty("--border", p.border);
   el.style.setProperty("--ring", p.ring);
-  // aliases (keep them in sync)
   el.style.setProperty("--card-bg", p.bg2);
   el.style.setProperty("--card-border", p.border);
   el.style.setProperty("--btn-bg", p.primary);
   el.style.setProperty("--btn-fg", p.primaryContrast);
   el.style.setProperty("--btn-border", "transparent");
-  // color-scheme hint
   const isDark = dataTheme === "dark" || (dataTheme === "custom" && isPerceivedDark(p));
   el.style.colorScheme = isDark ? ("dark" as any) : ("light" as any);
 }
 
-// quick luminance check for color-scheme
 function isPerceivedDark(p: Palette) {
   const [r, g, b] = hexToRgb(p.bg);
   const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return lum < 140; // 0..255
+  return lum < 140; 
 }
 function hexToRgb(hex: string): [number, number, number] {
   const h = hex.replace("#", "");
@@ -88,7 +85,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setMode] = useState<ThemeMode>("system");
   const [palette, setPalette] = useState<Palette>(LIGHT);
 
-  // initial load: localStorage + system
   useEffect(() => {
     const savedMode = (localStorage.getItem(LS_MODE) as ThemeMode) || "system";
     setMode(savedMode);
@@ -99,14 +95,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
     setPalette(savedMode === "dark" ? DARK : savedMode === "custom" ? pal : LIGHT);
 
-    // apply immediately without waiting for next render
     const mql = window.matchMedia("(prefers-color-scheme: dark)");
     const sys = mql.matches ? DARK : LIGHT;
     const active =
       savedMode === "dark" ? DARK : savedMode === "light" ? LIGHT : savedMode === "custom" ? pal : sys;
     applyCssVars(active, savedMode === "system" ? (mql.matches ? "dark" : "light") : (savedMode as any));
 
-    // keep in sync with system when mode === system
     const onChange = () => {
       if (savedMode === "system") {
         const now = mql.matches ? DARK : LIGHT;

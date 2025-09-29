@@ -1,4 +1,4 @@
-// components/ui/Button.tsx
+
 "use client";
 import React from "react";
 
@@ -10,7 +10,7 @@ const VARIANT = {
   primary: "btn-primary",
   secondary: "btn-secondary",
   ghost: "btn-ghost",
-  danger: "btn-danger", // add a red style in your CSS
+  danger: "btn-danger", 
 };
 export default function Button({ variant = "primary", size = "md", className = "", ...rest }: Props) {
   return (

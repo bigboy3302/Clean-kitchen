@@ -31,7 +31,6 @@ const ALL_ITEMS: Record<ItemKey, { href: string; label: string; icon: JSX.Elemen
   recipes: {
     href: "/recipes",
     label: "Recipes",
-    // FIX: stroke must be "currentColor" (it was empty before)
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true" width="40" height="40" fill="none" stroke="currentColor" strokeWidth="1.6">
         <path d="M4 4h11a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3V4z" />
@@ -88,7 +87,7 @@ export default function FabNav() {
   const posClass =
     placement === "header" ? "pos-header" : placement === "top" ? "pos-top" : "pos-bottom";
 
-  // Use user prefs if set, otherwise fall back to theme tokens
+  
   const styleVars: React.CSSProperties = {
     ["--pill" as any]: nav?.accent ?? "var(--navbar-bg)",
     ["--icon" as any]: nav?.icon ?? "var(--navbar-fg)",

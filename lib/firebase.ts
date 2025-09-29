@@ -20,9 +20,7 @@ if (Object.values(firebaseConfig).some((v) => !v)) {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var _firebaseApp: FirebaseApp | undefined;
-  // eslint-disable-next-line no-var
   var _appCheckInited: boolean | undefined;
 }
 

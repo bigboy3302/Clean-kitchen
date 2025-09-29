@@ -15,22 +15,21 @@ export type RecipeCardProps = {
   title: string;
   imageUrl: string;
   description?: string;
-  ingredients?: IngredientObj[];   // structured
-  steps?: string[];                // lines of text
+  ingredients?: IngredientObj[];  
+  steps?: string[];                
   open: boolean;
   onOpen: () => void;
   onClose: () => void;
   panelPlacement: PanelPlacement;
 
-  minutes?: number | null;         // optional meta
-  baseServings?: number | null;    // base to scale from
+  minutes?: number | null;        
+  baseServings?: number | null;    
 
-  /* NEW: favorites */
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
 };
 
-/* ---------- helpers: number parsing/scaling ---------- */
+
 
 function parseNumber(txt: string): number | null {
   const t = txt.trim();

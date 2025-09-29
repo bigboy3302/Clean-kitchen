@@ -1,5 +1,5 @@
-// lib/storageActions.ts
-import { storage } from "@/lib/firebase"; // or "../lib/firebase" if not using alias
+
+import { storage } from "@/lib/firebase"; 
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { v4 as uuid } from "uuid";
 

@@ -1,13 +1,11 @@
-// lib/nutrition.ts
+
 export type NutritionInfo = {
   name?: string | null;
   servingSize?: string | null;
 
-  // calories
   kcalPer100g?: number | null;
   kcalPerServing?: number | null;
 
-  // macros (per 100g)
   carbs100g?: number | null;
   sugars100g?: number | null;
   fiber100g?: number | null;

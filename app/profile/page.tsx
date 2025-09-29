@@ -1,4 +1,4 @@
-// app/profile/page.tsx
+
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -24,7 +24,7 @@ import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 
-/* -------------------------------- types -------------------------------- */
+
 type UserDoc = {
   uid: string;
   email: string;
@@ -39,7 +39,7 @@ type UserDoc = {
   };
 };
 
-/* ----------------------------- helpers/utils ---------------------------- */
+
 function slugifyUsername(v: string) {
   return v.trim().toLowerCase().replace(/[^a-z0-9._-]/g, "").replace(/\.{2,}/g, ".").slice(0, 20);
 }
@@ -52,19 +52,18 @@ function fullName(fn?: string | null, ln?: string | null) {
   return (f + " " + l).trim() || null;
 }
 
-/* --------------------------------- page --------------------------------- */
 export default function ProfilePage() {
   const router = useRouter();
 
-  // auth state
+ 
   const [authReady, setAuthReady] = useState(false);
   const [me, setMe] = useState<User | null>(null);
 
-  // data
+ 
   const [userDoc, setUserDoc] = useState<UserDoc | null>(null);
   const [loadingDoc, setLoadingDoc] = useState(true);
 
-  // edit fields
+  
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState("");
@@ -74,17 +73,17 @@ export default function ProfilePage() {
   const [newEmail, setNewEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
 
-  // prefs
+  
   const [units, setUnits] = useState<"metric" | "imperial">("metric");
   const [theme, setTheme] = useState<"system" | "light" | "dark">("system");
   const [emailNotifications, setEmailNotifications] = useState<boolean>(true);
 
-  // avatar
+  
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [busyUpload, setBusyUpload] = useState(false);
 
-  // ui
+  
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busySave, setBusySave] = useState(false);
@@ -93,7 +92,7 @@ export default function ProfilePage() {
   const [showDelete, setShowDelete] = useState(false);
   const [confirmText, setConfirmText] = useState("");
 
-  /* --------------------------- auth + load doc --------------------------- */
+  
   useEffect(() => {
     const stop = onAuthStateChanged(auth, (u) => {
       setMe(u || null);
@@ -149,7 +148,7 @@ export default function ProfilePage() {
     })();
   }, [authReady, me]);
 
-  /* ------------------------------ username ux --------------------------- */
+
   useEffect(() => {
     if (!username) {
       setUnameMsg(null);
@@ -180,7 +179,7 @@ export default function ProfilePage() {
     return () => clearTimeout(id);
   }, [username, me, userDoc?.username]);
 
-  /* ------------------------------ actions ------------------------------- */
+
   async function uploadAvatar() {
     if (!file || !me) return;
     if (!/image\/(png|jpe?g|webp)/i.test(file.type)) {
@@ -245,7 +244,7 @@ export default function ProfilePage() {
     try {
       await runTransaction(db, async (trx) => {
         const uref = doc(db, "users", me.uid);
-        // claim username if changed
+        
         if (uname && uname !== userDoc.username) {
           if (!validUsername(uname)) throw new Error("Username must be 3–20 characters: a–z, 0–9, . _ -");
           const nref = doc(db, "usernames", uname);
@@ -352,7 +351,7 @@ export default function ProfilePage() {
     setMsg(null);
     setBusyDelete(true);
     try {
-      // cleanup avatar
+      
       try {
         const root = sref(storage, `avatars/${me.uid}`);
         const { items, prefixes } = await listAll(root);
@@ -401,11 +400,11 @@ export default function ProfilePage() {
         <div className="p">Loading…</div>
       ) : userDoc ? (
         <>
-          {/* -------- Avatar -------- */}
+         
           <Card className="section">
             <h2 className="h2">Avatar</h2>
             <div className="row aic">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
+             
               <img src={userDoc.photoURL || "/default-avatar.png"} alt="avatar" className="avatar" />
               <div className="col">
                 <input ref={fileRef} type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
@@ -425,7 +424,7 @@ export default function ProfilePage() {
             </div>
           </Card>
 
-          {/* -------- Profile details -------- */}
+    
           <Card className="section">
             <h2 className="h2">Details</h2>
             <div className="grid">
@@ -445,7 +444,7 @@ export default function ProfilePage() {
             </div>
           </Card>
 
-          {/* -------- Account (email / password) -------- */}
+      
           <Card className="section">
             <h2 className="h2">Account</h2>
             <div className="grid">
@@ -476,7 +475,7 @@ export default function ProfilePage() {
             </div>
           </Card>
 
-          {/* -------- Preferences (FIXED TAGS) -------- */}
+       
           <Card className="section">
             <h2 className="h2">Preferences</h2>
 
@@ -519,7 +518,6 @@ export default function ProfilePage() {
             </div>
           </Card>
 
-          {/* -------- Danger zone -------- */}
           <Card className="section danger">
             <h2 className="h2">Danger zone</h2>
             <p className="muted small">
@@ -563,7 +561,7 @@ export default function ProfilePage() {
         <div className="p">Profile not found.</div>
       )}
 
-      {/* SINGLE styled-jsx block */}
+
       <style jsx>{`
         .wrap { max-width: 960px; margin: 0 auto; padding: 24px; }
         .headerRow { display:flex; align-items:center; justify-content:space-between; gap:12px; }

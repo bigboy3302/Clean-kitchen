@@ -19,7 +19,6 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Ja Email/Password un nav verificēts => /auth/verify
       const isPasswordProvider = u.providerData.some(p => p.providerId === "password");
       if (isPasswordProvider && !u.emailVerified) {
         setChecking(false);
@@ -27,7 +26,6 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Pārbaudām, vai ir onboarding pabeigts (users/{uid} ar username)
       const ref = doc(db, "users", u.uid);
       const snap = await getDoc(ref);
       const hasProfile = snap.exists() && !!snap.data()?.username;

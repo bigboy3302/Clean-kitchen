@@ -1,15 +1,13 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 
 import type { CommonRecipe, Ingredient } from "@/components/recipes/types";
 
-/* -------------------- tiny fetch helper -------------------- */
 async function j<T = any>(url: string): Promise<T> {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`);
   return r.json() as Promise<T>;
 }
 
-/* -------------------- helpers -------------------- */
 function mealToCommon(m: any): CommonRecipe {
   const ingredients: Ingredient[] = [];
   for (let i = 1; i <= 20; i++) {
@@ -61,7 +59,6 @@ function coreTerm(raw: string): string {
   return map[s] || s;
 }
 
-/* -------------------- API wrappers -------------------- */
 export async function getRandomMeals(n = 12): Promise<CommonRecipe[]> {
   const packs = await Promise.all(
     Array.from({ length: n }, () =>
@@ -86,7 +83,6 @@ export async function searchMealsByName(q: string): Promise<CommonRecipe[]> {
   return meals.map(mealToCommon);
 }
 
-/** Single-ingredient search; returns hydrated recipes. */
 export async function searchMealsByIngredient(
   ingredient: string,
   limit = 24
@@ -110,13 +106,7 @@ export async function lookupMealById(id: string): Promise<CommonRecipe | null> {
   return meal ? mealToCommon(meal) : null;
 }
 
-/**
- * Multi-ingredient AND search:
- *  - filter.php?i=<term> per term
- *  - intersect meal IDs (strict)
- *  - fallback to union if intersection is empty
- *  - hydrate to full recipes
- */
+
 export async function searchMealsByIngredientsAND(
   rawTerms: string[],
   maxHydrate = 30
@@ -124,7 +114,6 @@ export async function searchMealsByIngredientsAND(
   const terms = Array.from(new Set(rawTerms.map(coreTerm).filter(Boolean)));
   if (terms.length === 0) return [];
 
-  // Explicit typing so Promise.all resolves to string[][]
   const resultsPerTerm: string[][] = await Promise.all(
     terms.map(async (t): Promise<string[]> => {
       const res = await j<any>(
@@ -153,7 +142,7 @@ export async function searchMealsByIngredientsAND(
   if (ids.length === 0) {
     const union = new Set<string>();
     for (const arr of resultsPerTerm) {
-      arr.forEach((id: string) => union.add(id)); // <- typed
+      arr.forEach((id: string) => union.add(id)); 
     }
     ids = Array.from(union);
   }

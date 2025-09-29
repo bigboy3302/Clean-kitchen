@@ -5,7 +5,7 @@ export type Workout = {
   title: string;
   level: "beginner" | "intermediate" | "advanced";
   daysPerWeek: number;
-  focus: string; // e.g. "Push/Pull/Legs", "Full Body", etc.
+  focus: string; 
   notes?: string;
 };
 

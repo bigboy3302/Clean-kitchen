@@ -41,52 +41,49 @@ service firebase.storage {
     match /{allOtherPaths=**} {
       allow read, write: if false;
     }
+    // Anyone can read posts; writes only by owner
     match /posts/{postId} {
       allow read: if true;
 
-      // post owner can update/delete their post
-      allow update, delete: if request.auth != null &&
-                            request.auth.uid == resource.data.uid;
-      // anyone signed-in can create a post
-      allow create: if request.auth != null;
+      // Only the post owner can update or delete the post itself
+      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.uid == request.auth.uid;
 
-      // Likes: one doc per user (doc id = uid)
+      // ----- Likes subcollection -----
       match /likes/{uid} {
         allow read: if true;
-        allow create: if request.auth != null
-                      && request.auth.uid == uid
-                      && !exists(/databases/$(database)/documents/posts/$(postId)/likes/$(uid));
-        allow delete: if request.auth != null && request.auth.uid == uid;
-        allow update: if false;
+        // user can like/unlike using their own uid as doc id
+        allow create, update, delete: if request.auth != null && uid == request.auth.uid;
       }
 
-      // Reposts: one doc per user (doc id = uid)
+      // ----- Reposts subcollection -----
       match /reposts/{uid} {
         allow read: if true;
-        allow create: if request.auth != null
-                      && request.auth.uid == uid
-                      && !exists(/databases/$(database)/documents/posts/$(postId)/reposts/$(uid));
-        allow delete: if request.auth != null && request.auth.uid == uid;
-        allow update: if false;
+        // user can (un)repost using their own uid as doc id
+        allow create, update, delete: if request.auth != null && uid == request.auth.uid;
       }
 
-      // Comments: owner of comment OR owner of post can delete
+      // ----- Comments subcollection -----
       match /comments/{commentId} {
         allow read: if true;
-        allow create: if request.auth != null;
-        allow delete: if request.auth != null && (
-          request.auth.uid == resource.data.uid ||
-          request.auth.uid == get(/databases/$(database)/documents/posts/$(postId)).data.uid
-        );
-        allow update: if false;
-      }
 
-      // Reports: 1 doc per user
-      match /reports/{uid} {
-        allow read: if false;
-        allow create: if request.auth != null && request.auth.uid == uid;
-        allow update, delete: if false;
+        // create: any signed-in user
+        allow create: if request.auth != null;
+
+        // delete: comment owner or post owner
+        allow delete, update: if request.auth != null
+          && (resource.data.uid == request.auth.uid || get(/databases/$(database)/documents/posts/$(postId)).data.uid == request.auth.uid);
+
+        // ----- Replies under a comment -----
+        match /replies/{replyId} {
+          allow read: if true;
+          // any signed-in user can add a reply
+          allow create: if request.auth != null;
+          // delete: reply owner or post owner
+          allow delete, update: if request.auth != null
+            && (resource.data.uid == request.auth.uid || get(/databases/$(database)/documents/posts/$(postId)).data.uid == request.auth.uid);
+        }
       }
-    
+    }
   }
 }

@@ -9,7 +9,7 @@ import { doc, onSnapshot, updateDoc, serverTimestamp } from "firebase/firestore"
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import dynamic from "next/dynamic";
 
-// Use ONLY the dynamic import (no direct import)
+
 
 type Ingredient = { name: string; qty?: number | null; unit?: string | null };
 type Author = { username?: string; displayName?: string; avatarURL?: string | null } | null;
@@ -118,7 +118,7 @@ export default function RecipeEditPage() {
     return () => stop();
   }, [id]);
 
-  // Owner-gate: redirect non-owners to public page (also prevents flash)
+  
   useEffect(() => {
     if (loadingAuth || loadingDoc) return;
     if (!recipe) return;
@@ -167,7 +167,7 @@ export default function RecipeEditPage() {
     setErr(null); setMsg(null);
     setBusy(true);
     try {
-      // Cover image path (not gallery)
+     
       const path = `recipeImages/${recipe.uid}/${recipe.id}`;
       const sref = ref(storage, path);
       await uploadBytes(sref, file);
@@ -256,7 +256,7 @@ export default function RecipeEditPage() {
           <div className="full">
             <label className="label">Image</label>
 
-            {/* Gallery (owner can add/remove) */}
+       
 
             {recipe.imageURL ? (
               <div className="imgRow">

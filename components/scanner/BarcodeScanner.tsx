@@ -1,4 +1,4 @@
-// components/pantry/BarcodeScanner.tsx
+
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -23,7 +23,7 @@ export default function BarcodeScanner({ onDetected }: Props) {
 
   const [err, setErr] = useState<string | null>(null);
 
-  // discover cameras
+ 
   useEffect(() => {
     (async () => {
       try {
@@ -31,14 +31,13 @@ export default function BarcodeScanner({ onDetected }: Props) {
         const list = await navigator.mediaDevices.enumerateDevices();
         const cams = list.filter((d) => d.kind === "videoinput");
         setDevices(cams);
-        // choose a rear cam if we can
         const rear = cams.find((c) => /back|rear|environment/i.test(c.label || ""));
         if (rear) setDeviceId(rear.deviceId);
       } catch {}
     })();
   }, []);
 
-  // start/stop scanner
+
   useEffect(() => {
     if (!running) return stop();
 
@@ -63,7 +62,7 @@ export default function BarcodeScanner({ onDetected }: Props) {
             if (result) {
               try { navigator.vibrate?.(30); } catch {}
               onDetected(result.getText());
-              setRunning(false); // stop after first good scan
+              setRunning(false);
             }
           }
         );
@@ -75,7 +74,7 @@ export default function BarcodeScanner({ onDetected }: Props) {
           videoRef.current.autoplay = true;
         }
 
-        // torch capability check
+       
         const track = getVideoTrack();
         const caps = track?.getCapabilities?.();
         setTorchCapable(Boolean(caps && "torch" in caps));
@@ -90,7 +89,7 @@ export default function BarcodeScanner({ onDetected }: Props) {
     })();
 
     return () => { mounted = false; stop(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [running, deviceId, facing]);
 
   function stop() {
