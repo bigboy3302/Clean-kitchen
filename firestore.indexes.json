@@ -1,7 +1,7 @@
 {
   "indexes": [
     {
-      "collectionGroup": "pantryItems",
+      "collectionId": "pantryItems",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "uid", "order": "ASCENDING" },
@@ -9,12 +9,21 @@
       ]
     },
     {
-      "collectionGroup": "recipes",
+      "collectionId": "recipes",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "uid", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" },
         { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionId": "posts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "reposts",   "order": "DESCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" },
+        { "fieldPath": "__name__",  "order": "ASCENDING" }
       ]
     }
   ],

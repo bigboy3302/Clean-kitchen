@@ -148,15 +148,7 @@ export default function PostThreadPage() {
             <Link className="btn" href="/dashboard">Home</Link>
           </div>
         </header>
-
-        {post.text ? <p className="text">{post.text}</p> : null}
-        {post.imageURL ? (
-          <div className="imgWrap">
-            <img className="img" src={post.imageURL} alt="" />
-          </div>
-        ) : null}
-
-        <section className="compose">
+ <section className="compose">
           <form
             onSubmit={async (e) => {
               e.preventDefault();
@@ -168,6 +160,14 @@ export default function PostThreadPage() {
               }
             }}
           >
+        {post.text ? <p className="text">{post.text}</p> : null}
+        {post.imageURL ? (
+          <div className="imgWrap">
+            <img className="img" src={post.imageURL} alt="" />
+          </div>
+        ) : null}
+
+       
             <textarea name="text" rows={3} placeholder={me ? "Write a reply…" : "Sign in to reply"} disabled={!me} />
             <button className="btn" disabled={!me}>Reply</button>
           </form>
