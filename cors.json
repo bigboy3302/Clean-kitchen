@@ -1,0 +1,16 @@
+[
+    {
+      "origin": ["http://localhost:3000", "https://localhost:3000"],
+      "method": ["GET", "HEAD", "PUT", "POST", "DELETE", "OPTIONS"],
+      "responseHeader": [
+        "Authorization",
+        "Content-Type",
+        "x-goog-meta-*",
+        "x-goog-resumable",
+        "x-goog-upload-*",
+        "X-Firebase-AppCheck"
+      ],
+      "maxAgeSeconds": 3600
+    }
+  ]
+  

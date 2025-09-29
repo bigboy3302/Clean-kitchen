@@ -15,7 +15,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <ThemeScript />
         <ThemeProvider>
-      
           <header className="ck-navbar">
             <div className="ck-navbar-inner">
               <div aria-hidden />
