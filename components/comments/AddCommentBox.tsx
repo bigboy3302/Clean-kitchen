@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from "react";
@@ -57,8 +56,6 @@ export default function AddCommentBox({ pId, uid }: { pId: string; uid: string }
 
       <style jsx>{`
         .cmtForm { display:grid; gap:10px; }
-
-        /* Accessible, theme-aware textarea */
         .cmtInput {
           -webkit-appearance: none;
           appearance: none;
@@ -70,11 +67,9 @@ export default function AddCommentBox({ pId, uid }: { pId: string; uid: string }
           line-height: 1.5;
           min-height: 120px;
           resize: vertical;
-
           white-space: pre-wrap;
           overflow-wrap: anywhere;
           word-break: break-word;
-
           transition: border-color .12s ease, box-shadow .12s ease, background .12s ease;
         }
         .cmtInput::placeholder { color: var(--muted); }
@@ -83,16 +78,14 @@ export default function AddCommentBox({ pId, uid }: { pId: string; uid: string }
           border-color: var(--primary);
           box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 25%, transparent);
         }
-
         .cmtRow {
           display: flex;
           align-items: center;
           gap: 12px;
           justify-content: flex-end;
         }
-        .count { margin-right: auto; } /* count on left, button on right */
+        .count { margin-right: auto; }
         .muted { color: var(--muted); font-size: 12px; }
-
         .btn {
           border: 1px solid var(--primary);
           background: var(--primary);
@@ -106,7 +99,6 @@ export default function AddCommentBox({ pId, uid }: { pId: string; uid: string }
         .btn:hover { opacity: .95; }
         .btn:active { transform: translateY(1px); }
         .btn[disabled] { opacity: .6; cursor: not-allowed; }
-
         .error {
           color: color-mix(in oklab, #7f1d1d 70%, var(--text) 30%);
           background: color-mix(in oklab, #ef4444 15%, var(--card-bg));
@@ -115,8 +107,6 @@ export default function AddCommentBox({ pId, uid }: { pId: string; uid: string }
           border-radius: 10px;
           font-size: 12px;
         }
-
-        /* a11y-only label */
         .visuallyHidden {
           position: absolute !important;
           height: 1px; width: 1px;

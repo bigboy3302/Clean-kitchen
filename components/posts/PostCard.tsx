@@ -9,9 +9,6 @@ import {
   query,
   addDoc,
   serverTimestamp,
-  doc,
-  setDoc,
-  deleteDoc,
 } from "firebase/firestore";
 
 type Author = { username?: string|null; displayName?: string|null; avatarURL?: string|null };
@@ -25,7 +22,9 @@ type MediaItem = {
 export type Post = {
   id: string;
   uid?: string | null;
-  text?: string|null;
+  text?: string|null;               // used as caption under media
+  title?: string|null;              // optional, if you added titles
+  description?: string|null;        // optional, if you added descriptions
   media?: MediaItem[];
   author?: Author | null;
   createdAt?: { seconds?: number } | number | string | null;
@@ -50,7 +49,7 @@ function timeAgo(ts: Post["createdAt"]) {
   const sec =
     typeof ts === "number" ? ts :
     typeof ts === "string" ? Math.floor(Date.parse(ts)/1000) :
-    ts?.seconds ?? 0;
+    (ts as any)?.seconds ?? 0;
   if (!sec) return "";
   const diff = Math.max(1, Math.floor(Date.now()/1000 - sec));
   const steps: [number,string][]= [[60,"s"],[60,"m"],[24,"h"],[7,"d"],[4.345,"w"],[12,"mo"],[Number.MAX_SAFE_INTEGER,"y"]];
@@ -60,7 +59,7 @@ function timeAgo(ts: Post["createdAt"]) {
 }
 
 export default function PostCard({
-  post, meUid, onEdit, onAddMedia, onDelete, onReport, onComment, onToggleRepost, onToggleLike,
+  post, meUid, onEdit, onAddMedia, onDelete, onReport, onToggleRepost, onToggleLike,
 }: Props) {
   const { text, media = [], author = {}, createdAt } = post || {};
   const isOwner = !!(meUid && post?.uid && meUid === post.uid);
@@ -76,10 +75,6 @@ export default function PostCard({
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const likeBurstRef = useRef<HTMLDivElement | null>(null);
-
-  const [showComposer, setShowComposer] = useState(false);
-  const [commentText, setCommentText] = useState("");
-  const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [editOpen, setEditOpen] = useState(false);
   const [draftText, setDraftText] = useState(text || "");
@@ -130,26 +125,11 @@ export default function PostCard({
     });
   }
 
-  async function handleEditSave() {
-    const next = draftText.trim();
-    setEditOpen(false);
-    if (next !== text) await onEdit?.(post, next);
-  }
-
-  function handleAddMediaClick() { fileInputRef.current?.click(); }
-
   async function handleAddMediaChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
     if (files.length) await onAddMedia?.(post, files);
     if (fileInputRef.current) fileInputRef.current.value = "";
     setMenuOpen(false);
-  }
-
-  async function submitComment() {
-    const t = commentText.trim();
-    if (!t) return;
-    setCommentText("");
-    await onComment?.(post, t);
   }
 
   async function toggleRepost() {
@@ -159,33 +139,9 @@ export default function PostCard({
     await onToggleRepost?.(post, next);
   }
 
-  async function toggleReplies(commentId: string) {
-    if (openRepliesFor === commentId) {
-      setOpenRepliesFor(null);
-      return;
-    }
-    setOpenRepliesFor(commentId);
-    const stop = onSnapshot(collection(db, "posts", post.id, "comments", commentId, "replies"), (snap) => {
-      setReplies((r) => ({ ...r, [commentId]: snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) }));
-    });
-    setTimeout(() => {
-      const unsub = stop as unknown as () => void;
-      return () => unsub();
-    }, 0);
-  }
-
-  async function submitReply(commentId: string, value: string) {
-    const text = value.trim();
-    if (!text) return;
-    await addDoc(collection(db, "posts", post.id, "comments", commentId, "replies"), {
-      text,
-      uid: meUid,
-      createdAt: serverTimestamp(),
-    });
-  }
-
   const displayName = author?.displayName || author?.username || "User";
   const profileHref = `/u/${author?.username || ""}`;
+  const threadHref = `/posts/${post.id}`; // 👈 make sure your route is /posts/[id]
 
   return (
     <>
@@ -210,7 +166,7 @@ export default function PostCard({
                 {isOwner ? (
                   <>
                     <button className="mi" role="menuitem" onClick={() => { setDraftText(post.text || ""); setEditOpen(true); setMenuOpen(false); }}>Edit post</button>
-                    <button className="mi" role="menuitem" onClick={handleAddMediaClick}>Add media</button>
+                    <button className="mi" role="menuitem" onClick={() => fileInputRef.current?.click()}>Add media</button>
                     <hr className="sep" aria-hidden />
                     <button className="mi danger" role="menuitem" onClick={() => onDelete?.(post)}>Delete</button>
                   </>
@@ -226,10 +182,11 @@ export default function PostCard({
           </div>
         </header>
 
+        {/* media */}
         {hasMedia ? (
           <div className={`pc-media ${media.length > 1 ? "multi" : ""}`} onDoubleClick={onDoubleTap}>
             <div ref={likeBurstRef} className="burst" aria-hidden>
-              <svg viewBox="0 0 24 24" width="96" height="96"><path d="M12.1 8.64l-.1.1-.11-.11C10.14 6.8 7.1 6.8 5.35 8.56c-1.76 1.75-1.76 4.6 0 6.36l6.07 6.07c.32.32.85.32 1.18 0l6.06-6.07c1.76-1.76 1.76-4.6 0-6.36-1.76-1.76-4.8-1.76-6.56 0z" fill="currentColor"/></svg>
+              <svg viewBox="0 0 24 24" width="72" height="72"><path d="M12.1 8.64l-.1.1-.11-.11C10.14 6.8 7.1 6.8 5.35 8.56c-1.76 1.75-1.76 4.6 0 6.36l6.07 6.07c.32.32.85.32 1.18 0l6.06-6.07c1.76-1.76 1.76-4.6 0-6.36-1.76-1.76-4.8-1.76-6.56 0z" fill="currentColor"/></svg>
             </div>
             <div className="rail" tabIndex={0} aria-label="Post media">
               {media.map((m,i)=>(
@@ -241,11 +198,13 @@ export default function PostCard({
             {media.length>1 && <div className="dots" aria-hidden>{media.map((_,i)=><span key={i} className="dot" />)}</div>}
           </div>
         ) : (
-          text && (
+          post.title || post.description || text ? (
             <div className="pc-empty">
-              <p className="empty-text">{text}</p>
+              {post.title ? <h3 className="t">{post.title}</h3> : null}
+              {post.description ? <p className="d">{post.description}</p> : null}
+              {text ? <p className="empty-text">{text}</p> : null}
             </div>
-          )
+          ) : null
         )}
 
         <div className="pc-info">
@@ -264,9 +223,12 @@ export default function PostCard({
             </button>
             <span className="miniCount">{likes}</span>
 
-            <button className="icon" aria-label="Comment" onClick={() => { setShowComposer(v=>!v); setTimeout(()=>composerRef.current?.focus(),0); }}>
-              <svg width="24" height="24" viewBox="0 0 24 24"><path d="M21 12a8.5 8.5 0 01-8.5 8.5H6l-3 3 .5-4.8A8.5 8.5 0 1121 12z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            </button>
+            {/* 🔗 comment icon now links to the thread page */}
+            <Link href={threadHref} className="icon" aria-label="Open thread">
+              <svg width="24" height="24" viewBox="0 0 24 24">
+                <path d="M21 12a8.5 8.5 0 01-8.5 8.5H6l-3 3 .5-4.8A8.5 8.5 0 1121 12z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </Link>
 
             <button className="icon" aria-label="Repost" onClick={toggleRepost} disabled={!meUid} title={hasReposted ? "Undo repost" : "Repost"}>
               <svg width="24" height="24" viewBox="0 0 24 24">
@@ -282,32 +244,10 @@ export default function PostCard({
             <svg width="24" height="24" viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 011 1v17l-7-4-7 4V4a1 1 0 011-1z" fill={saved?"currentColor":"none"} stroke="currentColor" strokeWidth="1.5"/></svg>
           </button>
         </div>
-
-        {showComposer && (
-          <div className="composer">
-            <textarea
-              ref={composerRef}
-              rows={2}
-              placeholder="Write a comment…"
-              value={commentText}
-              onChange={(e)=>setCommentText(e.target.value)}
-            />
-            <button className="send" onClick={submitComment} disabled={!commentText.trim()}>Post</button>
-          </div>
-        )}
-
-        <RepliesLoader
-          postId={post.id}
-          meUid={meUid}
-          openRepliesFor={openRepliesFor}
-          onToggleReplies={toggleReplies}
-          onSubmitReply={submitReply}
-          replies={replies}
-        />
       </article>
 
       <style jsx>{`
-        .pc{ position:relative; background:var(--card-bg); border:1px solid var(--border); border-radius:16px; overflow:visible; box-shadow:var(--shadow) }
+        .pc{ position:relative; background:var(--card-bg); border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:var(--shadow) }
         .pc-head{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px }
         .pc-left{ display:flex; align-items:center; gap:10px }
         .pc-avatar{ width:40px; height:40px; border-radius:999px; overflow:hidden; display:block; border:1px solid var(--border); background:#000 }
@@ -326,22 +266,39 @@ export default function PostCard({
         .mi:hover{ background: rgba(2,6,23,.06) } :root[data-theme="dark"] .mi:hover{ background: rgba(255,255,255,.08) }
         .mi.danger{ color:#e11d48 }
         .sep{ height:1px; background: var(--border); border:0; margin:6px }
-        .pc-media{ position:relative }
-        .rail{ display:flex; gap:6px; overflow:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; padding:0 6px 6px }
-        .cell{ position:relative; flex: 0 0 100%; scroll-snap-align:center; border-radius:12px; overflow:hidden; border:1px solid var(--border); max-height:72vh; background:#000 }
+
+        /* media rail — tuned for phones */
+        .pc-media{ position:relative; }
+        .rail{ display:flex; gap:6px; overflow:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; padding:0 6px 8px }
+        .cell{
+          position:relative; flex: 0 0 84%; /* smaller for swipe on phones */
+          scroll-snap-align:center; border-radius:12px; overflow:hidden;
+          border:1px solid var(--border); background:#000;
+          aspect-ratio: 4/5;            /* tall-phone style */
+          max-height: 420px;
+        }
+        @media (min-width: 720px){
+          .cell{ flex: 0 0 62%; aspect-ratio: 4/3; max-height: 360px; }
+        }
         .pc-media img, .pc-media video{ width:100%; height:100%; object-fit:cover; display:block }
-        .dots{ position:absolute; bottom:12px; left:0; right:0; display:flex; gap:6px; justify-content:center }
-        .dot{ width:6px; height:6px; border-radius:999px; background: rgba(255,255,255,.55) }
-        :root[data-theme="dark"] .dot{ background: rgba(255,255,255,.7) }
+        .dots{ position:absolute; bottom:10px; left:0; right:0; display:flex; gap:4px; justify-content:center }
+        .dot{ width:5px; height:5px; border-radius:999px; background: rgba(255,255,255,.65) }
+        :root[data-theme="dark"] .dot{ background: rgba(255,255,255,.8) }
+
         .burst{ position:absolute; inset:0; display:grid; place-items:center; color:#ef4444; opacity:0; transform: scale(.6); pointer-events:none }
         .burst.go{ animation: pop .45s ease forwards }
         @keyframes pop{ 0%{opacity:0; transform:scale(.6)} 70%{opacity:.9; transform:scale(1)} 100%{opacity:0; transform:scale(1.1)} }
-        .pc-empty{ display:grid; place-items:center; padding:32px 14px }
-        .empty-text{ margin:0; text-align:center; color: var(--text); white-space:pre-wrap }
-        .pc-info{ padding: 10px 12px 0 }
-        .caption{ margin:8px 0 0; color: var(--text); text-align:center; white-space:pre-wrap }
-        .timestamp{ background: transparent; border: 0; color: var(--muted); font-size: 12px; margin: 8px auto 0; padding: 0; display:block; text-align:center }
-        .pc-actions{ display:flex; align-items:center; justify-content:space-between; padding: 8px 8px 10px }
+
+        .pc-empty{ display:grid; gap:6px; padding:16px 14px }
+        .t{ margin:0; font-size:18px; font-weight:800; color: var(--text) }
+        .d{ margin:0; color: var(--muted) }
+        .empty-text{ margin:0; color: var(--text); white-space:pre-wrap }
+
+        .pc-info{ padding: 8px 12px 0 }
+        .caption{ margin:6px 0 0; color: var(--text); text-align:left; white-space:pre-wrap }
+        .timestamp{ background: transparent; border: 0; color: var(--muted); font-size: 12px; margin: 6px 0 0; padding: 0; display:block; text-align:left }
+
+        .pc-actions{ display:flex; align-items:center; justify-content:space-between; padding: 6px 8px 10px }
         .pc-actions .left{ display:flex; gap:6px; align-items:center }
         .miniCount{ font-size:12px; color: var(--muted); padding-right:6px }
         .icon{ width:36px; height:36px; display:grid; place-items:center; border-radius:999px; background: transparent; border: 0; color: var(--text); cursor: pointer; transition: background .12s ease, opacity .12s ease, transform .06s ease; }
@@ -349,97 +306,7 @@ export default function PostCard({
         :root[data-theme="dark"] .icon:hover{ background: rgba(255,255,255,.08) }
         .icon:active{ transform: translateY(1px) }
         .icon.active{ color:#ef4444 }
-        .composer{ display:grid; grid-template-columns: 1fr auto; gap:8px; padding: 0 12px 12px }
-        .composer textarea{ width:100%; border:1px solid var(--border); border-radius:12px; padding:10px 12px; background: var(--bg); color: var(--text); resize: vertical; min-height: 38px; }
-        .composer .send{ border-radius:12px; border:0; padding:0 14px; background: var(--primary); color: var(--primary-contrast); font-weight:700; cursor:pointer; }
-        .composer .send:disabled{ opacity:.6; cursor:not-allowed }
       `}</style>
     </>
-  );
-}
-
-function RepliesLoader({
-  postId,
-  meUid,
-  openRepliesFor,
-  onToggleReplies,
-  onSubmitReply,
-  replies,
-}: {
-  postId: string;
-  meUid?: string|null;
-  openRepliesFor: string | null;
-  onToggleReplies: (cid: string) => void;
-  onSubmitReply: (cid: string, value: string) => Promise<void>;
-  replies: Record<string, { id: string; uid: string; text: string }[]>;
-}) {
-  const [comments, setComments] = useState<{ id: string; uid: string; text: string }[]>([]);
-  const [replyDrafts, setReplyDrafts] = useState<Record<string,string>>({});
-
-  useEffect(() => {
-    const stop = onSnapshot(query(collection(db, "posts", postId, "comments")), (snap) => {
-      setComments(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })));
-    });
-    return () => stop();
-  }, [postId]);
-
-  return (
-    <div className="replies">
-      {comments.map((c) => (
-        <div key={c.id} className="row">
-          <button className="replyToggle" onClick={()=>onToggleReplies(c.id)} aria-expanded={openRepliesFor===c.id}>
-            {openRepliesFor===c.id ? "Hide replies" : "View replies"}
-          </button>
-          {openRepliesFor===c.id && (
-            <div className="replyBlock">
-              <ul className="replyList">
-                {(replies[c.id] || []).map(r => (
-                  <li key={r.id} className="rli">
-                    <span className="rtext">{r.text}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="replyComposer">
-                <input
-                  type="text"
-                  placeholder={meUid ? "Write a reply…" : "Sign in to reply"}
-                  disabled={!meUid}
-                  value={replyDrafts[c.id] || ""}
-                  onChange={(e)=>setReplyDrafts(d => ({...d, [c.id]: e.target.value}))}
-                  onKeyDown={async (e) => {
-                    if (e.key === "Enter") {
-                      const v = (replyDrafts[c.id] || "").trim();
-                      if (v) {
-                        await onSubmitReply(c.id, v);
-                        setReplyDrafts(d => ({...d, [c.id]: ""}));
-                      }
-                    }
-                  }}
-                />
-                <button
-                  onClick={async ()=>{ const v=(replyDrafts[c.id]||"").trim(); if (v) { await onSubmitReply(c.id, v); setReplyDrafts(d=>({...d,[c.id]:""})); } }}
-                  disabled={!meUid || !(replyDrafts[c.id]||"").trim()}
-                >
-                  Reply
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      ))}
-
-      <style jsx>{`
-        .replies{ padding: 0 12px 12px; display:grid; gap:8px }
-        .row{ border-top:1px dashed var(--border); padding-top:8px }
-        .replyToggle{ background:transparent; border:0; color: var(--primary); cursor:pointer; padding:0 }
-        .replyBlock{ margin-top:8px; display:grid; gap:8px }
-        .replyList{ list-style:none; margin:0; padding:0; display:grid; gap:6px }
-        .rli{ font-size:14px; color: var(--text) }
-        .replyComposer{ display:grid; grid-template-columns: 1fr auto; gap:6px }
-        .replyComposer input{ border:1px solid var(--border); border-radius:10px; padding:8px; background: var(--bg); color: var(--text) }
-        .replyComposer button{ border-radius:10px; border:1px solid var(--border); background: var(--bg); color: var(--text); padding:8px 12px; font-weight:700 }
-        .replyComposer button:disabled{ opacity:.6 }
-      `}</style>
-    </div>
   );
 }

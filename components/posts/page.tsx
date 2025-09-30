@@ -15,6 +15,7 @@ export default function PostCard({ post }: { post: Post }) {
   const ts = post.createdAt?.seconds ? new Date(post.createdAt.seconds * 1000) : null;
 
   return (
+    
     <Link href={`/posts/${post.id}`} className="cardLink" aria-label="Open post">
       <article className="postCard">
         {post.imageURL ? <img className="img" src={post.imageURL} alt="" /> : null}

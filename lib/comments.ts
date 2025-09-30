@@ -1,12 +1,5 @@
-
 import { db } from "@/lib/firebase";
-import {
-  addDoc,
-  collection,
-  doc,
-  getDoc,
-  serverTimestamp,
-} from "firebase/firestore";
+import { addDoc, collection, doc, getDoc, serverTimestamp } from "firebase/firestore";
 
 export async function addComment(opts: { postId: string; uid: string; text: string }) {
   const { postId, uid, text } = opts;
@@ -22,16 +15,16 @@ export async function addComment(opts: { postId: string; uid: string; text: stri
     const uref = doc(db, "users", uid);
     const usnap = await getDoc(uref);
     if (usnap.exists()) {
-      const u = usnap.data() || {};
+      const u = usnap.data() as any;
       author = {
-        displayName: u.firstName
+        displayName: u?.firstName
           ? `${u.firstName}${u.lastName ? " " + u.lastName : ""}`
-          : u.displayName || null,
-        username: u.username || null,
-        avatarURL: u.photoURL || null,
+          : u?.displayName || null,
+        username: u?.username || null,
+        avatarURL: u?.photoURL || null,
       };
     }
-  } catch { /* vis safe ja profile is missing */ }
+  } catch {}
 
   await addDoc(collection(db, "posts", postId, "comments"), {
     uid,

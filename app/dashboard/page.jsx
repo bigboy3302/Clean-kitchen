@@ -1,52 +1,31 @@
+// app/dashboard/page.jsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { auth, db, storage } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import {
-  addDoc,
   collection,
   onSnapshot,
-  query,
-  where,
   orderBy,
-  serverTimestamp,
-  updateDoc,
-  doc as fsDoc,
+  query,
   doc,
   getDoc,
   setDoc,
   deleteDoc,
-  runTransaction,
+  serverTimestamp,
   limit as fsLimit,
+  addDoc,
+  updateDoc,
+  increment,
 } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 
-import Container from "@/components/Container";
-import Section from "@/components/Section";
-import Card from "@/components/ui/Card";
-import Button from "@/components/ui/Button";
+import { auth, db, storage } from "@/lib/firebase";
 import PostCard from "@/components/posts/PostCard";
-import { addMediaToPost } from "@/lib/postMedia";
 
-const BAD_WORDS = ["fuck","shit","bitch","asshole","cunt","nigger","faggot","retard"];
-const clean = (t) => !t || !BAD_WORDS.some((w) => String(t).toLowerCase().includes(w));
-
-function stripUndefinedDeep(value) {
-  if (Array.isArray(value)) return value.map(stripUndefinedDeep).filter((v) => v !== undefined);
-  if (value && typeof value === "object") {
-    const out = {};
-    Object.entries(value).forEach(([k, v]) => {
-      const cleaned = stripUndefinedDeep(v);
-      if (cleaned !== undefined) out[k] = cleaned;
-    });
-    return out;
-  }
-  return value === undefined ? undefined : value;
-}
-
+/* ---------- tiny helpers ---------- */
 function getImageDims(file) {
   return new Promise((res, rej) => {
     const img = new Image();
@@ -73,7 +52,7 @@ async function uploadWithProgress(storageRef, file) {
     task.on(
       "state_changed",
       null,
-      (err) => reject(err ?? new Error("upload failed")),
+      (err) => reject(err || new Error("Upload failed.")),
       async () => resolve(await getDownloadURL(storageRef))
     );
   });
@@ -81,74 +60,164 @@ async function uploadWithProgress(storageRef, file) {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [ready, setReady] = useState(false);
   const [uid, setUid] = useState(null);
+  const [ready, setReady] = useState(false);
+
+  // feed + trending
+  const [recentPosts, setRecentPosts] = useState([]);
+  const [trending, setTrending] = useState([]);
+
+  // composer
+  const [openComposer, setOpenComposer] = useState(false);
+  const [postText, setPostText] = useState("");
+  const [postFiles, setPostFiles] = useState([]);
+  const [previews, setPreviews] = useState([]);
+  const [busyPost, setBusyPost] = useState(false);
+  const [errPost, setErrPost] = useState(null);
+  const fileRef = useRef(null);
 
   useEffect(() => {
     const stop = onAuthStateChanged(auth, (u) => {
-      if (!u) { router.replace("/auth/login"); return; }
+      if (!u) {
+        router.replace("/auth/login");
+        return;
+      }
       setUid(u.uid);
       setReady(true);
     });
     return () => stop();
   }, [router]);
 
-  const [myPosts, setMyPosts] = useState([]);
-  const [myRecipes, setMyRecipes] = useState([]);
-  const [recentPosts, setRecentPosts] = useState([]);
-  const [trending, setTrending] = useState([]);
-
+  // recent posts (main feed)
   useEffect(() => {
-    const tQ = query(collection(db, "posts"), orderBy("reposts", "desc"), orderBy("createdAt", "desc"), fsLimit(10));
-    const stopT = onSnapshot(tQ, (snap) => {
-      setTrending(snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) })));
+    const qy = query(
+      collection(db, "posts"),
+      orderBy("createdAt", "desc"),
+      fsLimit(50)
+    );
+    const stop = onSnapshot(qy, (snap) => {
+      const list = snap.docs
+        .map((d) => ({ id: d.id, ...(d.data() || {}) }))
+        .filter((p) => p.isRepost !== true);
+      setRecentPosts(list);
     });
-    return () => stopT();
+    return () => stop();
   }, []);
 
+  // trending by repost count (top 5)
   useEffect(() => {
-    if (!uid) return;
-    const qp = query(collection(db, "posts"), where("uid", "==", uid));
-    const stopP = onSnapshot(qp, (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) })).filter((p) => p.isRepost !== true);
-      list.sort((a,b) => (b?.createdAt?.seconds||0) - (a?.createdAt?.seconds||0));
-      setMyPosts(list);
+    const tQ = query(
+      collection(db, "posts"),
+      orderBy("reposts", "desc"),
+      fsLimit(5)
+    );
+    const stop = onSnapshot(tQ, (snap) => {
+      setTrending(snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) })));
     });
-    const qr = query(collection(db, "recipes"), where("uid", "==", uid));
-    const stopR = onSnapshot(qr, (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) }));
-      list.sort((a,b) => (b?.createdAt?.seconds||0) - (a?.createdAt?.seconds||0));
-      setMyRecipes(list);
+    return () => stop();
+  }, []);
+
+  /* ---------- PostCard handlers ---------- */
+  async function handleToggleLike(post, liked) {
+    if (!uid || !post?.id) return;
+    const likeRef = doc(db, "posts", post.id, "likes", uid);
+    const snap = await getDoc(likeRef);
+    if (liked) {
+      if (!snap.exists()) {
+        await setDoc(likeRef, { uid, createdAt: serverTimestamp() });
+        // bump denormalized counter so Trending/metrics stay correct
+        await updateDoc(doc(db, "posts", post.id), { likes: increment(1) }).catch(() => {});
+      }
+    } else {
+      if (snap.exists()) {
+        await deleteDoc(likeRef);
+        await updateDoc(doc(db, "posts", post.id), { likes: increment(-1) }).catch(() => {});
+      }
+    }
+  }
+
+  async function handleToggleRepost(post, next) {
+    if (!uid || !post?.id) return;
+    const rRef = doc(db, "posts", post.id, "reposts", uid);
+    const rSnap = await getDoc(rRef);
+    if (next) {
+      if (!rSnap.exists()) {
+        await setDoc(rRef, { uid, createdAt: serverTimestamp() });
+        await updateDoc(doc(db, "posts", post.id), { reposts: increment(1) }).catch(() => {});
+      }
+    } else {
+      if (rSnap.exists()) {
+        await deleteDoc(rRef);
+        await updateDoc(doc(db, "posts", post.id), { reposts: increment(-1) }).catch(() => {});
+      }
+    }
+  }
+
+  async function handleEdit(post, nextText) {
+    if (!uid || !post?.id) return;
+    await setDoc(doc(db, "posts", post.id), { text: nextText || null }, { merge: true });
+  }
+
+  async function handleAddMedia(post, files) {
+    if (!uid || !post?.id || !files?.length) return;
+    const uploaded = [];
+    for (const file of files.slice(0, 4)) {
+      const isVideo = file.type.startsWith("video");
+      let w = 0, h = 0, duration;
+      try {
+        if (isVideo) {
+          const d = await getVideoDims(file);
+          w = d.w; h = d.h; duration = d.duration;
+        } else {
+          const d = await getImageDims(file);
+          w = d.w; h = d.h;
+        }
+      } catch {}
+      const safeName = `${Date.now()}-${file.name}`.replace(/\s+/g, "_");
+      const storagePath = `posts/${uid}/${post.id}/${safeName}`;
+      const url = await uploadWithProgress(ref(storage, storagePath), file);
+      uploaded.push({
+        mid: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        type: isVideo ? "video" : "image",
+        url,
+        storagePath,
+        w,
+        h,
+        ...(isVideo ? { duration } : {}),
+      });
+    }
+    if (uploaded.length) {
+      await setDoc(
+        doc(db, "posts", post.id),
+        { media: [...(post.media || []), ...uploaded] },
+        { merge: true }
+      );
+    }
+  }
+
+  async function handleDelete(post) {
+    if (!uid || !post?.id) return;
+    await deleteDoc(doc(db, "posts", post.id));
+  }
+
+  async function handleReport(post) {
+    if (!uid || !post?.id) return;
+    await setDoc(doc(db, "posts", post.id, "reports", uid), {
+      uid,
+      createdAt: serverTimestamp(),
     });
-    const qAll = query(collection(db, "posts"), orderBy("createdAt", "desc"));
-    const stopAll = onSnapshot(qAll, (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) })).filter((p) => p.isRepost !== true);
-      setRecentPosts(list.slice(0, 20));
-    });
-    return () => { stopP(); stopR(); stopAll(); };
-  }, [uid]);
+  }
 
-  const [open, setOpen] = useState(false);
-  const [err, setErr]   = useState(null);
-  const [ok, setOk]     = useState(null);
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = open ? "hidden" : prev || "";
-    return () => { document.body.style.overflow = prev || ""; };
-  }, [open]);
+  async function handleComment() {
+    // dashboard sends user to thread page for full comment UX
+  }
 
-  const [pText, setPText] = useState("");
-  const [pFiles, setPFiles] = useState([]);
-  const [pPreviews, setPPreviews] = useState([]);
-  const [busyPost, setBusyPost] = useState(false);
-  const fileInputRef = useRef(null);
-
-  function onPickPostFiles(e) {
-    const files = Array.from(e.target.files || []);
-    const limited = files.slice(0, 4);
-    setPFiles(limited);
-    setPPreviews(
-      limited.map((f) => ({
+  /* ---------- composer ---------- */
+  function onPick(e) {
+    const list = Array.from(e.target.files || []).slice(0, 4);
+    setPostFiles(list);
+    setPreviews(
+      list.map((f) => ({
         url: URL.createObjectURL(f),
         type: f.type.startsWith("video") ? "video" : "image",
       }))
@@ -156,338 +225,379 @@ export default function DashboardPage() {
   }
 
   async function createPost() {
-    setErr(null); setOk(null);
-    if (!uid) { setErr("You must be signed in."); return; }
-    if (!pText.trim() && pFiles.length === 0) { setErr("Nothing to publish."); return; }
-    if (!clean(pText)) { setErr("Please avoid offensive words in your post."); return; }
+    if (!uid) return;
+    const text = postText.trim();
+    if (!text && postFiles.length === 0) return;
 
     setBusyPost(true);
+    setErrPost(null);
     try {
+      // author snapshot (denormalized)
       let author = { username: null, displayName: null, avatarURL: null };
       try {
-        const snap = await getDoc(fsDoc(db, "users", uid));
-        if (snap.exists()) {
-          const u = snap.data() || {};
+        const uSnap = await getDoc(doc(db, "users", uid));
+        if (uSnap.exists()) {
+          const u = uSnap.data() || {};
           author = {
             username: u.username || null,
-            displayName: u.firstName ? `${u.firstName}${u.lastName ? " " + u.lastName : ""}` : (u.displayName || null),
+            displayName: u.firstName
+              ? `${u.firstName}${u.lastName ? " " + u.lastName : ""}`
+              : u.displayName || null,
             avatarURL: u.photoURL || null,
           };
         }
       } catch {}
 
-      const draftRef = await addDoc(collection(db, "posts"), stripUndefinedDeep({
+      // create post doc
+      const postRef = await addDoc(collection(db, "posts"), {
         uid,
-        text: pText.trim() ? pText.trim() : null,
+        text: text || null,
         media: [],
-        createdAt: serverTimestamp(),
-        isRepost: false,
         likes: 0,
         reposts: 0,
+        createdAt: serverTimestamp(),
         author,
-      }));
+      });
 
-      const uploaded = [];
-      for (const file of pFiles.slice(0, 4)) {
-        const isVideo = file.type.startsWith("video");
-        let w = 0, h = 0, duration;
-        try {
-          if (isVideo) { const dim = await getVideoDims(file); w = dim.w; h = dim.h; duration = dim.duration; }
-          else { const dim = await getImageDims(file); w = dim.w; h = dim.h; }
-        } catch {}
-        const safeName = `${Date.now()}-${file.name}`.replace(/\s+/g, "_");
-        const storagePath = `posts/${uid}/${draftRef.id}/${safeName}`;
-        const storageRef = ref(storage, storagePath);
-        const url = await uploadWithProgress(storageRef, file);
-        uploaded.push({
-          mid: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
-          type: isVideo ? "video" : "image",
-          url,
-          storagePath,
-          w, h,
-          aspect: h ? w / h : undefined,
-          ...(isVideo ? { duration } : {}),
-        });
+      // upload media (optional)
+      if (postFiles.length) {
+        const uploaded = [];
+        for (const file of postFiles) {
+          const isVideo = file.type.startsWith("video");
+          let w = 0, h = 0, duration;
+          try {
+            if (isVideo) {
+              const d = await getVideoDims(file);
+              w = d.w; h = d.h; duration = d.duration;
+            } else {
+              const d = await getImageDims(file);
+              w = d.w; h = d.h;
+            }
+          } catch {}
+          const safeName = `${Date.now()}-${file.name}`.replace(/\s+/g, "_");
+          const storagePath = `posts/${uid}/${postRef.id}/${safeName}`;
+          const url = await uploadWithProgress(ref(storage, storagePath), file);
+          uploaded.push({
+            mid: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            type: isVideo ? "video" : "image",
+            url,
+            storagePath,
+            w,
+            h,
+            ...(isVideo ? { duration } : {}),
+          });
+        }
+        await updateDoc(postRef, { media: uploaded });
       }
-      if (uploaded.length > 0) await updateDoc(draftRef, { media: uploaded });
 
-      setOk("Post published!");
-      setPText(""); setPFiles([]); setPPreviews([]);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      setOpen(false);
+      // reset composer
+      setPostText("");
+      setPostFiles([]);
+      setPreviews([]);
+      if (fileRef.current) fileRef.current.value = "";
+      setOpenComposer(false);
     } catch (e) {
       const msg = String(e?.message || e);
-      if (/permission|denied|insufficient/i.test(msg)) setErr("Permission denied. Check Firestore/Storage rules and sign-in status.");
-      else setErr(msg);
+      setErrPost(/permission|insufficient|denied/i.test(msg)
+        ? "Permission denied. Check auth and rules."
+        : msg);
     } finally {
       setBusyPost(false);
     }
   }
 
-  async function handleToggleLike(post, liked){
-    if (!uid || !post?.id) return;
-    const likeRef = doc(db, "posts", post.id, "likes", uid);
-    const snap = await getDoc(likeRef);
-    if (liked) {
-      if (!snap.exists()) await setDoc(likeRef, { uid, createdAt: serverTimestamp() });
-    } else {
-      if (snap.exists()) await deleteDoc(likeRef);
-    }
-  }
-
-  async function handleToggleRepost(post, next){
-    if (!uid || !post?.id) return;
-    await runTransaction(db, async (tx) => {
-      const pRef = doc(db, "posts", post.id);
-      const rRef = doc(db, "posts", post.id, "reposts", uid);
-      const rSnap = await tx.get(rRef);
-      const pSnap = await tx.get(pRef);
-      if (!pSnap.exists()) return;
-      const curr = Number(pSnap.data()?.reposts || 0);
-      if (next) {
-        if (!rSnap.exists()) {
-          tx.set(rRef, { uid, createdAt: serverTimestamp() });
-          tx.update(pRef, { reposts: curr + 1 });
-        }
-      } else {
-        if (rSnap.exists()) {
-          tx.delete(rRef);
-          tx.update(pRef, { reposts: Math.max(0, curr - 1) });
-        }
-      }
-    });
-  }
-
-  async function handleEdit(post, nextText){
-    if (!uid || !post?.id) return;
-    await updateDoc(doc(db, "posts", post.id), { text: nextText || null });
-  }
-
-  async function handleAddMedia(post, files){
-    if (!uid || !post?.id || !files?.length) return;
-    await addMediaToPost({ uid, postId: post.id, files, limit: 4 });
-  }
-
-  async function handleDelete(post){
-    if (!uid || !post?.id) return;
-    await deleteDoc(doc(db, "posts", post.id));
-  }
-
-  async function handleComment(post, text){
-    if (!uid || !post?.id) return;
-    await addDoc(collection(db, "posts", post.id, "comments"), {
-      uid, text, createdAt: serverTimestamp(),
-    });
-  }
-
-  async function handleReport(post){
-    if (!uid || !post?.id) return;
-    try {
-      await setDoc(doc(db, "posts", post.id, "reports", uid), { uid, createdAt: serverTimestamp() });
-    } catch {}
-  }
-
   if (!ready) return null;
 
   return (
-    <Container className="page">
-      <header className="head">
-        <div className="title tracking-in-contract-bck-top">Home</div>
+    <div className="page">
+      <header className="top container">
+        <div className="hgroup">
+          <h1>Dashboard</h1>
+          <p className="sub">Your posts, plus what’s trending</p>
+        </div>
+        <button className="btn btn-primary" onClick={() => setOpenComposer(true)}>
+          New Post
+        </button>
       </header>
 
-      <Card className="hero">
-        <h2 className="heroTitle">Hello <span className="wave">👋</span> Welcome to <span className="brand">Clean-Kitchen</span></h2>
-        <p className="heroText">Share <strong>posts</strong>, review your <strong>recipes</strong>, and keep your <strong>pantry</strong> tidy. Tap the <strong>+</strong> to get started.</p>
-      </Card>
+      <div className="container grid">
+        {/* MAIN FEED */}
+        <section className="main">
+          <div className="feed">
+            {recentPosts.map((p) => (
+              <PostCard
+                key={p.id}
+                post={p}
+                meUid={uid}
+                onEdit={handleEdit}
+                onAddMedia={handleAddMedia}
+                onDelete={handleDelete}
+                onReport={handleReport}
+                onComment={handleComment}
+                onToggleRepost={handleToggleRepost}
+                onToggleLike={handleToggleLike}
+              />
+            ))}
+            {recentPosts.length === 0 && <p className="empty">No posts yet.</p>}
+          </div>
+        </section>
 
-      <div className="layout">
-        <div className="mainCol">
-          {recentPosts.length > 0 && (
-            <Section title="Recent posts" subtitle="Latest from the community">
-              <div className="list">
-                {recentPosts.map((p) => (
-                  <PostCard
-                    key={p.id}
-                    post={p}
-                    meUid={uid}
-                    onEdit={handleEdit}
-                    onAddMedia={handleAddMedia}
-                    onDelete={handleDelete}
-                    onReport={handleReport}
-                    onComment={handleComment}
-                    onToggleRepost={handleToggleRepost}
-                    onToggleLike={handleToggleLike}
-                  />
-                ))}
-              </div>
-            </Section>
-          )}
-
-          {(myPosts.length > 0 || myRecipes.length > 0) && (
-            <Section>
-              <div className="twoCol">
-                {myPosts.length > 0 && (
-                  <div>
-                    <h3 className="subhead">My posts</h3>
-                    <div className="list">
-                      {myPosts.map((p) => (
-                        <PostCard
-                          key={p.id}
-                          post={p}
-                          meUid={uid}
-                          onEdit={handleEdit}
-                          onAddMedia={handleAddMedia}
-                          onDelete={handleDelete}
-                          onReport={handleReport}
-                          onComment={handleComment}
-                          onToggleRepost={handleToggleRepost}
-                          onToggleLike={handleToggleLike}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {myRecipes.length > 0 && (
-                  <div>
-                    <h3 className="subhead">My recipes</h3>
-                    <ul className="recipes">
-                      {myRecipes.map((r) => (
-                        <li key={r.id} className="recipeItem">
-                          <Link href={`/recipes/${r.id}`} className="recipeLink">
-                            <div className="recipeTitle">{r.title || "Untitled"}</div>
-                            {r.description ? <div className="recipeDesc">{r.description}</div> : null}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </Section>
-          )}
-        </div>
-
-        <aside className="sideCol">
-          <Card>
-            <h3 className="trendTitle">Trending by reposts</h3>
+        {/* SIDEBAR: TRENDING */}
+        <aside className="side">
+          <div className="panel">
+            <div className="panelHead">
+              <span className="dot" /> Trending
+            </div>
             {trending.length === 0 ? (
               <p className="muted">No trending posts yet.</p>
             ) : (
-              <ol className="trendList">
-                {trending.map((p, i) => (
-                  <li key={p.id} className="trendItem">
-                    <span className="rank">{i+1}</span>
-                    <Link href={`/posts/${p.id}`} className="tlink">
-                      <span className="ttitle">{(p.text || "Untitled").slice(0, 60)}</span>
-                      <span className="tmeta">{(p.reposts || 0)} reposts</span>
-                    </Link>
-                  </li>
-                ))}
-              </ol>
+              <ul className="trend">
+                {trending.map((p, i) => {
+                  const thumb = Array.isArray(p.media) && p.media[0]?.url ? p.media[0] : null;
+                  return (
+                    <li key={p.id} className="tr">
+                      <span className="rank">{i + 1}</span>
+                      <Link href={`/posts/${p.id}`} className="trLink">
+                        {thumb ? (
+                          <div className="mini">
+                            {thumb.type === "video" ? (
+                              <video src={thumb.url} muted playsInline preload="metadata" />
+                            ) : (
+                              <img src={thumb.url} alt="" />
+                            )}
+                          </div>
+                        ) : (
+                          <div className="mini ph" />
+                        )}
+                        <div className="trBody">
+                          <div className="trTitle">{(p.text || p.description || p.title || "Untitled").slice(0, 80)}</div>
+                          <div className="trMeta">{p.reposts || 0} reposts</div>
+                        </div>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
-          </Card>
+          </div>
         </aside>
       </div>
 
-      <button className="fab" onClick={() => setOpen(true)} aria-label="Create post"><span aria-hidden>+</span></button>
-
-      {open && (
-        <div className="overlay" role="dialog" aria-modal="true" aria-label="Create post" onClick={() => setOpen(false)}>
-          <div className="modal" onClick={(e)=>e.stopPropagation()}>
-            <div className="headRow">
-              <div className="titleRow">New Post</div>
-              <button className="close" onClick={()=>setOpen(false)} aria-label="Close">✕</button>
+      {/* COMPOSER */}
+      {openComposer && (
+        <div className="backdrop" onClick={() => setOpenComposer(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="mHead">
+              <div className="mTitle">Create post</div>
+              <button className="x" onClick={() => setOpenComposer(false)}>✕</button>
             </div>
 
-            {err && <p className="bad" role="alert">{err}</p>}
-            {ok &&  <p className="ok" role="status">{ok}</p>}
+            <div className="mBody">
+              {errPost ? <p className="bad">{errPost}</p> : null}
 
-            <div className="body">
-              <div className="field">
-                <label className="label" htmlFor="post-text">Text</label>
-                <textarea id="post-text" className="ta" rows={4} value={pText} onChange={(e)=>setPText(e.target.value)} />
-              </div>
-              <div className="field">
-                <label className="label" htmlFor="post-media">Media (up to 4): images or videos</label>
-                <input ref={fileInputRef} id="post-media" type="file" accept="image/*,video/*" multiple onChange={onPickPostFiles}/>
-                {pPreviews.length > 0 && (
-                  <div className={`mediaPreview mcount-${pPreviews.length}`}>
-                    {pPreviews.map((m, i) => (
-                      <div key={i} className="mCell">
-                        {m.type === "video" ? <video src={m.url} controls muted playsInline /> : <img src={m.url} alt="" />}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="actions end">
-                <Button variant="secondary" onClick={()=>setOpen(false)}>Cancel</Button>
-                <Button onClick={createPost} disabled={busyPost}>{busyPost?"Publishing…":"Publish"}</Button>
-              </div>
+              <label className="lab">Text</label>
+              <textarea
+                rows={4}
+                value={postText}
+                onChange={(e) => setPostText(e.target.value)}
+                placeholder="What’s on your mind?"
+              />
+
+              <label className="lab">Media (up to 4)</label>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                onChange={onPick}
+              />
+
+              {previews.length > 0 && (
+                <div className={`preview grid-${Math.min(previews.length, 2)}`}>
+                  {previews.map((m, i) => (
+                    <div key={i} className="pCell">
+                      {m.type === "video" ? <video src={m.url} controls muted /> : <img src={m.url} alt="" />}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mFoot">
+              <button className="btn ghost" onClick={() => setOpenComposer(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={createPost} disabled={busyPost}>
+                {busyPost ? "Publishing…" : "Publish"}
+              </button>
             </div>
           </div>
         </div>
       )}
 
       <style jsx>{`
-        .page { padding-bottom: 96px; }
-        .layout{ display:grid; grid-template-columns: minmax(0,1fr) 320px; gap:16px; align-items:start; margin-top:16px }
-        @media (max-width: 1100px){ .layout{ grid-template-columns: 1fr } .sideCol{ order:-1 } }
-        .head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin: 10px auto 14px; max-width: 1100px; padding: 0 4px; }
-        .title { font-weight: 900; font-size: 34px; letter-spacing: -0.02em; color: var(--text); }
-        .sub { color: var(--muted); margin: 0; }
-        .hero { padding: 24px; border-radius: 18px; background: var(--card-bg); border:1px solid var(--border); box-shadow: 0 20px 50px rgba(0,0,0,.06); }
-        .heroTitle { font-size: 22px; font-weight: 800; margin: 0 0 8px; color: var(--text); }
-        .brand { background: linear-gradient(90deg, var(--primary), color-mix(in oklab, var(--text) 55%, transparent)); -webkit-background-clip: text; color: transparent; }
-        .heroText { color: var(--muted); margin: 0 }
-        .wave { display:inline-block; transform-origin: 70% 70%; animation: wave 1.8s ease-in-out 1; }
-        .list { display: grid; gap: 18px; }
-        :global(.list > *) { max-width: 640px; width: 100%; margin: 0 auto; }
-        .twoCol { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        @media (max-width: 900px){ .twoCol { grid-template-columns:1fr; } }
-        .recipes { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px }
-        .recipeItem { border:1px solid var(--border); border-radius: 12px; background: var(--card-bg) }
-        .recipeLink { display:block; padding: 10px 12px; text-decoration:none; color: inherit }
-        .recipeLink:hover { background: var(--bg); }
-        .recipeTitle { font-weight: 700 }
-        .recipeDesc { color: var(--muted); font-size: 14px; margin-top: 2px }
-        .trendTitle{ font-weight:800; margin:0 0 8px }
-        .trendList{ list-style:none; margin:0; padding:0; display:grid; gap:8px }
-        .trendItem{ display:grid; grid-template-columns: 24px 1fr; gap:8px; align-items:start }
-        .rank{ width:24px; height:24px; border-radius:8px; display:grid; place-items:center; font-size:12px; background:var(--bg2); color:var(--text); border:1px solid var(--border) }
-        .tlink{ text-decoration:none; color:inherit; display:flex; flex-direction:column }
-        .ttitle{ font-weight:600 }
-        .tmeta{ font-size:12px; color: var(--muted) }
-        .fab { position: fixed; right: 24px; bottom: 24px; width: 56px; height: 56px; border-radius: 9999px; background: var(--primary); color: var(--primary-contrast); border: none; font-size: 30px; display: grid; place-items: center; box-shadow: 0 12px 32px rgba(0,0,0,.25); cursor: pointer; z-index: 60; transition: transform .12s ease, opacity .12s ease; }
-        .fab:hover { transform: translateY(-2px); opacity: .96; }
-        .overlay { position: fixed; inset: 0; background: rgba(2,6,23,.55); display: grid; place-items: center; padding: 16px; z-index: 1200; }
-        .modal { width: 100%; max-width: 760px; background: var(--card-bg); border-radius: 16px; overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,.35); border: 1px solid var(--border); }
-        .headRow { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); background: var(--bg); }
-        .titleRow { font-weight: 800; color: var(--text) }
-        .close { border: none; background: transparent; font-size: 18px; color: var(--muted); cursor: pointer }
-        .body { padding: 14px }
-        .field { margin-bottom: 12px }
-        .label { display: block; margin-bottom: 6px; font-size: .9rem; color: var(--text); font-weight: 600 }
-        .ta { width: 100%; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--bg); color: var(--text); font-size: 14px; }
-        .actions { display: flex; gap: 12px }
-        .end { justify-content: flex-end }
-        .ok  { margin: 10px 0 0; background: rgba(16,185,129, .12); color: #065f46; border: 1px solid rgba(16,185,129,.28); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
-        .bad { margin: 10px 0 0; background: rgba(239,68,68, .12); color: #7f1d1d; border: 1px solid rgba(239,68,68,.28); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
-        .mediaPreview { display: grid; gap: 6px; margin-top: 8px }
-        .mediaPreview img, .mediaPreview video { width: 100%; height: 100%; display: block; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); background:#000; }
-        .mediaPreview.mcount-1 { grid-template-columns: 1fr; grid-auto-rows: 160px }
-        .mediaPreview.mcount-2 { grid-template-columns: 1fr 1fr; grid-auto-rows: 130px }
-        .mediaPreview.mcount-3 { grid-template-columns: 2fr 1fr; grid-auto-rows: 110px }
-        .mediaPreview.mcount-3 .mCell:nth-child(1){ grid-row: 1 / span 2; height: 226px }
-        .mediaPreview.mcount-4 { grid-template-columns: 1fr 1fr; grid-auto-rows: 110px }
-        .tracking-in-contract-bck-top { animation: tracking-in-contract-bck-top 1s cubic-bezier(0.215,0.610,0.355,1.000) both; }
-        @keyframes tracking-in-contract-bck-top {
-          0% { letter-spacing:1em; transform:translateZ(400px) translateY(-300px); opacity:0; }
-          40% { opacity:.6; }
-          100% { transform:translateZ(0) translateY(0); opacity:1; }
+        /* ---------- theme tokens ---------- */
+        :root {
+          --bg: #0b0c10;
+          --bg-soft: #0f1117;
+          --card: #0f1320;
+          --border: #1c2336;
+          --text: #e7ecf3;
+          --muted: #a3adbb;
+          --primary: #6d5dfc;
+          --primary-contrast: #fff;
+          --shadow: 0 10px 30px rgba(0,0,0,.35);
         }
+        @media (prefers-color-scheme: light) {
+          :root {
+            --bg: #f6f7fb;
+            --bg-soft: #f1f5f9;
+            --card: #ffffff;
+            --border: #e5e7eb;
+            --text: #0f172a;
+            --muted: #6b7280;
+            --primary: #4f46e5;
+            --shadow: 0 10px 30px rgba(2,6,23,.06);
+          }
+        }
+
+        /* ---------- layout ---------- */
+        .page { color: var(--text); padding-bottom: 80px; }
+        .container { max-width: 1120px; margin: 0 auto; padding: 16px; }
+        .top { display:flex; align-items:center; justify-content:space-between; }
+        .hgroup { display:grid; gap:4px; }
+        h1 { margin:0; font-weight:900; font-size: clamp(22px, 3.4vw, 30px); letter-spacing:-.02em; }
+        .sub { margin:0; color: var(--muted); }
+
+        .grid {
+          display:grid; gap: 18px;
+          grid-template-columns: minmax(0, 1fr) 320px;
+          align-items:start;
+        }
+        @media (max-width: 1024px) {
+          .grid { grid-template-columns: 1fr; }
+          .side { order: -1; }
+        }
+
+        /* ---------- buttons/inputs ---------- */
+        .btn {
+          border: 1px solid var(--border);
+          background: var(--card);
+          color: var(--text);
+          border-radius: 12px;
+          padding: 10px 14px;
+          font-weight: 800;
+          cursor: pointer;
+          transition: background .15s ease, transform .06s ease, box-shadow .2s ease, border-color .2s ease;
+        }
+        .btn:hover { background: color-mix(in oklab, var(--card) 80%, var(--bg)); }
+        .btn:active { transform: translateY(1px); }
+        .btn-primary {
+          background: var(--primary);
+          color: var(--primary-contrast);
+          border-color: color-mix(in oklab, var(--primary) 50%, var(--border));
+          box-shadow: 0 8px 18px color-mix(in oklab, var(--primary) 25%, transparent);
+        }
+        .ghost { background: transparent; }
+
+        textarea, input[type="text"], input[type="file"] {
+          width:100%; border:1px solid var(--border); border-radius:12px;
+          background: var(--bg-soft); color: var(--text);
+          padding: 12px 14px;
+        }
+        textarea:focus, input:focus {
+          outline:none;
+          border-color: color-mix(in oklab, var(--primary) 40%, var(--border));
+          box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 20%, transparent);
+        }
+
+        /* ---------- feed ---------- */
+        .feed { display:grid; gap: 14px; }
+        :global(.feed > *) { max-width: 720px; width: 100%; margin: 0 auto; }
+        .empty { color: var(--muted); text-align:center; padding: 18px; }
+
+        /* ---------- sidebar trending ---------- */
+        .panel {
+          position: sticky; top: 16px;
+          background: var(--card);
+          border: 1px solid var(--border);
+          border-radius: 16px;
+          box-shadow: var(--shadow);
+          padding: 12px;
+        }
+        .panelHead {
+          display:flex; align-items:center; gap:8px;
+          font-weight:900; letter-spacing:-.01em; margin-bottom:8px;
+        }
+        .dot { width:10px; height:10px; border-radius:999px; background: var(--primary); box-shadow: 0 0 12px color-mix(in oklab, var(--primary) 60%, transparent); }
+
+        .trend { list-style:none; margin:0; padding:0; display:grid; gap:8px; }
+        .tr {
+          display:grid;
+          grid-template-columns: 28px 1fr;
+          gap: 8px;
+          align-items:center;
+        }
+        .rank {
+          width: 28px; height: 28px; border-radius: 10px;
+          display:grid; place-items:center;
+          border:1px solid var(--border); background: var(--bg-soft);
+          font-size: 12px; font-weight:900;
+        }
+        .trLink {
+          display:grid; grid-template-columns: 56px 1fr; gap:10px;
+          text-decoration:none; color: inherit; align-items:center;
+          padding: 8px; border-radius: 12px; border:1px dashed transparent;
+          transition: background .15s ease, border-color .15s ease;
+        }
+        .trLink:hover {
+          background: color-mix(in oklab, var(--primary) 10%, transparent);
+          border-color: color-mix(in oklab, var(--primary) 35%, var(--border));
+        }
+        .mini {
+          width:56px; height:42px; border-radius:10px; overflow:hidden; background:#000; border:1px solid var(--border);
+        }
+        .mini img, .mini video { width:100%; height:100%; object-fit:cover; display:block; }
+        .mini.ph { background: var(--bg-soft); }
+        .trBody { display:grid; gap:2px; min-width:0; }
+        .trTitle { font-weight:800; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .trMeta  { color: var(--muted); font-size:12px; }
+
+        /* ---------- composer modal ---------- */
+        .backdrop {
+          position: fixed; inset: 0;
+          background: color-mix(in oklab, #000 55%, transparent);
+          backdrop-filter: blur(4px);
+          display:grid; place-items:center;
+          z-index: 1000;
+        }
+        .modal {
+          width:min(760px, calc(100vw - 24px));
+          background: var(--card);
+          border:1px solid var(--border);
+          border-radius:16px;
+          overflow:hidden;
+          box-shadow: 0 24px 60px rgba(0,0,0,.35);
+        }
+        .mHead { display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid var(--border); }
+        .mTitle { font-weight:900; }
+        .x { background:transparent; border:0; color: var(--muted); cursor:pointer; font-size:18px; border-radius:10px; }
+        .x:hover { color: var(--text); background: color-mix(in oklab, var(--primary) 10%, transparent); }
+        .mBody { padding: 14px; display:grid; gap:10px; }
+        .lab { font-size:12px; color: var(--muted); font-weight:700; }
+        .preview { display:grid; gap:10px; margin-top:4px; }
+        .preview.grid-1 { grid-template-columns: 1fr; }
+        .preview.grid-2 { grid-template-columns: 1fr 1fr; }
+        .pCell { border:1px solid var(--border); border-radius:12px; overflow:hidden; background:#000; aspect-ratio: 16/10; }
+        .pCell img, .pCell video { width:100%; height:100%; object-fit:cover; display:block; }
+        .mFoot { padding:12px 14px; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--border); }
+
+        .bad {
+          color: #7f1d1d;
+          background: rgba(239,68,68,.12);
+          border: 1px solid rgba(239,68,68,.28);
+          border-radius: 10px; padding: 8px 10px; font-size: 12px; margin:0;
+        }
+        .muted { color: var(--muted); }
       `}</style>
-    </Container>
+    </div>
   );
 }

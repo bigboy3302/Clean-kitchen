@@ -99,20 +99,6 @@ service cloud.firestore {
       allow delete: if isSignedIn() && request.auth.uid == uid;
     }
 
-    /* ---------- pantryItems ---------- */
-    match /pantryItems/{id} {
-      function isExpired() {
-        return resource.data.expiresAt != null && resource.data.expiresAt < request.time;
-      }
-      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
-      allow create: if creatingAsSelf();
-      allow update: if isSignedIn()
-                    && resource.data.uid == request.auth.uid
-                    && ownershipUnchanged()
-                    && !isExpired();
-      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
-    }
-
     /* ---------- recipes (+ photos) ---------- */
     match /recipes/{id} {
       allow read: if true;
@@ -153,7 +139,7 @@ service cloud.firestore {
                     && request.resource.data.uid == request.auth.uid
                     && cleanOptional('text');
 
-      // Counter bump helpers (if you keep denormalized likes/reposts on the post doc)
+      // Counter bump helpers (if you denormalize likes/reposts)
       function canBump(field) {
         return (field in request.resource.data)
                && (field in resource.data)
@@ -180,14 +166,14 @@ service cloud.firestore {
       // Owner delete
       allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
 
-      // Likes (toggle; doc id MUST equal auth.uid)
+      // Likes for post (toggle; doc id MUST equal auth.uid)
       match /likes/{uid} {
         allow read: if true;
         allow create, delete: if isSignedIn() && request.auth.uid == uid;
         allow update: if false;
       }
 
-      // Reposts (toggle; doc id MUST equal auth.uid)
+      // Reposts for post (toggle; doc id MUST equal auth.uid)
       match /reposts/{uid} {
         allow read: if true;
         allow create, delete: if isSignedIn() && request.auth.uid == uid;
@@ -216,7 +202,14 @@ service cloud.firestore {
                            request.auth.uid == get(/databases/$(database)/documents/posts/$(postId)).data.uid
                          );
 
-        // Replies (mirror comment rules)
+        // Reposts for a comment (X-style toggle)
+        match /reposts/{uid} {
+          allow read: if true;
+          allow create, delete: if isSignedIn() && request.auth.uid == uid;
+          allow update: if false;
+        }
+
+        // Replies (with their own reposts)
         match /replies/{rid} {
           allow read: if true;
 
@@ -237,6 +230,13 @@ service cloud.firestore {
                              request.auth.uid == resource.data.uid ||
                              request.auth.uid == get(/databases/$(database)/documents/posts/$(postId)).data.uid
                            );
+
+          // Reposts for a reply
+          match /reposts/{uid} {
+            allow read: if true;
+            allow create, delete: if isSignedIn() && request.auth.uid == uid;
+            allow update: if false;
+          }
         }
       }
 
