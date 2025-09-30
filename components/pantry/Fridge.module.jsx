@@ -1,155 +1,4 @@
-"use client";
-
-import { useMemo } from "react";
-
-type TSLike =
-  | { seconds: number; nanoseconds: number }
-  | Date
-  | null
-  | undefined;
-
-type Nutrition = {
-  carbs100g?: number | null;
-  sugars100g?: number | null;
-  fiber100g?: number | null;
-  protein100g?: number | null;
-  fat100g?: number | null;
-  satFat100g?: number | null;
-  salt100g?: number | null;
-  sodium100g?: number | null;
-  kcalPer100g?: number | null;
-  kcalPerServing?: number | null;
-  servingSize?: string | null;
-} | null;
-
-type Item = {
-  id: string;
-  uid?: string;
-  name: string;
-  quantity?: number;
-  expiresAt?: TSLike;
-  barcode?: string | null;
-  nutrition?: Nutrition;
-};
-
-export default function Fridge({
-  items,
-  isOpen,
-  onToggleOpen,
-  onEdit,
-  onDelete,
-}: {
-  items: Item[];
-  isOpen: boolean;
-  onToggleOpen: (v: boolean) => void;
-  onEdit?: (it: Item) => void;
-  onDelete?: (it: Item) => void;
-}) {
-  const total = items.length;
-
-  const foods = useMemo(() => {
-    const base = ["🥬", "🍎", "🥛", "🧀", "🥚", "🥦", "🍇", "🍓", "🥕", "🍗", "🍊", "🧃", "🥒", "🫐"];
-    const count = Math.min(10, Math.max(4, Math.ceil(total / 2)));
-    return Array.from({ length: count }, (_, i) => base[i % base.length]);
-  }, [total]);
-
-  const ajar = total > 0 && !isOpen;
-
-  return (
-    <div className="fridgeWrap">
-      <button
-        type="button"
-        className={`box ${isOpen ? "open" : ""} ${ajar ? "ajar" : ""}`}
-        onClick={() => onToggleOpen(!isOpen)}
-        aria-expanded={isOpen}
-        aria-label={isOpen ? "Close fridge" : "Open fridge"}
-      >
-        <span className="chrome" />
-        <span className="gasket" />
-        <span className="shelf s1" />
-        <span className="shelf s2" />
-        <span className="shelf s3" />
-
-        <span className="door">
-          <span className="handle" />
-        </span>
-
-        {total > 0 && <span className="count">{total}</span>}
-
-        {!isOpen && (
-          <div className="pile peek">
-            {foods.map((g, i) => (
-              <span key={i} className="food" style={{ ["--i" as any]: i }}>
-                {g}
-              </span>
-            ))}
-          </div>
-        )}
-      </button>
-
-      {isOpen && (
-        <div className="content">
-          <ul className="grid">
-            {items.map((it, i) => {
-              const n = (it.nutrition || {}) as NonNullable<Nutrition>;
-              const hasCals =
-                n?.kcalPer100g != null || n?.kcalPerServing != null || n?.servingSize;
-              const hasMacros =
-                n?.carbs100g != null ||
-                n?.sugars100g != null ||
-                n?.fiber100g != null ||
-                n?.protein100g != null ||
-                n?.fat100g != null ||
-                n?.satFat100g != null ||
-                n?.salt100g != null ||
-                n?.sodium100g != null;
-
-              return (
-                <li className="card" key={it.id} style={{ ["--i" as any]: i }}>
-                  <div className="top">
-                    <div className="title" title={it.name}>{it.name}</div>
-                    <div className="meta">
-                      <span>Qty: <strong>{it.quantity ?? 1}</strong></span>
-                      <span className="muted">Fresh</span>
-                    </div>
-                  </div>
-
-                  {hasCals && (
-                    <div className="badges">
-                      {n?.kcalPer100g != null && <span className="badge pill">kcal/100g {n.kcalPer100g}</span>}
-                      {n?.kcalPerServing != null && <span className="badge pill">kcal/serv {n.kcalPerServing}</span>}
-                      {n?.servingSize && <span className="badge pill">serving {n.servingSize}</span>}
-                    </div>
-                  )}
-
-                  {hasMacros && (
-                    <div className="nutri">
-                      <div>Carbs/100g: <strong>{n?.carbs100g ?? "—"}</strong></div>
-                      <div>Sugars/100g: <strong>{n?.sugars100g ?? "—"}</strong></div>
-                      <div>Fiber/100g: <strong>{n?.fiber100g ?? "—"}</strong></div>
-                      <div>Protein/100g: <strong>{n?.protein100g ?? "—"}</strong></div>
-                      <div>Fat/100g: <strong>{n?.fat100g ?? "—"}</strong></div>
-                      <div>Sat fat/100g: <strong>{n?.satFat100g ?? "—"}</strong></div>
-                      <div>Salt/100g: <strong>{n?.salt100g ?? "—"}</strong></div>
-                      <div>Sodium/100g: <strong>{n?.sodium100g ?? "—"}</strong></div>
-                      {it.barcode ? <div>Barcode: <strong>{it.barcode}</strong></div> : null}
-                    </div>
-                  )}
-
-                  {(onEdit || onDelete) && (
-                    <div className="row">
-                      {onEdit && <button className="btn secondary" onClick={() => onEdit(it)}>Edit</button>}
-                      {onDelete && <button className="btn danger" onClick={() => onDelete(it)}>Delete</button>}
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
-
-      <style jsx>{`
+    <style jsx>{`
         .fridgeWrap {
           display: grid;
           grid-template-columns: 230px 1fr;
@@ -158,6 +7,7 @@ export default function Fridge({
           width: 100%;
         }
 
+        /* FRIDGE BODY */
         .box {
           position: sticky;
           top: 8px;
@@ -186,6 +36,7 @@ export default function Fridge({
         .shelf.s2 { top: 128px; }
         .shelf.s3 { top: 178px; }
 
+        /* DOOR + HANDLE (no accidental scrollbars) */
         .door {
           position:absolute; top:0; bottom:0; right:0; width:106px;
           background: linear-gradient(180deg, #e2e8f0 0%, #e5e7eb 40%, #e2e8f0 100%);
@@ -196,7 +47,7 @@ export default function Fridge({
           box-shadow: inset 0 0 0 1px rgba(255,255,255,.3);
           transition: transform .55s cubic-bezier(.22,1,.36,1);
           will-change: transform;
-          overflow: hidden;
+          overflow: hidden; /* ensure no scrollbars */
         }
         .box.ajar .door { transform: rotateY(-14deg); }
         .box.open .door { transform: rotateY(-58deg); }
@@ -222,6 +73,7 @@ export default function Fridge({
           box-shadow: 0 4px 12px rgba(14,165,233,.35);
         }
 
+        /* Peek foods */
         .pile { position:absolute; left:22px; right:58px; bottom:18px; top:26px; pointer-events:none; transform: translateZ(2px); }
         .food {
           position:absolute; font-size:20px; filter: drop-shadow(0 2px 6px rgba(0,0,0,.15));
@@ -240,6 +92,7 @@ export default function Fridge({
 
         @keyframes chill { 0%,100%{ transform: translateY(0) } 50%{ transform: translateY(-1px) } }
 
+        /* CONTENT GRID */
         .content {
           border: 1px solid var(--border);
           border-radius: 16px;
@@ -282,6 +135,7 @@ export default function Fridge({
           font-size: 12px;
           color: #0f172a;
           background: #eef2ff;
+          /* 🔧 kill any global underline styles */
           text-decoration: none !important;
         }
         .badge * { text-decoration: none !important; }
@@ -306,6 +160,3 @@ export default function Fridge({
           100%{ opacity:1; transform: translateY(0) scale(1); }
         }
       `}</style>
-    </div>
-  );
-}

@@ -1,4 +1,4 @@
-
+/* app/pantry/page.tsx */
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -11,14 +11,18 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 
-import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
+import PantryCard, { PantryCardItem } from "@/components/pantry/PantryCard";
+import BarcodeScanner from "@/components/pantry/BarcodeScanner";
 import PantryHelpButton from "@/components/pantry/PantryHelpButton";
 import { fetchNutritionByBarcode, NutritionInfo } from "@/lib/nutrition";
 import Fridge from "@/components/pantry/Fridge";
 import TrashCan from "@/components/pantry/TrashCan";
-import CameraModal from "@/components/pantry/CameraModal";
 
+/* ---------- TS helpers ---------- */
+type TSLike = Timestamp | { seconds: number; nanoseconds: number } | Date | null | undefined;
+
+/* ---------- utilities ---------- */
 const looksLikeBarcode = (s: string) => /^\d{6,}$/.test(s);
 const capFirst = (s: string) => s.replace(/^\p{L}/u, (m) => m.toUpperCase());
 const todayStr = () => {
@@ -26,13 +30,16 @@ const todayStr = () => {
   return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
 };
 const startOfToday = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
-function toDate(ts?: Timestamp | {seconds:number} | null) {
+
+function toDate(ts?: TSLike | null) {
   if (!ts) return null;
-  const t: any = ts;
-  if (typeof t?.toDate === "function") return t.toDate();
-  if (typeof t?.seconds === "number") return new Date(t.seconds * 1000);
+  if (ts instanceof Date) return ts;
+  const anyTs: any = ts;
+  if (typeof anyTs?.toDate === "function") return anyTs.toDate();
+  if (typeof anyTs?.seconds === "number") return new Date(anyTs.seconds * 1000);
   return null;
 }
+
 function normalizeProductName(raw: string): string {
   const original = raw || "";
   let s = original.toLowerCase()
@@ -55,15 +62,15 @@ function normalizeProductName(raw: string): string {
   );
 }
 
-
-type Item = {
+/* ---------- page-level item type ---------- */
+type PantryItemPage = {
   id: string;
-  uid: string;
+  uid?: string;
   name: string;
   nameKey?: string;
   quantity: number;
-  createdAt?: Timestamp | null;
-  expiresAt?: Timestamp | null;
+  createdAt?: TSLike | null;
+  expiresAt?: TSLike | null;
   barcode?: string | null;
   nutrition?: NutritionInfo | null;
 };
@@ -71,28 +78,39 @@ type Item = {
 export default function PantryPage() {
   const router = useRouter();
 
-  
+  // add-form
   const [name, setName] = useState("");
   const [qty, setQty] = useState<number>(1);
   const [date, setDate] = useState<string>("");
   const [barcode, setBarcode] = useState<string>("");
 
+  // scanner
+  const [scannerKey, setScannerKey] = useState(0);
+  const [scannerAutoStart, setScannerAutoStart] = useState(false);
+
+  // nutrition
   const [nutrition, setNutrition] = useState<NutritionInfo | null>(null);
   const [nutriBusy, setNutriBusy] = useState(false);
   const [nutriErr, setNutriErr] = useState<string | null>(null);
 
+  // state
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [items, setItems] = useState<Item[]>([]);
+  const [items, setItems] = useState<PantryItemPage[]>([]);
   const stopRef = useRef<null | (() => void)>(null);
 
   const minDate = todayStr();
-  const todayZero = useMemo(startOfToday, []);
-  const [fridgeOpen, setFridgeOpen] = useState(false);
+  const todayStart = useMemo(startOfToday, []);
 
+  const [fridgeOpen, setFridgeOpen] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
-  const [camOpen, setCamOpen] = useState(false);
-  const [scannerKey, setScannerKey] = useState(0);
+
+  // edit modal
+  const [editOpen, setEditOpen] = useState(false);
+  const [editItem, setEditItem] = useState<PantryItemPage | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editQty, setEditQty] = useState<number>(1);
+  const [editDate, setEditDate] = useState("");
 
   /* auth + live items */
   useEffect(() => {
@@ -107,7 +125,7 @@ export default function PantryPage() {
       );
       const stop = onSnapshot(
         qy,
-        (snap) => setItems(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as Item[]),
+        (snap) => setItems(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as PantryItemPage[]),
         (e) => setErr(e?.message ?? "Could not load pantry.")
       );
       stopRef.current = stop;
@@ -130,16 +148,16 @@ export default function PantryPage() {
       } finally {
         setNutriBusy(false);
       }
-    }, 300);
+    }, 280);
     return () => clearTimeout(id);
   }, [barcode]);
 
-  function onDetectedFromCam(code: string) {
+  function handleDetected(code: string) {
     setBarcode(code);
-    setCamOpen(false);
+    setScannerAutoStart(false);
   }
 
-  
+  /* add / merge */
   const isPast = (s: string) => !!s && s < minDate;
 
   async function addOrMergeItem() {
@@ -160,7 +178,7 @@ export default function PantryPage() {
 
       const nameKey = cleanedName.toLowerCase();
 
-     
+      // match by barcode first
       let existingId: string | null = null;
       if (barcode) {
         const s1 = await getDocs(query(
@@ -171,7 +189,7 @@ export default function PantryPage() {
         ));
         if (!s1.empty) existingId = s1.docs[0].id;
       }
-      
+      // else by nameKey
       if (!existingId) {
         const s2 = await getDocs(query(
           collection(db, "pantryItems"),
@@ -204,104 +222,207 @@ export default function PantryPage() {
         });
       }
 
-      
+      // reset + quick fridge pop
       setName(""); setQty(1); setDate(""); setBarcode(""); setNutrition(null); setNutriErr(null);
-      setFridgeOpen(true); setTimeout(()=>setFridgeOpen(false), 1000);
+      setScannerAutoStart(false); setScannerKey((k) => k + 1);
+      setFridgeOpen(true); setTimeout(()=>setFridgeOpen(false), 1200);
     } catch (e: any) {
       setErr(e?.message ?? "Failed to add item.");
     } finally { setBusy(false); }
   }
 
   async function saveItem(id: string, patch: { name: string; quantity: number; expiresAt: any }) {
-    setErr(null);
-    try {
-      const cleaned = capFirst(normalizeProductName(patch.name || ""));
-      const toWrite: any = {
-        name: cleaned,
-        nameKey: cleaned.toLowerCase(),
-        quantity: Number(patch.quantity) || 1,
-        expiresAt: null,
-      };
-      if (patch.expiresAt) {
-        if (typeof patch.expiresAt?.toDate === "function") toWrite.expiresAt = patch.expiresAt;
-        else if (typeof patch.expiresAt?.seconds === "number") toWrite.expiresAt = Timestamp.fromDate(new Date(patch.expiresAt.seconds * 1000));
-        else if (typeof patch.expiresAt === "string" && !Number.isNaN(Date.parse(patch.expiresAt))) toWrite.expiresAt = Timestamp.fromDate(new Date(`${patch.expiresAt}T00:00:00`));
-      }
-      await updateDoc(doc(db, "pantryItems", id), toWrite);
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to save changes."); throw e;
+    const cleaned = capFirst(normalizeProductName(patch.name || ""));
+    const toWrite: any = {
+      name: cleaned,
+      nameKey: cleaned.toLowerCase(),
+      quantity: Number(patch.quantity) || 1,
+      expiresAt: null,
+    };
+    if (patch.expiresAt) {
+      const p: any = patch.expiresAt;
+      if (typeof p?.toDate === "function") toWrite.expiresAt = p;
+      else if (p instanceof Date) toWrite.expiresAt = Timestamp.fromDate(p);
+      else if (typeof p?.seconds === "number") toWrite.expiresAt = Timestamp.fromDate(new Date(p.seconds * 1000));
+      else if (typeof patch.expiresAt === "string" && !Number.isNaN(Date.parse(patch.expiresAt)))
+        toWrite.expiresAt = Timestamp.fromDate(new Date(`${patch.expiresAt}T00:00:00`));
     }
+    await updateDoc(doc(db, "pantryItems", id), toWrite);
   }
 
   async function removeItem(id: string) {
-    setErr(null);
     try { await deleteDoc(doc(db, "pantryItems", id)); }
     catch (e) {
       const code = (e as FirebaseError).code || "";
-      setErr(code === "permission-denied" ? "You can only delete items you own." : (e as any)?.message ?? "Failed to delete."); throw e;
+      throw new Error(code === "permission-denied" ? "You can only delete items you own." : (e as any)?.message ?? "Failed to delete.");
     }
   }
 
-
-  async function editFromWidget(it: any) {
-    const newName = prompt("Edit name", it.name ?? "") ?? it.name ?? "";
-    const newQty = Number(prompt("Edit quantity", String(it.quantity ?? 1)) ?? (it.quantity ?? 1));
-    await saveItem(it.id, { name: newName, quantity: newQty, expiresAt: it.expiresAt ?? null });
-  }
-  function deleteFromWidget(it: any) { return removeItem(it.id); }
-
- 
-  const active: Item[] = [];
-  const expired: Item[] = [];
+  /* split */
+  const active: PantryItemPage[] = [];
+  const expired: PantryItemPage[] = [];
   items.forEach((it) => {
     const d = toDate(it.expiresAt);
-    if (d && d < todayZero) expired.push(it);
+    if (d && d < todayStart) expired.push(it);
     else active.push(it);
   });
 
+  /* for Fridge/TrashCan */
+  const fridgeItems = active.map((it) => ({
+    id: it.id,
+    uid: it.uid,
+    name: it.name,
+    quantity: it.quantity,
+    expiresAt: it.expiresAt ?? null,
+    barcode: it.barcode ?? null,
+    nutrition: it.nutrition ?? null,
+  }));
+  const trashItems = expired.map((it) => ({
+    id: it.id,
+    uid: it.uid,
+    name: it.name,
+    quantity: it.quantity,
+    expiresAt: it.expiresAt ?? null,
+    barcode: it.barcode ?? null,
+    nutrition: it.nutrition ?? null,
+  }));
+
+  /* edit from Fridge item */
+  function openEditFromFridge(it: any) {
+    const d = toDate(it?.expiresAt ?? null);
+    setEditItem({
+      id: it?.id,
+      uid: it?.uid,
+      name: it?.name,
+      quantity: it?.quantity ?? 1,
+      expiresAt: it?.expiresAt ?? null,
+    });
+    setEditName(it?.name || "");
+    setEditQty(it?.quantity ?? 1);
+    setEditDate(
+      d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` : ""
+    );
+    setEditOpen(true);
+  }
+
+  async function confirmEdit() {
+    if (!editItem) return;
+    await saveItem(editItem.id, {
+      name: editName.trim(),
+      quantity: editQty,
+      expiresAt: editDate || null,
+    });
+    setEditOpen(false);
+    setEditItem(null);
+  }
+
   return (
     <main className="wrap">
-      <header className="hero">
-        <div className="left">
-          <h1 className="title tracking-in-contract-bck-top">Pantry</h1>
-          <p className="sub">Store groceries in your <strong>Fridge</strong>, keep an eye on <strong>Expired</strong> items.</p>
+      {/* HERO */}
+      <section className="hero">
+        <div className="heroInner">
+          <div className="heroLeft">
+            <h1 className="title">Pantry</h1>
+            <p className="sub">
+              Log groceries, track freshness, and keep your <span className="hl">Fridge</span> stocked.
+            </p>
+          </div>
+          <div className="heroRight">
+            <PantryHelpButton />
+          </div>
         </div>
-        <div className="right"><PantryHelpButton /></div>
-      </header>
+      </section>
 
+      {/* QUICK STATS */}
+      <section className="stats">
+        <div className="stat">
+          <div className="sTop"><span className="dot dot-ok" /> Active</div>
+          <div className="sNum">{active.length}</div>
+        </div>
+        <div className="stat">
+          <div className="sTop"><span className="dot dot-warn" /> Expired</div>
+          <div className="sNum">{expired.length}</div>
+        </div>
+        <div className="stat">
+          <div className="sTop"><span className="dot" /> Total</div>
+          <div className="sNum">{items.length}</div>
+        </div>
+      </section>
+
+      {/* ADD PRODUCT */}
       <section className="card addCard">
-        <div className="bgOrbs" aria-hidden />
         <div className="addHead">
+          <div className="addIcon" aria-hidden>➕</div>
           <div>
-            <h2 className="cardTitle">Add product</h2>
-            <p className="muted small">Scan groceries, merge duplicates, and keep track of what’s fresh.</p>
+            <div className="addTitle">Add product</div>
+            <div className="addSub">Scan a barcode or type manually. We’ll merge duplicates automatically.</div>
           </div>
-
-          
-          <button
-            type="button"
-            className="camIcon"
-            title="Scan with camera"
-            onClick={() => { setScannerKey((k) => k + 1); setCamOpen(true); }}
-            aria-label="Open camera"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M4 7h2l1.2-2.4A2 2 0 0 1 9 3h6a2 2 0 0 1 1.8 1.1L18 6h2a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H4a3 3 0 0 1-3-3V10a3 3 0 0 1 3-3Z" stroke="currentColor" strokeWidth="1.6"/>
-              <circle cx="12" cy="13" r="4" stroke="currentColor" strokeWidth="1.6"/>
-            </svg>
-          </button>
         </div>
 
-        <div className="grid2">
-          <Input label="Name" value={name} onChange={(e:any)=>setName(e.target.value)} placeholder="Pasta" />
-          <Input label="Quantity" type="number" min={1} value={String(qty)} onChange={(e:any)=>setQty(Number(e.target.value))} />
-          <div>
-            <label className="label">Expiry date (optional)</label>
-            <input className="textInput" type="date" min={minDate} value={date} onChange={(e)=>setDate(e.currentTarget.value)} />
+        <div className="addGrid">
+          <div className="field">
+            <label className="label">Name</label>
+            <input
+              className="input"
+              value={name}
+              onChange={(e)=>setName(e.target.value)}
+              placeholder="Pasta"
+              aria-label="Product name"
+            />
           </div>
+
+          <div className="field">
+            <label className="label">Quantity</label>
+            <input
+              className="input"
+              type="number" min={1}
+              value={String(qty)}
+              onChange={(e)=>setQty(Math.max(1, Number(e.target.value) || 1))}
+              aria-label="Quantity"
+            />
+          </div>
+
+          <div className="field">
+            <label className="label">Expiry</label>
+            <input
+              className="input"
+              type="date"
+              min={minDate}
+              value={date}
+              onChange={(e)=>setDate(e.currentTarget.value)}
+              aria-label="Expiry date"
+            />
+          </div>
+
           <div className="barcodeRow">
-            <Input label="Barcode" value={barcode} onChange={(e:any)=>setBarcode(String(e.target.value).trim())} placeholder="Type or scan digits" />
-            <button type="button" className="btn" onClick={() => { setBarcode(""); setNutrition(null); setNutriErr(null); }}>Clear</button>
+            <div className="field">
+              <label className="label">Barcode</label>
+              <input
+                className="input"
+                value={barcode}
+                onChange={(e)=>setBarcode(String(e.target.value).trim())}
+                placeholder="Scan or type digits"
+                aria-label="Barcode"
+              />
+            </div>
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={() => { setBarcode(""); setNutrition(null); setNutriErr(null); }}
+            >
+              Clear
+            </button>
+          </div>
+
+          <div className="scannerCol">
+            <label className="label">Scan with camera</label>
+            <div className="scanner">
+              <BarcodeScanner key={scannerKey} autoStart={scannerAutoStart} onDetected={handleDetected} />
+            </div>
+            <div className="rowHint">
+              {nutriBusy ? <span className="muted small">Looking up nutrition…</span> : <span className="muted small">Tip: hold steady 20–30cm away</span>}
+              {nutriErr ? <span className="error small">{nutriErr}</span> : null}
+            </div>
           </div>
         </div>
 
@@ -309,13 +430,11 @@ export default function PantryPage() {
           <div className="nutri">
             <div className="nutTitle">Nutrition (from barcode)</div>
             <div className="nutGrid">
-              <div><span className="muted">Name:</span> <strong>{normalizeProductName(nutrition?.name || "")}</strong></div>
-              <div><span className="muted">kcal / 100g:</span> <strong>{nutrition?.kcalPer100g ?? "—"}</strong></div>
-              <div><span className="muted">kcal / serving:</span> <strong>{nutrition?.kcalPerServing ?? "—"}</strong></div>
-              <div><span className="muted">Serving size:</span> <strong>{nutrition?.servingSize ?? "—"}</strong></div>
+              <div><span className="muted">Name</span> <strong>{normalizeProductName(nutrition?.name || "")}</strong></div>
+              <div><span className="muted">kcal / 100g</span> <strong>{nutrition?.kcalPer100g ?? "—"}</strong></div>
+              <div><span className="muted">kcal / serving</span> <strong>{nutrition?.kcalPerServing ?? "—"}</strong></div>
+              <div><span className="muted">Serving size</span> <strong>{nutrition?.servingSize ?? "—"}</strong></div>
             </div>
-            {nutriBusy && <p className="muted small">Looking up nutrition…</p>}
-            {nutriErr && <p className="error small">{nutriErr}</p>}
           </div>
         )}
 
@@ -327,166 +446,273 @@ export default function PantryPage() {
         </div>
       </section>
 
-  
+      {/* ACTIVE + FRIDGE (no duplicate grid) */}
       <section className="list">
-        <div className="secHead">
+        <div className="sectionHead">
           <h2 className="secTitle">Active</h2>
-          <span className="secBadge">{active.length}</span>
+          <div className="fridgeDock">
+            <Fridge
+              items={fridgeItems}
+              isOpen={fridgeOpen}
+              onToggleOpen={setFridgeOpen}
+              onEdit={(it) => openEditFromFridge(it)}
+              onDelete={(it) => removeItem((it as any).id)}
+            />
+          </div>
         </div>
 
-        <div className={`widgetRow ${active.length === 0 ? "widgetRow--empty" : ""}`}>
-          <Fridge
-            items={active}               
-            isOpen={fridgeOpen}
-            onToggleOpen={setFridgeOpen}
-            onEdit={editFromWidget}
-            onDelete={deleteFromWidget}
-          />
-          {active.length === 0 && <div className="empty hint">Add something to your fridge to see it here.</div>}
-        </div>
+        {/* If nothing active, show an empty state UNDER the fridge */}
+        {active.length === 0 && (
+          <div className="empty">
+            <div className="emoji">🧺</div>
+            <p className="emptyTitle">Your pantry is squeaky clean</p>
+            <p className="muted">Add a few items to get started.</p>
+          </div>
+        )}
       </section>
 
- 
-      <section className="list">
-        <div className="secHead">
+      {/* EXPIRED + TRASHCAN */}
+      <section className="list" style={{ marginTop: 20 }}>
+        <div className="sectionHead">
           <h2 className="secTitle">Expired</h2>
-          <br />
-          <br />
-          <br />
-          <span className="secBadge warn">{expired.length}</span>
-        </div>
-
-        <div className={`widgetRow ${expired.length === 0 ? "widgetRow--empty" : ""}`}>
           <TrashCan
-            items={expired}                
+            items={trashItems as any}
             isOpen={trashOpen}
             onToggleOpen={setTrashOpen}
-            onEdit={editFromWidget}
-            onDelete={deleteFromWidget}
           />
-          {expired.length === 0 && <div className="empty hint">No expired items. 🎉</div>}
         </div>
+
+        {expired.length === 0 ? (
+          <div className="empty ok">
+            <div className="emoji">🎉</div>
+            <p className="emptyTitle">Nothing expired</p>
+            <p className="muted">Keep it fresh!</p>
+          </div>
+        ) : (
+          <div className="gridCards">
+            {expired.map((it) => (
+              <PantryCard
+                key={it.id}
+                item={{ ...it, name: it.name } as unknown as PantryCardItem}
+                onDelete={() => removeItem(it.id)}
+                onSave={(patch) => saveItem(it.id, patch)}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
-      {camOpen && (
-        <CameraModal
-          key={`cam-${scannerKey}`}
-          open={camOpen}
-          onClose={() => setCamOpen(false)}
-          onDetected={(code) => onDetectedFromCam(code)}
-        />
+      {/* EDIT MODAL */}
+      {editOpen && editItem && (
+        <div className="overlay" onClick={()=>setEditOpen(false)} role="dialog" aria-modal="true">
+          <div className="modal" onClick={(e)=>e.stopPropagation()}>
+            <div className="mhead">
+              <div className="mtitle">Edit “{editItem.name}”</div>
+              <button className="x" onClick={()=>setEditOpen(false)} aria-label="Close">×</button>
+            </div>
+            <div className="mbody">
+              <div className="gridM">
+                <label className="lbl">Name
+                  <input className="txt" value={editName} onChange={(e)=>setEditName(e.target.value)} />
+                </label>
+                <label className="lbl">Quantity
+                  <input className="txt" type="number" min={1} value={String(editQty)} onChange={(e)=>setEditQty(Math.max(1, Number(e.target.value)||1))} />
+                </label>
+                <label className="lbl">Expiry date
+                  <input className="txt" type="date" value={editDate} onChange={(e)=>setEditDate(e.target.value)} />
+                </label>
+              </div>
+            </div>
+            <div className="mfoot">
+              <Button variant="secondary" onClick={()=>setEditOpen(false)}>Cancel</Button>
+              <Button onClick={confirmEdit}>Save</Button>
+            </div>
+          </div>
+        </div>
       )}
 
       <style jsx>{`
-        .wrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 80px; }
+        .wrap { max-width: 1120px; margin: 0 auto; padding: 20px 16px 96px; }
 
-        .hero {
-          display:grid; grid-template-columns: 1fr auto; align-items:center;
-          margin: 4px 0 18px;
-        }
-        .title { font-size: 34px; font-weight: 900; letter-spacing: -0.02em; margin: 0; color: var(--text); }
-        .sub { color: var(--muted); margin: 6px 0 0; }
-        .right { display:flex; align-items:center; gap:8px; }
-
-        .card {
+        /* ---------- HERO ---------- */
+        .hero { position: relative; margin: 6px 0 18px; }
+     
+        .heroInner {
           position: relative;
-          border:1px solid var(--border);
-          background: var(--card-bg);
-          border-radius:18px; padding:18px;
-          box-shadow: 0 2px 12px rgba(16,24,40,.06), 0 16px 36px rgba(16,24,40,.08);
-        }
-        .addCard {
-          overflow: hidden;
-          isolation: isolate;
-        }
-        .bgOrbs {
-          position:absolute; inset:-1px;
-          background:
-            radial-gradient(800px 280px at -10% -10%, color-mix(in oklab, var(--primary) 10%, transparent), transparent 60%),
-            radial-gradient(600px 260px at 110% 10%, color-mix(in oklab, #60a5fa 12%, transparent), transparent 60%);
-          filter: blur(6px);
-          opacity: .7;
-          pointer-events: none;
-          z-index: 0;
-        }
-        .addHead { position:relative; z-index:1; display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
-        .cardTitle { font-size: 18px; font-weight: 800; color: var(--text); }
-
-        .camIcon {
-          width: 40px; height: 40px; border-radius: 999px;
-          display:grid; place-items:center;
-          background: var(--primary); color: var(--primary-contrast);
-          border: 1px solid color-mix(in oklab, var(--primary) 30%, var(--border));
-          box-shadow: 0 8px 24px rgba(0,0,0,.18);
-          cursor: pointer; transition: transform .15s ease, filter .15s ease;
-        }
-        .camIcon:hover { filter: brightness(1.05); transform: translateY(-1px); }
-
-        .grid2 { position:relative; z-index:1; display:grid; grid-template-columns:1fr 140px 200px 1fr; gap:12px 16px; align-items:start; }
-        @media (max-width: 980px){ .grid2{ grid-template-columns:1fr 1fr; } }
-        @media (max-width: 560px){ .grid2{ grid-template-columns:1fr; } }
-
-        .label { display:block; margin-bottom:6px; font-size:.9rem; color:var(--text); font-weight:600; }
-        .textInput {
-          width:100%; border:1px solid var(--border); border-radius:14px; padding:11px 12px; font-size:14px;
-          background: color-mix(in oklab, var(--bg2) 85%, white 15%); color: var(--text);
+          border: 1px solid var(--border);
+          background: color-mix(in oklab, var(--bg) 92%, transparent);
           backdrop-filter: blur(6px);
+          border-radius: 22px;
+          padding: 18px;
+          display: grid;
+          grid-template-columns: 1fr auto;
+          align-items: center;
+          box-shadow: 0 12px 38px rgba(2,6,23,.08);
         }
-        .textInput:focus { outline:none; border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 25%, transparent); }
+        .heroLeft { display: grid; gap: 6px; }
+        .title { font-size: clamp(26px, 4vw, 36px); font-weight: 900; letter-spacing: -0.02em; margin: 0; color: var(--text); }
+        .sub { color: var(--muted); margin: 0; font-size: 15px; }
+        .hl { color: var(--text); font-weight: 800; background: linear-gradient(90deg, color-mix(in oklab, var(--primary) 16%, transparent), transparent); padding: 0 6px; border-radius: 8px; }
 
-        .barcodeRow { display:grid; grid-template-columns: 1fr auto; gap:8px; align-items:end; }
-        .btn {
-          border:1px solid var(--border); background:var(--bg2);
-          padding:10px 14px; border-radius:12px; cursor:pointer; color: var(--text); font-weight:600;
-          transition: background .12s ease, transform .05s ease;
+        /* ---------- STATS ---------- */
+        .stats {
+          display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px;
+          margin: 10px 0 18px;
         }
-        .btn:hover{ background: color-mix(in oklab, var(--bg2) 85%, var(--primary) 15%); }
+        .stat {
+          border: 1px solid var(--border);
+          background: var(--card-bg);
+          border-radius: 16px;
+          padding: 12px 14px;
+          box-shadow: 0 8px 30px rgba(2,6,23,.06);
+        }
+        .sTop { display: flex; align-items: center; gap: 8px; color: var(--muted); font-weight: 700; font-size: 12px; }
+        .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--muted); display: inline-block; }
+        .dot-ok { background: #10b981; }
+        .dot-warn { background: #f59e0b; }
+        .sNum { font-weight: 900; font-size: 24px; line-height: 1; margin-top: 6px; }
+
+        /* ---------- CARD BASE ---------- */
+        .card {
+          border: 1px solid var(--border);
+          background: linear-gradient(180deg, color-mix(in oklab, var(--card-bg) 92%, transparent), var(--card-bg));
+          border-radius: 20px;
+          padding: 16px;
+          box-shadow: 0 14px 40px rgba(2,6,23,.06), 0 2px 10px rgba(2,6,23,.04);
+        }
+
+        /* ---------- ADD CARD ---------- */
+        .addCard { margin-bottom: 24px; }
+        .addHead { display:flex; align-items:center; gap:12px; margin-bottom: 14px; }
+        .addIcon {
+          width:36px; height:36px; border-radius:12px; display:grid; place-items:center;
+          background: color-mix(in oklab, var(--primary) 18%, var(--bg2));
+          border:1px solid var(--border); font-weight:800;
+          box-shadow: 0 6px 16px rgba(2,6,23,.08);
+        }
+        .addTitle { font-weight:900; letter-spacing:-.01em; }
+        .addSub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+        .addGrid {
+          display:grid;
+          grid-template-columns: 1.2fr .5fr .8fr 1fr;
+          gap: 12px 16px; align-items:end;
+        }
+        @media (max-width: 1000px){ .addGrid{ grid-template-columns:1fr 1fr; } }
+        @media (max-width: 560px){ .addGrid{ grid-template-columns:1fr; } }
+
+        .field { display:grid; gap:6px; }
+        .label { font-size:.84rem; color:var(--muted); font-weight:700; }
+        .input {
+          width:100%; border:1px solid var(--border); border-radius:12px; padding:10px 12px;
+          background: var(--bg2); color: var(--text); outline: none;
+          transition: border-color .15s ease, box-shadow .15s ease, background .2s ease, transform .04s ease;
+        }
+        .input:focus {
+          border-color: color-mix(in oklab, var(--primary) 60%, var(--border));
+          box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 22%, transparent);
+          background: var(--bg);
+        }
+        .input:active { transform: translateY(1px); }
+
+        .barcodeRow { display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:end; }
+        .btn {
+          border:1px solid var(--border); background:var(--bg2); padding:10px 14px; border-radius:12px; cursor:pointer; color: var(--text); font-weight:800;
+          transition: background .2s ease, transform .04s ease;
+        }
         .btn:active{ transform: translateY(1px); }
+        .btn.ghost:hover{ background: color-mix(in oklab, var(--bg2) 85%, var(--primary) 15%); }
+
+        .scannerCol { display:grid; gap:8px; }
+        .scanner {
+          border:1px dashed var(--border);
+          background: var(--bg);
+          border-radius: 14px;
+          padding: 8px;
+        }
+        .rowHint { display:flex; gap:12px; align-items:center; }
+        .muted { color: var(--muted); }
+        .small { font-size:12px; }
 
         .nutri {
-          position:relative; z-index:1;
-          margin-top: 12px; padding: 12px;
-          border:1px solid color-mix(in oklab, var(--border) 70%, transparent);
-          border-radius: 14px;
+          margin-top: 12px;
+          border:1px dashed var(--border);
           background: color-mix(in oklab, var(--bg) 92%, var(--primary) 8%);
+          border-radius:14px;
+          padding:10px 12px;
         }
-        .nutTitle { font-weight:800; margin-bottom:6px; color: var(--text); }
+        .nutTitle { font-weight:900; margin-bottom:6px; color: var(--text); }
         .nutGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px 12px; }
         @media (max-width:560px){ .nutGrid{ grid-template-columns:1fr; } }
 
         .actions { margin-top:14px; display:flex; gap:12px; justify-content:flex-end; }
-
-        .list { margin-top: 24px; }
-        .secHead { display:flex; align-items:center; gap:10px; }
-        .secTitle { font-size:16px; font-weight:800; margin: 0; color: var(--text); }
-        .secBadge { display:inline-grid; place-items:center; min-width:26px; height:22px; padding:0 8px; border-radius:999px; font-size:12px; font-weight:700; color:#0f172a; background:#e5f0ff; border:1px solid #cfe1ff; }
-        .secBadge.warn { background:#ffe5e5; border-color:#ffcfcf; }
-
-        .widgetRow { display:flex; align-items:flex-start; gap:16px; }
-        .widgetRow--empty { gap: 24px; align-items: center; }
-
-        .empty { color: var(--muted); font-size:14px; padding:16px; text-align:center; border:1px dashed var(--border); border-radius:12px; background: var(--bg); }
-        .empty.hint { background: transparent; }
-
-        .muted { color: var(--muted); }
-        .small { font-size:12px; }
-        .error { margin-top:8px; background: color-mix(in oklab, #ef4444 15%, var(--card-bg)); color:#7f1d1d; border:1px solid color-mix(in oklab, #ef4444 35%, var(--border)); border-radius:8px; padding:8px 10px; font-size:13px; }
-
-        /* headline animation */
-        .tracking-in-contract-bck-top {
-          -webkit-animation: tracking-in-contract-bck-top 1s cubic-bezier(0.215,0.610,0.355,1.000) both;
-                  animation: tracking-in-contract-bck-top 1s cubic-bezier(0.215,0.610,0.355,1.000) both;
+        .error {
+          background: color-mix(in oklab, #ef4444 15%, var(--card-bg));
+          color:#7f1d1d;
+          border:1px solid color-mix(in oklab, #ef4444 35%, var(--border));
+          border-radius:10px; padding:8px 10px; font-size:13px;
         }
-        @-webkit-keyframes tracking-in-contract-bck-top {
-          0%{ letter-spacing:1em; -webkit-transform: translateZ(400px) translateY(-300px); transform: translateZ(400px) translateY(-300px); opacity:0; }
-          40%{ opacity:.6; }
-          100%{ -webkit-transform: translateZ(0) translateY(0); transform: translateZ(0) translateY(0); opacity:1; }
+
+        /* ---------- LISTS ---------- */
+        .list { margin-top: 18px; }
+        .sectionHead {
+          display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom: 10px;
         }
-        @keyframes tracking-in-contract-bck-top {
-          0%{ letter-spacing:1em; -webkit-transform: translateZ(400px) translateY(-300px); transform: translateZ(400px) translateY(-300px); opacity:0; }
-          40%{ opacity:.6; }
-          100%{ -webkit-transform: translateZ(0) translateY(0); transform: translateZ(0) translateY(0); opacity:1; }
+        .secTitle { font-size:16px; font-weight:900; margin: 0; color: var(--text); letter-spacing: -0.01em; }
+
+        .fridgeDock { display: grid; }
+
+        .gridCards {
+          display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:16px;
+          animation: fadeIn .24s ease-out both;
         }
+        @media (max-width: 900px){ .gridCards{ grid-template-columns:repeat(2, minmax(0,1fr)); } }
+        @media (max-width: 600px){ .gridCards{ grid-template-columns:1fr; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: translateY(0) } }
+
+        .empty {
+          text-align:center;
+          border:1px dashed var(--border);
+          border-radius:16px;
+          padding: 24px 14px;
+          background: var(--bg);
+        }
+        .empty.ok { background: color-mix(in oklab, #10b981 10%, var(--bg)); border-color: color-mix(in oklab, #10b981 35%, var(--border)); }
+        .emoji { font-size: 28px; }
+        .emptyTitle { margin: 6px 0 2px; font-weight: 900; color: var(--text); }
+        .empty .muted { font-size: 14px; }
+
+        /* ---------- EDIT MODAL ---------- */
+        .overlay { position:fixed; inset:0; background:rgba(2,6,23,.55); display:grid; place-items:center; padding:16px; z-index:1200;}
+        .modal {
+          width:100%; max-width:560px;
+          border:1px solid var(--border);
+          background:
+            radial-gradient(130% 60% at 100% -20%, color-mix(in oklab, var(--primary) 20%, transparent), transparent),
+            var(--card-bg);
+          backdrop-filter: blur(8px);
+          border-radius:18px; overflow:hidden;
+          box-shadow:0 24px 60px rgba(0,0,0,.35);
+          animation: modalIn .18s ease-out both;
+        }
+        @keyframes modalIn { from{ opacity:0; transform: translateY(8px) } to{ opacity:1; transform: translateY(0) } }
+        .mhead {
+          display:grid; grid-template-columns:1fr auto; align-items:center; gap:8px;
+          padding:12px 14px; border-bottom:1px solid var(--border); background: var(--bg2);
+        }
+        .mtitle { font-weight:900; color: var(--text); }
+        .x { border:none; background:transparent; font-size:22px; color: var(--muted); cursor:pointer; }
+        .mbody { padding:14px; }
+        .gridM { display:grid; grid-template-columns:1fr 140px 1fr; gap:12px 16px; }
+        @media (max-width:640px){ .gridM{ grid-template-columns:1fr; } }
+        .lbl { display:grid; gap:6px; font-size:.9rem; color:var(--text); font-weight:700; }
+        .txt {
+          width:100%; border:1px solid var(--border); border-radius:12px; padding:12px;
+          background: var(--bg); color: var(--text);
+          outline: none; transition: border-color .15s ease, box-shadow .15s ease, background .2s ease;
+        }
+        .txt:focus { border-color: color-mix(in oklab, var(--primary) 60%, var(--border)); box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 22%, transparent); }
+        .mfoot { padding:12px 14px; border-top:1px solid var(--border); display:flex; gap:10px; justify-content:flex-end; }
       `}</style>
     </main>
   );

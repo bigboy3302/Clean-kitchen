@@ -4,28 +4,18 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     /* ---------- helpers ---------- */
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function creatingAsSelf() {
-      return isSignedIn() && request.resource.data.uid == request.auth.uid;
-    }
-
-    function ownershipUnchanged() {
-      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
-    }
+    function isSignedIn()         { return request.auth != null; }
+    function creatingAsSelf()     { return isSignedIn() && request.resource.data.uid == request.auth.uid; }
+    function ownershipUnchanged() { return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid; }
 
     function isClean(str) {
       return !(str.matches('(?i).*(\\b(fuck|shit|bitch|asshole|nigger|retard|cunt|faggot)\\b).*'));
     }
-
     function cleanOptional(field) {
       return !(field in request.resource.data) ||
              request.resource.data[field] == null ||
              isClean(request.resource.data[field]);
     }
-
     function textOk() {
       return !('text' in request.resource.data)
              || request.resource.data.text == null
@@ -36,9 +26,9 @@ service cloud.firestore {
                 );
     }
 
-    function isStr(v, max) { return v is string && v.size() <= max; }
-    function isBool(v)     { return v is bool; }
-    function isOneOf(v, list) { return list.hasAny([v]); }
+    function isStr(v, max)  { return v is string && v.size() <= max; }
+    function isBool(v)      { return v is bool; }
+    function isOneOf(v, xs) { return xs.hasAny([v]); }
 
     function listAllowedStrings(arr, allowed, maxLen) {
       return (arr is list) && arr.size() > 0 && arr.size() <= maxLen && arr.hasOnly(allowed);
@@ -99,6 +89,22 @@ service cloud.firestore {
       allow delete: if isSignedIn() && request.auth.uid == uid;
     }
 
+    /* ---------- pantryItems (OWNER-ONLY) ---------- */
+    match /pantryItems/{id} {
+      // user can read only their own items
+      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+
+      // create as yourself
+      allow create: if creatingAsSelf();
+
+      // update/delete only your own docs; uid cannot change
+      allow update: if isSignedIn()
+                    && resource.data.uid == request.auth.uid
+                    && ownershipUnchanged();
+
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
     /* ---------- recipes (+ photos) ---------- */
     match /recipes/{id} {
       allow read: if true;
@@ -139,7 +145,7 @@ service cloud.firestore {
                     && request.resource.data.uid == request.auth.uid
                     && cleanOptional('text');
 
-      // Counter bump helpers (if you denormalize likes/reposts)
+      // counter-bump helpers (if denormalized)
       function canBump(field) {
         return (field in request.resource.data)
                && (field in resource.data)
@@ -153,7 +159,7 @@ service cloud.firestore {
         return changed.hasOnly(["likes","reposts"]);
       }
 
-      // Owner edit or safe public bumps
+      // Owner edits OR safe public bumps
       allow update: if isSignedIn()
                     && (
                          (resource.data.uid == request.auth.uid && ownershipUnchanged())
@@ -166,21 +172,21 @@ service cloud.firestore {
       // Owner delete
       allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
 
-      // Likes for post (toggle; doc id MUST equal auth.uid)
+      // Likes (toggle; doc id == auth.uid)
       match /likes/{uid} {
         allow read: if true;
         allow create, delete: if isSignedIn() && request.auth.uid == uid;
         allow update: if false;
       }
 
-      // Reposts for post (toggle; doc id MUST equal auth.uid)
+      // Reposts (toggle; doc id == auth.uid)
       match /reposts/{uid} {
         allow read: if true;
         allow create, delete: if isSignedIn() && request.auth.uid == uid;
         allow update: if false;
       }
 
-      // Comments
+      // Comments (and their reposts/replies)
       match /comments/{cid} {
         allow read: if true;
 
@@ -202,14 +208,14 @@ service cloud.firestore {
                            request.auth.uid == get(/databases/$(database)/documents/posts/$(postId)).data.uid
                          );
 
-        // Reposts for a comment (X-style toggle)
+        // Comment reposts
         match /reposts/{uid} {
           allow read: if true;
           allow create, delete: if isSignedIn() && request.auth.uid == uid;
           allow update: if false;
         }
 
-        // Replies (with their own reposts)
+        // Replies (with their reposts)
         match /replies/{rid} {
           allow read: if true;
 
@@ -231,7 +237,6 @@ service cloud.firestore {
                              request.auth.uid == get(/databases/$(database)/documents/posts/$(postId)).data.uid
                            );
 
-          // Reposts for a reply
           match /reposts/{uid} {
             allow read: if true;
             allow create, delete: if isSignedIn() && request.auth.uid == uid;
