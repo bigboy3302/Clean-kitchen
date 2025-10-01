@@ -1,309 +1,315 @@
+// components/pantry/Fridge.tsx
 "use client";
 
-import { useMemo } from "react";
+import React from "react";
+import Button from "@/components/ui/Button";
 
-type TSLike =
-  | { seconds: number; nanoseconds: number }
-  | Date
-  | null
-  | undefined;
+type TSLike = any;
 
-type Nutrition = {
-  carbs100g?: number | null;
-  sugars100g?: number | null;
-  fiber100g?: number | null;
-  protein100g?: number | null;
-  fat100g?: number | null;
-  satFat100g?: number | null;
-  salt100g?: number | null;
-  sodium100g?: number | null;
-  kcalPer100g?: number | null;
-  kcalPerServing?: number | null;
-  servingSize?: string | null;
-} | null;
-
-type Item = {
+export type FridgeItem = {
   id: string;
   uid?: string;
   name: string;
-  quantity?: number;
-  expiresAt?: TSLike;
+  quantity: number;
+  expiresAt?: TSLike | null;
   barcode?: string | null;
-  nutrition?: Nutrition;
+  nutrition?: any | null;
 };
+
+type Props = {
+  items: FridgeItem[];
+  isOpen: boolean;
+  onToggleOpen: (open: boolean) => void;
+  minimal?: boolean;
+  onEdit?: (item: FridgeItem) => void;
+  onDelete?: (item: FridgeItem) => void;
+};
+
+function toDate(v: any): Date | null {
+  if (!v) return null;
+  if (v instanceof Date) return v;
+  const anyTs: any = v;
+  if (typeof anyTs?.toDate === "function") return anyTs.toDate();
+  if (typeof anyTs?.seconds === "number") return new Date(anyTs.seconds * 1000);
+  if (typeof v === "string" && !Number.isNaN(Date.parse(v))) return new Date(v);
+  return null;
+}
 
 export default function Fridge({
   items,
   isOpen,
   onToggleOpen,
+  minimal,
   onEdit,
   onDelete,
-}: {
-  items: Item[];
-  isOpen: boolean;
-  onToggleOpen: (v: boolean) => void;
-  onEdit?: (it: Item) => void;
-  onDelete?: (it: Item) => void;
-}) {
-  const total = items.length;
-
-  const foods = useMemo(() => {
-    const base = ["🥬", "🍎", "🥛", "🧀", "🥚", "🥦", "🍇", "🍓", "🥕", "🍗", "🍊", "🧃", "🥒", "🫐"];
-    const count = Math.min(10, Math.max(4, Math.ceil(total / 2)));
-    return Array.from({ length: count }, (_, i) => base[i % base.length]);
-  }, [total]);
-
-  const ajar = total > 0 && !isOpen;
+}: Props) {
+  const count = items.length;
+  const label = count === 1 ? "1 item" : `${count} items`;
 
   return (
-    <div className="fridgeWrap">
-      <button
-        type="button"
-        className={`box ${isOpen ? "open" : ""} ${ajar ? "ajar" : ""}`}
-        onClick={() => onToggleOpen(!isOpen)}
-        aria-expanded={isOpen}
-        aria-label={isOpen ? "Close fridge" : "Open fridge"}
-      >
-        <span className="chrome" />
-        <span className="gasket" />
-        <span className="shelf s1" />
-        <span className="shelf s2" />
-        <span className="shelf s3" />
+    <div className={`fridgeWrap ${isOpen ? "open" : "closed"} ${minimal ? "mini" : ""}`}>
+      <div className="fridge" aria-label="Fridge">
+        <div className="badge">FRIDGE</div>
+        <div className="door">
+          <div className="handle" />
+        </div>
 
-        <span className="door">
-          <span className="handle" />
-        </span>
+        <div className="footer">
+          <span className="pill">{label}</span>
+          <button
+            type="button"
+            className="linkBtn"
+            onClick={() => onToggleOpen(!isOpen)}
+          >
+            {isOpen ? "Close" : "Open"}
+          </button>
+        </div>
+      </div>
 
-        {total > 0 && <span className="count">{total}</span>}
-
-        {!isOpen && (
-          <div className="pile peek">
-            {foods.map((g, i) => (
-              <span key={i} className="food" style={{ ["--i" as any]: i }}>
-                {g}
-              </span>
-            ))}
-          </div>
-        )}
-      </button>
-
+      {/* TRAY — only render when OPEN so nothing shows outside while closed */}
       {isOpen && (
-        <div className="content">
-          <ul className="grid">
-            {items.map((it, i) => {
-              const n = (it.nutrition || {}) as NonNullable<Nutrition>;
-              const hasCals =
-                n?.kcalPer100g != null || n?.kcalPerServing != null || n?.servingSize;
-              const hasMacros =
-                n?.carbs100g != null ||
-                n?.sugars100g != null ||
-                n?.fiber100g != null ||
-                n?.protein100g != null ||
-                n?.fat100g != null ||
-                n?.satFat100g != null ||
-                n?.salt100g != null ||
-                n?.sodium100g != null;
-
-              return (
-                <li className="card" key={it.id} style={{ ["--i" as any]: i }}>
-                  <div className="top">
-                    <div className="title" title={it.name}>{it.name}</div>
+        <div className="tray">
+          {items.length === 0 ? (
+            <div className="empty">
+              <span className="emoji">🧊</span>
+              <div className="tTitle">Your fridge is empty</div>
+              <div className="muted">Add some items to see them here.</div>
+            </div>
+          ) : (
+            <ul className="grid">
+              {items.map((it) => {
+                const d = toDate(it.expiresAt);
+                const exp =
+                  d
+                    ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+                        d.getDate()
+                      ).padStart(2, "0")}`
+                    : "—";
+                return (
+                  <li key={it.id} className="card">
+                    <div className="top">
+                      <h4 className="name" title={it.name}>
+                        {it.name}
+                      </h4>
+                      <div className="actions">
+                        {onEdit ? (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => onEdit(it)}
+                          >
+                            Edit
+                          </Button>
+                        ) : null}
+                        {onDelete ? (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => onDelete(it)}
+                          >
+                            Delete
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
                     <div className="meta">
-                      <span>Qty: <strong>{it.quantity ?? 1}</strong></span>
-                      <span className="muted">Fresh</span>
+                      <span className="chip">Qty: {it.quantity}</span>
+                      <span className="chip">Exp: {exp}</span>
+                      {it.barcode ? <span className="chip">EAN {it.barcode}</span> : null}
                     </div>
-                  </div>
-
-                  {hasCals && (
-                    <div className="badges">
-                      {n?.kcalPer100g != null && <span className="badge pill">kcal/100g {n.kcalPer100g}</span>}
-                      {n?.kcalPerServing != null && <span className="badge pill">kcal/serv {n.kcalPerServing}</span>}
-                      {n?.servingSize && <span className="badge pill">serving {n.servingSize}</span>}
-                    </div>
-                  )}
-
-                  {hasMacros && (
-                    <div className="nutri">
-                      <div>Carbs/100g: <strong>{n?.carbs100g ?? "—"}</strong></div>
-                      <div>Sugars/100g: <strong>{n?.sugars100g ?? "—"}</strong></div>
-                      <div>Fiber/100g: <strong>{n?.fiber100g ?? "—"}</strong></div>
-                      <div>Protein/100g: <strong>{n?.protein100g ?? "—"}</strong></div>
-                      <div>Fat/100g: <strong>{n?.fat100g ?? "—"}</strong></div>
-                      <div>Sat fat/100g: <strong>{n?.satFat100g ?? "—"}</strong></div>
-                      <div>Salt/100g: <strong>{n?.salt100g ?? "—"}</strong></div>
-                      <div>Sodium/100g: <strong>{n?.sodium100g ?? "—"}</strong></div>
-                      {it.barcode ? <div>Barcode: <strong>{it.barcode}</strong></div> : null}
-                    </div>
-                  )}
-
-                  {(onEdit || onDelete) && (
-                    <div className="row">
-                      {onEdit && <button className="btn secondary" onClick={() => onEdit(it)}>Edit</button>}
-                      {onDelete && <button className="btn danger" onClick={() => onDelete(it)}>Delete</button>}
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       )}
 
       <style jsx>{`
         .fridgeWrap {
           display: grid;
-          grid-template-columns: 230px 1fr;
-          gap: 16px;
-          align-items: start;
+          gap: 10px;
+          transition: all 180ms ease;
+        }
+
+        /* Fridge box */
+        .fridge {
+          position: relative;
           width: 100%;
-        }
-
-        .box {
-          position: sticky;
-          top: 8px;
-          width: 220px;
-          height: 260px;
-          border: 1px solid var(--border);
-          border-radius: 16px;
+          border: 2px solid rgba(255, 255, 255, 0.14);
+          border-radius: 18px;
           background:
-            radial-gradient(140% 80% at 50% -10%, #fff0 45%, rgba(255,255,255,0.55) 60%, #fff0 61%),
-            linear-gradient(180deg, #e0f2fe 0%, #dbeafe 40%, #c7d2fe 100%);
-          box-shadow: 0 16px 48px rgba(2, 6, 23, 0.18);
-          cursor: pointer;
-          perspective: 900px;
-          transform-style: preserve-3d;
-          transition: transform .5s cubic-bezier(.22,1,.36,1), filter .25s ease;
+            radial-gradient(800px 160px at -10% -30%, rgba(255, 255, 255, 0.08), transparent),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(20, 24, 35, 0.28));
+          box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+            0 10px 24px rgba(2, 6, 23, 0.35);
           overflow: hidden;
+          display: grid;
+          grid-template-rows: 1fr auto;
+          height: 220px;
+          transition: height 220ms ease, transform 220ms ease, box-shadow 220ms ease;
         }
-        .box:hover { filter: brightness(1.04); }
-        .box.open { transform: translateY(-2px) rotateX(5deg); }
 
-        .chrome { position:absolute; inset:6px; border-radius:14px; border:1px solid rgba(255,255,255,.5); box-shadow: inset 0 1px 0 rgba(255,255,255,.35); }
-        .gasket { position:absolute; inset:14px 14px 14px 40px; border-radius:10px; border:1px dashed rgba(2,6,23,.06); }
+        /* Closed vs open sizing */
+        .fridgeWrap.closed .fridge {
+          height: 220px;
+        }
+        .fridgeWrap.open .fridge {
+          height: 280px;
+        }
+        .fridgeWrap.mini .fridge {
+          height: 180px;
+        }
 
-        .shelf { position:absolute; left:24px; right:56px; height:2px; background: rgba(2,6,23,.12); opacity:.6; }
-        .shelf.s1 { top: 78px; }
-        .shelf.s2 { top: 128px; }
-        .shelf.s3 { top: 178px; }
+        .badge {
+          position: absolute;
+          top: 10px;
+          left: 12px;
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: 0.12em;
+          color: rgba(255, 255, 255, 0.6);
+          text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+        }
 
         .door {
-          position:absolute; top:0; bottom:0; right:0; width:106px;
-          background: linear-gradient(180deg, #e2e8f0 0%, #e5e7eb 40%, #e2e8f0 100%);
-          border-left: 1px solid rgba(15,23,42,.08);
-          border-radius: 0 16px 16px 0;
-          transform-origin: 100% 50%;
-          transform: rotateY(0deg);
-          box-shadow: inset 0 0 0 1px rgba(255,255,255,.3);
-          transition: transform .55s cubic-bezier(.22,1,.36,1);
-          will-change: transform;
-          overflow: hidden;
+          position: relative;
+          border-radius: 14px;
+          inset: 10px;
+          margin: 6px;
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.12));
+          outline: 1px solid rgba(255, 255, 255, 0.06);
         }
-        .box.ajar .door { transform: rotateY(-14deg); }
-        .box.open .door { transform: rotateY(-58deg); }
 
         .handle {
-          position:absolute;
-          top: 40px;
-          left: 10px;
-          width: 10px;
-          height: 112px;
-          border-radius: 8px;
-          background: linear-gradient(180deg, #93a8c0, #6b7f96);
-          box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
-        }
-
-        .count {
           position: absolute;
-          top: 8px; left: 8px;
-          min-width: 26px; height: 24px; padding: 0 8px;
-          display:grid; place-items:center;
-          background: #0ea5e9; color: #0b1220;
-          font-size: 12px; font-weight: 900; border-radius: 999px;
-          box-shadow: 0 4px 12px rgba(14,165,233,.35);
+          right: 10px;
+          top: 28px;
+          width: 10px;
+          height: 72px;
+          border-radius: 8px;
+          background: linear-gradient(180deg, #e9eef7, #c9d0de);
+          box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(2, 6, 23, 0.25);
         }
 
-        .pile { position:absolute; left:22px; right:58px; bottom:18px; top:26px; pointer-events:none; transform: translateZ(2px); }
-        .food {
-          position:absolute; font-size:20px; filter: drop-shadow(0 2px 6px rgba(0,0,0,.15));
-          animation: chill 2.6s ease-in-out infinite; animation-delay: calc(var(--i) * 70ms);
+        .footer {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 8px 10px 10px;
         }
-        .food:nth-child(1)  { left: 6px;  bottom: 10px; }
-        .food:nth-child(2)  { left: 30px; bottom: 12px; }
-        .food:nth-child(3)  { left: 54px; bottom: 14px; }
-        .food:nth-child(4)  { left: 78px; bottom: 16px; }
-        .food:nth-child(5)  { left: 16px; bottom: 48px; }
-        .food:nth-child(6)  { left: 46px; bottom: 52px; }
-        .food:nth-child(7)  { left: 74px; bottom: 56px; }
-        .food:nth-child(8)  { left: 12px; bottom: 92px; }
-        .food:nth-child(9)  { left: 40px; bottom: 94px; }
-        .food:nth-child(10) { left: 70px; bottom: 98px; }
+        .pill {
+          display: inline-flex;
+          align-items: center;
+          height: 28px;
+          padding: 0 10px;
+          font-weight: 900;
+          font-size: 12px;
+          color: var(--text);
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(255, 255, 255, 0.14);
+        }
+        .linkBtn {
+          appearance: none;
+          border: none;
+          background: transparent;
+          color: #9ec1ff;
+          font-weight: 900;
+          cursor: pointer;
+        }
 
-        @keyframes chill { 0%,100%{ transform: translateY(0) } 50%{ transform: translateY(-1px) } }
-
-        .content {
+        /* Tray (only exists in DOM when open) */
+        .tray {
           border: 1px solid var(--border);
-          border-radius: 16px;
           background: var(--card-bg);
-          box-shadow: 0 2px 12px rgba(16,24,40,.06), 0 16px 36px rgba(16,24,40,.08);
-          padding: 14px;
-          animation: contentIn .28s ease-out both;
+          border-radius: 16px;
+          padding: 12px;
+          box-shadow: 0 12px 30px rgba(2, 6, 23, 0.25);
+          animation: trayIn 180ms ease-out both;
         }
-        @keyframes contentIn { from{opacity:0; transform: translateY(6px);} to{opacity:1; transform: translateY(0);} }
+        @keyframes trayIn {
+          from {
+            opacity: 0;
+            transform: translateY(-6px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .empty {
+          text-align: center;
+          padding: 20px 10px;
+        }
+        .emoji {
+          font-size: 26px;
+        }
+        .tTitle {
+          font-weight: 900;
+          margin-top: 6px;
+        }
+        .muted {
+          color: var(--muted);
+          font-size: 13px;
+        }
 
         .grid {
-          list-style:none; margin:0; padding:0;
-          display:grid; gap:14px; grid-template-columns: repeat(3, minmax(0,1fr));
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 10px;
         }
-        @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
-        @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
 
         .card {
           border: 1px solid var(--border);
-          background: var(--bg2);
-          border-radius: 16px;
-          padding: 16px;
-          min-height: 140px;
-          box-shadow: 0 2px 10px rgba(16,24,40,.06), 0 16px 34px rgba(16,24,40,.08);
-          opacity: 0; transform: translateY(10px) scale(.98);
-          animation: cardPop .46s cubic-bezier(.18,.89,.32,1.28) forwards;
-          animation-delay: calc((var(--i,0)) * 70ms);
+          background: var(--bg);
+          border-radius: 14px;
+          padding: 12px;
+          display: grid;
+          gap: 8px;
         }
-        .card:hover { transform: translateY(-2px) scale(1.01); transition: transform .18s ease; }
-
-        .top { display:grid; gap:4px; }
-        .title { font-weight:800; font-size:15px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .meta { display:flex; gap:10px; flex-wrap:wrap; font-size:13px; color:var(--muted); }
-
-        .badges { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 4px; }
-        .badge {
-          border: 1px solid var(--border);
-          padding: 5px 8px;
+        .top {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: 8px;
+          align-items: center;
+        }
+        .name {
+          margin: 0;
+          font-size: 16px;
+          font-weight: 900;
+          letter-spacing: -0.01em;
+          color: var(--text);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .actions {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+        .meta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .chip {
+          display: inline-flex;
+          align-items: center;
+          height: 26px;
+          padding: 0 10px;
           border-radius: 999px;
+          border: 1px solid var(--border);
+          background: var(--bg2);
           font-size: 12px;
-          color: #0f172a;
-          background: #eef2ff;
-          text-decoration: none !important;
-        }
-        .badge * { text-decoration: none !important; }
-
-        .nutri {
-          margin-top: 8px;
-          display:grid; gap:6px 12px;
-          grid-template-columns: repeat(2, minmax(0,1fr));
-          font-size: 13px;
-        }
-        @media (max-width: 560px) { .nutri { grid-template-columns: 1fr; } }
-
-        .row { display:flex; gap:10px; justify-content:flex-end; margin-top:10px; }
-        .btn { border:1px solid var(--border); background:var(--bg2); padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:600; }
-        .btn.secondary:hover { background: color-mix(in oklab, var(--bg2) 85%, var(--primary) 15%); }
-        .btn.danger { color:#fff; background:#e11d48; border-color:#e11d48; }
-        .btn.danger:hover { filter: brightness(.97); }
-
-        @keyframes cardPop {
-          0%{ opacity:0; transform: translateY(16px) scale(.96); }
-          60%{ opacity:1; transform: translateY(-3px) scale(1.02); }
-          100%{ opacity:1; transform: translateY(0) scale(1); }
+          font-weight: 800;
+          color: var(--text);
         }
       `}</style>
     </div>

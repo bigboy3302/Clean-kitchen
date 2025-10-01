@@ -1,337 +1,300 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Button from "@/components/ui/Button";
-import { Timestamp } from "firebase/firestore";
-import type { NutritionInfo } from "@/lib/nutrition";
 
-type TSLike = Timestamp | { seconds: number; nanoseconds: number } | null | undefined;
+export type NutritionInfo = {
+  name?: string | null;
+  servingSize?: string | null;
+  kcalPer100g?: number | null;
+  kcalPerServing?: number | null;
+  carbs100g?: number | null;
+  sugars100g?: number | null;
+  fiber100g?: number | null;
+  protein100g?: number | null;
+  fat100g?: number | null;
+  satFat100g?: number | null;
+  salt100g?: number | null;
+  sodium100g?: number | null;
+};
 
 export type PantryCardItem = {
   id: string;
   name: string;
   quantity: number;
-  createdAt?: TSLike;
-  expiresAt?: TSLike;
-
-  // optional (your shape)
+  expiresAt?: any | null;
   barcode?: string | null;
   nutrition?: NutritionInfo | null;
-
-  // legacy props (we map to nutrition if present)
-  kcalPer100g?: number | null;
-  kcalPerServing?: number | null;
-  servingSize?: string | null;
+  lastConsumedGrams?: number | null;
 };
 
 type Props = {
   item: PantryCardItem;
-  onDelete: () => void;
-  onSave: (patch: { name: string; quantity: number; expiresAt: TSLike }) => Promise<void>;
+  onSave?: (patch: { name: string; quantity: number; expiresAt: any }) => void | Promise<void>;
+  onDelete?: () => void | Promise<void>;
+  onConsume?: (payload: {
+    grams: number;
+    nutrients: { sugars_g: number; satFat_g: number; sodium_g: number; kcal: number };
+  }) => void | Promise<void>;
 };
 
-function toDate(ts?: TSLike) {
-  if (!ts) return null;
-  const anyTs = ts as any;
+function toDate(v: any): Date | null {
+  if (!v) return null;
+  if (v instanceof Date) return v;
+  const anyTs: any = v;
   if (typeof anyTs?.toDate === "function") return anyTs.toDate();
   if (typeof anyTs?.seconds === "number") return new Date(anyTs.seconds * 1000);
+  if (typeof v === "string" && !Number.isNaN(Date.parse(v))) return new Date(v);
   return null;
 }
-function fmt(ts?: TSLike) {
-  const d = toDate(ts);
-  return d ? d.toLocaleDateString() : "—";
-}
-function toDateInputValue(ts?: TSLike) {
-  const d = toDate(ts);
-  if (!d) return "";
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-function todayStr() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+
+function Chip({ children }: { children: React.ReactNode }) {
+  return <span className="chip">{children}<style jsx>{`
+    .chip{
+      display:inline-flex; align-items:center; gap:6px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px; font-weight: 800; color: var(--text);
+    }
+  `}</style></span>;
 }
 
-export default function PantryCard({ item, onDelete, onSave }: Props) {
-  const [editing, setEditing] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+export default function PantryCard({ item, onSave, onDelete, onConsume }: Props) {
+  const d = toDate(item.expiresAt);
+  const expiresStr = useMemo(() => {
+    if (!d) return "—";
+    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }, [d]);
 
+  // EDIT modal
+  const [editOpen, setEditOpen] = useState(false);
   const [name, setName] = useState(item.name);
-  const [qty, setQty] = useState<number>(item.quantity);
-  const [date, setDate] = useState<string>(toDateInputValue(item.expiresAt));
-  const minDate = todayStr();
+  const [qty, setQty] = useState<number>(item.quantity || 1);
+  const [exp, setExp] = useState<string>(expiresStr !== "—" ? expiresStr : "");
+  const firstInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    if (!editing) {
-      setName(item.name);
-      setQty(item.quantity);
-      setDate(toDateInputValue(item.expiresAt));
-    }
-  }, [editing, item.name, item.quantity, item.expiresAt]);
+  // NUTRITION modal
+  const n = item.nutrition || {};
+  const hasNutrition = !!item.barcode && !!n && Object.values({
+    kcalPer100g: n.kcalPer100g, kcalPerServing: n.kcalPerServing,
+    carbs100g: n.carbs100g, sugars100g: n.sugars100g, fiber100g: n.fiber100g,
+    protein100g: n.protein100g, fat100g: n.fat100g, satFat100g: n.satFat100g,
+    salt100g: n.salt100g, sodium100g: n.sodium100g,
+  }).some((v) => v != null);
+  const [nutriOpen, setNutriOpen] = useState(false);
 
-  const nutrition = useMemo(() => {
-    if (item.nutrition) return item.nutrition;
+  // CONSUME modal
+  const [consumeOpen, setConsumeOpen] = useState(false);
+  const [consumeGrams, setConsumeGrams] = useState<number>(item.lastConsumedGrams ?? 100);
+
+  const est = useMemo(() => {
+    const g = Math.max(0, Number(consumeGrams) || 0);
+    const f = (x?: number | null) => (x != null ? (x / 100) * g : 0);
     return {
-      kcalPer100g: item.kcalPer100g ?? null,
-      kcalPerServing: item.kcalPerServing ?? null,
-      servingSize: item.servingSize ?? null,
-      name: null,
-      carbs100g: null,
-      sugars100g: null,
-      fiber100g: null,
-      protein100g: null,
-      fat100g: null,
-      satFat100g: null,
-      salt100g: null,
-      sodium100g: null,
-    } as NutritionInfo;
-  }, [item]);
+      sugars_g: f(n.sugars100g),
+      satFat_g: f(n.satFat100g),
+      sodium_g: f(n.sodium100g),
+      kcal: f(n.kcalPer100g),
+    };
+  }, [consumeGrams, n.sugars100g, n.satFat100g, n.sodium100g, n.kcalPer100g]);
 
-  async function save() {
-    setErr(null);
-    const clean = (name || "").trim();
-    if (!clean) { setErr("Please enter a name."); return; }
-    if (date && date < minDate) { setErr("Expiry cannot be in the past."); return; }
+  /* sync on live update */
+  useEffect(() => {
+    setName(item.name);
+    setQty(item.quantity || 1);
+    setExp(expiresStr !== "—" ? expiresStr : "");
+    setConsumeGrams(item.lastConsumedGrams ?? 100);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id, item.name, item.quantity, expiresStr, item.lastConsumedGrams]);
 
-    setBusy(true);
-    try {
-      const expiresAt: TSLike =
-        date && !Number.isNaN(Date.parse(date))
-          ? { seconds: Math.floor(new Date(`${date}T00:00:00`).getTime() / 1000), nanoseconds: 0 }
-          : null;
+  /* modal UX */
+  useEffect(() => {
+    const anyModal = editOpen || nutriOpen || consumeOpen;
+    if (!anyModal) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setEditOpen(false); setNutriOpen(false); setConsumeOpen(false); }
+      if (e.key === "Enter" && editOpen) handleSave();
+    };
+    window.addEventListener("keydown", onKey);
+    const t = setTimeout(() => firstInputRef.current?.focus(), 50);
+    const orig = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); clearTimeout(t); document.body.style.overflow = orig; };
+  }, [editOpen, nutriOpen, consumeOpen]);
 
-      const fixedName = clean.replace(/^\p{L}/u, (m: string) => m.toUpperCase());
-      await onSave({ name: fixedName, quantity: Math.max(1, Number(qty) || 1), expiresAt });
-      setEditing(false);
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to save changes.");
-    } finally {
-      setBusy(false);
+  async function handleSave() {
+    if (onSave) {
+      await onSave({ name: name.trim() || item.name, quantity: Number(qty) || 1, expiresAt: exp || null });
     }
+    setEditOpen(false);
   }
 
+  async function handleConsume() {
+    if (!onConsume) { setConsumeOpen(false); return; }
+    await onConsume({ grams: Math.max(0, Number(consumeGrams) || 0), nutrients: est });
+    setConsumeOpen(false);
+  }
+
+  const facts: Array<{ label: string; value: any; suffix?: string }> = [
+    { label: "Serving size", value: n.servingSize },
+    { label: "kcal / 100g", value: n.kcalPer100g },
+    { label: "kcal / serving", value: n.kcalPerServing },
+    { label: "Carbs / 100g", value: n.carbs100g, suffix: "g" },
+    { label: "Sugars / 100g", value: n.sugars100g, suffix: "g" },
+    { label: "Fiber / 100g", value: n.fiber100g, suffix: "g" },
+    { label: "Protein / 100g", value: n.protein100g, suffix: "g" },
+    { label: "Fat / 100g", value: n.fat100g, suffix: "g" },
+    { label: "Sat. fat / 100g", value: n.satFat100g, suffix: "g" },
+    { label: "Salt / 100g", value: n.salt100g, suffix: "g" },
+    { label: "Sodium / 100g", value: n.sodium100g, suffix: "g" },
+  ];
+
   return (
-    <div className={`pcard ${editing ? "editing" : ""}`}>
-      {/* HEADER (title + quick data) */}
-      <div className="head">
-        <div className="titleRow">
-          <div className="avatar" aria-hidden>{item.name.slice(0,1).toUpperCase()}</div>
-          <div className="title" title={item.name}>{item.name}</div>
-        </div>
+    <>
+      <article className="card">
+        <header className="hdr">
+          <h3 className="title" title={item.name}>{item.name}</h3>
+          <div className="toolbar">
+            {hasNutrition ? <Button variant="secondary" onClick={() => setNutriOpen(true)}>Nutrition</Button> : null}
+            {hasNutrition && onConsume ? <Button onClick={() => setConsumeOpen(true)}>Consume</Button> : null}
+            <Button variant="secondary" onClick={() => setEditOpen(true)}>Edit</Button>
+            {onDelete ? <Button variant="destructive" onClick={onDelete}>Delete</Button> : null}
+          </div>
+        </header>
 
-        <div className="chips">
-          <span className="chip">Qty <b>{item.quantity}</b></span>
-          <span className="chip">Expiry <b>{fmt(item.expiresAt)}</b></span>
-          {nutrition?.kcalPer100g != null && (
-            <span className="chip soft">kcal/100g <b>{nutrition.kcalPer100g}</b></span>
-          )}
+        <div className="meta">
+          <Chip>Qty: {item.quantity}</Chip>
+          <Chip>Expiry: {expiresStr}</Chip>
+          {item.barcode ? <Chip>EAN: {item.barcode}</Chip> : null}
         </div>
+      </article>
 
-        <div className="actions">
-          {!editing ? (
-            <>
-              <button className="iconBtn" onClick={() => setEditing(true)} aria-label="Edit item">✎</button>
-              <button
-                className="iconBtn danger"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(); }}
-                aria-label="Delete item"
-              >🗑️</button>
-            </>
-          ) : (
-            <>
-              <button className="iconBtn" onClick={() => setEditing(false)} aria-label="Close editor">✕</button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* NUTRITION LINE (collapsed) */}
-      {!editing && (nutrition?.kcalPerServing != null || nutrition?.servingSize) && (
-        <div className="subRow">
-          {nutrition?.kcalPerServing != null && <span className="pill">kcal/serv <b>{nutrition.kcalPerServing}</b></span>}
-          {nutrition?.servingSize && <span className="pill">serving <b>{nutrition.servingSize}</b></span>}
-          {item.barcode ? <span className="pill muted">barcode <b>{item.barcode}</b></span> : null}
-        </div>
+      {/* EDIT MODAL */}
+      {editOpen && createPortal(
+        <div className="modalOverlay" role="dialog" aria-modal="true" onClick={() => setEditOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <header className="mHead">
+              <div><div className="mEyebrow">Edit product</div><div className="mTitle">{item.name}</div></div>
+              <button className="mClose" onClick={() => setEditOpen(false)} aria-label="Close">×</button>
+            </header>
+            <div className="mBody">
+              <div className="mForm">
+                <label className="lbl">Name<input ref={firstInputRef} className="inp" value={name} onChange={(e)=>setName(e.target.value)} /></label>
+                <div className="g2">
+                  <label className="lbl">Quantity<input className="inp" type="number" min={1} value={String(qty)} onChange={(e)=>setQty(Math.max(1, Number(e.target.value)||1))} /></label>
+                  <label className="lbl">Expiry date<input className="inp" type="date" value={exp} onChange={(e)=>setExp(e.target.value)} /></label>
+                </div>
+                {item.barcode ? <div className="readonly"><span className="key">Barcode</span><span className="val">{item.barcode}</span></div> : null}
+              </div>
+            </div>
+            <footer className="mFoot"><Button variant="secondary" onClick={()=>setEditOpen(false)}>Cancel</Button><Button onClick={handleSave}>Save changes</Button></footer>
+          </div>
+        </div>, document.body
       )}
 
-      {/* EDITOR — web-message frosted sheet */}
-      {editing && (
-        <div className="sheet" role="group" aria-label={`Edit ${item.name}`}>
-          <div className="field">
-            <input
-              className="input"
-              value={name}
-              onChange={(e)=>setName(e.currentTarget.value)}
-              placeholder=" "
-              aria-label="Name"
-            />
-            <label className="float">Name</label>
-          </div>
-
-          <div className="grid2">
-            <div className="field">
-              <input
-                className="input"
-                type="number"
-                min={1}
-                value={String(qty)}
-                onChange={(e)=>setQty(Math.max(1, Number(e.currentTarget.value)||1))}
-                placeholder=" "
-                aria-label="Quantity"
-              />
-              <label className="float">Quantity</label>
+      {/* NUTRITION MODAL */}
+      {nutriOpen && createPortal(
+        <div className="modalOverlay" role="dialog" aria-modal="true" onClick={() => setNutriOpen(false)}>
+          <div className="modal modal-nutri" onClick={(e) => e.stopPropagation()}>
+            <header className="mHead">
+              <div><div className="mEyebrow">Nutrition facts</div><div className="mTitle">{n.name || item.name}</div></div>
+              <button className="mClose" onClick={() => setNutriOpen(false)} aria-label="Close">×</button>
+            </header>
+            <div className="mBody mBody--single">
+              <div className="nutCard big">
+                <div className="nutHead">
+                  <div className="nutTitle">Per 100g / serving</div>
+                  <div className="muted small">{item.barcode ? `EAN ${item.barcode}` : ""}{n.servingSize ? ` • ${n.servingSize}` : ""}</div>
+                </div>
+                <dl className="nutGrid big">
+                  {facts.map((f)=> f.value==null||f.value===""?null:(
+                    <div className="nrow" key={f.label}><dt>{f.label}</dt><dd>{String(f.value)}{f.suffix?<span className="suffix">{f.suffix}</span>:null}</dd></div>
+                  ))}
+                </dl>
+              </div>
             </div>
-            <div className="field">
-              <input
-                className="input"
-                type="date"
-                min={minDate}
-                value={date}
-                onChange={(e)=>setDate(e.currentTarget.value)}
-                placeholder=" "
-                aria-label="Expiry date"
-              />
-              <label className="float">Expiry date</label>
+            <footer className="mFoot"><Button onClick={() => setNutriOpen(false)}>Close</Button></footer>
+          </div>
+        </div>, document.body
+      )}
+
+      {/* CONSUME MODAL */}
+      {consumeOpen && createPortal(
+        <div className="modalOverlay" role="dialog" aria-modal="true" onClick={() => setConsumeOpen(false)}>
+          <div className="modal modal-nutri" onClick={(e) => e.stopPropagation()}>
+            <header className="mHead">
+              <div><div className="mEyebrow">Log consumption</div><div className="mTitle">{item.name}</div></div>
+              <button className="mClose" onClick={() => setConsumeOpen(false)} aria-label="Close">×</button>
+            </header>
+            <div className="mBody mBody--single">
+              <div className="consumeBox">
+                <label className="lbl">How many grams did you consume?
+                  <input className="inp" type="number" min={0} value={String(consumeGrams)} onChange={(e)=>setConsumeGrams(Number(e.target.value)||0)} />
+                </label>
+                <div className="est">
+                  <div className="eRow"><span className="k">Estimated sugar</span><strong>{est.sugars_g.toFixed(1)} g</strong></div>
+                  <div className="eRow"><span className="k">Estimated sat. fat</span><strong>{est.satFat_g.toFixed(1)} g</strong></div>
+                  <div className="eRow"><span className="k">Estimated sodium</span><strong>{est.sodium_g.toFixed(2)} g</strong></div>
+                  <div className="eRow"><span className="k">Estimated energy</span><strong>{Math.round(est.kcal)} kcal</strong></div>
+                </div>
+              </div>
             </div>
+            <footer className="mFoot">
+              <Button variant="secondary" onClick={() => setConsumeOpen(false)}>Cancel</Button>
+              <Button onClick={handleConsume}>Log</Button>
+            </footer>
           </div>
-
-          {err && <p className="error">{err}</p>}
-
-          <div className="actionsRow">
-            <Button onClick={save} disabled={busy} type="button">
-              {busy ? "Saving…" : "Save changes"}
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => setEditing(false)}
-              disabled={busy}
-              type="button"
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); onDelete(); }}
-              disabled={busy}
-              type="button"
-            >
-              Delete
-            </Button>
-          </div>
-        </div>
+        </div>, document.body
       )}
 
       <style jsx>{`
-        .pcard {
-          border: 1px solid var(--border);
-          background: linear-gradient(180deg, color-mix(in oklab, var(--card-bg) 92%, transparent), var(--card-bg));
-          border-radius: 18px;
-          padding: 14px;
-          box-shadow: 0 10px 28px rgba(2,6,23,.08);
-          transition: box-shadow .2s ease, transform .15s ease, border-color .2s ease;
-        }
-        .pcard:hover { transform: translateY(-1px); box-shadow: 0 14px 44px rgba(2,6,23,.10); }
-
-        .head {
-          display:grid; grid-template-columns: 1fr auto; align-items:center; gap: 12px;
-        }
-        .titleRow { display:flex; align-items:center; gap:10px; min-width:0; }
-        .avatar {
-          width: 32px; height: 32px; border-radius: 10px;
-          display:grid; place-items:center; font-weight: 900;
-          background: color-mix(in oklab, var(--primary) 18%, var(--bg2));
-          border: 1px solid var(--border);
-          box-shadow: 0 4px 12px rgba(2,6,23,.08);
-        }
-        .title {
-          font-weight: 900; letter-spacing:-.01em; color: var(--text);
-          overflow:hidden; text-overflow: ellipsis; white-space: nowrap;
-        }
-
-        .chips { display:flex; gap:8px; flex-wrap:wrap; margin-top: 8px; }
-        .chip {
-          border: 1px solid var(--border);
-          background: var(--bg2);
-          border-radius: 999px;
-          padding: 4px 10px;
-          font-size: 12px; color: var(--text);
-        }
-        .chip.soft { background: #eef2ff; color:#0f172a; }
-        .chip b { font-weight: 900; }
-
-        .actions { display:flex; gap:6px; }
-        .iconBtn {
-          border: 1px solid var(--border);
-          background: var(--bg);
-          width: 30px; height: 30px; border-radius: 10px;
-          cursor: pointer;
-        }
-        .iconBtn:hover { background: color-mix(in oklab, var(--bg2) 85%, var(--primary) 15%); }
-        .iconBtn.danger { background: #fee2e2; border-color:#fecaca; }
-
-        .subRow { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
-        .pill {
-          background: var(--bg2);
-          border: 1px dashed var(--border);
-          border-radius: 999px;
-          padding: 4px 8px;
-          font-size: 12px;
-        }
-        .pill b { font-weight: 800; }
-        .pill.muted { opacity: .8; }
-
-        /* EDIT SHEET */
-        .sheet {
-          margin-top: 12px;
-          border: 1px solid color-mix(in oklab, var(--primary) 35%, var(--border));
-          background:
-            radial-gradient(140% 120% at 100% -40%, color-mix(in oklab, var(--primary) 18%, transparent), transparent),
-            color-mix(in oklab, var(--card-bg) 90%, transparent);
-          backdrop-filter: blur(8px);
-          border-radius: 16px;
-          padding: 12px;
-          box-shadow: 0 18px 50px rgba(2,6,23,.12) inset, 0 8px 30px rgba(2,6,23,.08);
-          animation: sheetIn .18s ease-out both;
-        }
-        @keyframes sheetIn { from { opacity:0; transform: translateY(6px) } to { opacity:1; transform: translateY(0) } }
-
-        .grid2 { display:grid; grid-template-columns: 140px 1fr; gap: 10px 12px; }
-        @media (max-width:560px){ .grid2{ grid-template-columns: 1fr; } }
-
-        .field { position: relative; }
-        .input {
-          width:100%; border:1px solid var(--border); border-radius: 12px;
-          padding: 14px 12px 10px; background: var(--bg);
-          color: var(--text); outline: none;
-        }
-        .input:focus {
-          border-color: color-mix(in oklab, var(--primary) 60%, var(--border));
-          box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 22%, transparent);
-        }
-        .float {
-          position: absolute; left: 10px; top: 10px;
-          padding: 0 6px; background: var(--bg);
-          color: var(--muted); font-size: 12px; border-radius: 6px;
-          transition: transform .12s ease, color .12s ease, top .12s ease, background .12s ease;
-          pointer-events:none;
-        }
-        .input:not(:placeholder-shown) + .float,
-        .input:focus + .float {
-          top: -8px; transform: translateY(-2px); color: color-mix(in oklab, var(--primary) 70%, var(--muted));
+        .card{
+          border:1px solid var(--border);
           background: var(--card-bg);
+          border-radius:18px;
+          padding:14px;
+          box-shadow:0 10px 28px rgba(2,6,23,.06);
+          display:grid; gap:10px;
         }
+        .hdr{ display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; }
+        .title{ margin:0; font-size:22px; font-weight:900; letter-spacing:-.01em; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .toolbar{ display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+        .meta{ display:flex; flex-wrap:wrap; gap:8px; }
 
-        .actionsRow { display:flex; gap:10px; justify-content:flex-end; margin-top: 10px; }
-        .error {
-          margin-top: 6px;
-          background: color-mix(in oklab, #ef4444 12%, var(--card-bg));
-          color:#7f1d1d; border:1px solid color-mix(in oklab, #ef4444 35%, var(--border));
-          border-radius:10px; padding:8px 10px; font-size: 12px;
-        }
+        /* Modals */
+        .modalOverlay { position:fixed; inset:0; background:rgba(2,6,23,.55); display:grid; place-items:center; padding:16px; z-index:3000; }
+        .modal { width:min(720px, 96vw); max-height:92vh; display:grid; grid-template-rows:auto 1fr auto; border:1px solid var(--border); background:var(--card-bg); border-radius:18px; overflow:hidden; box-shadow:0 24px 64px rgba(0,0,0,.35); }
+        .modal.modal-nutri { width:min(720px, 96vw); }
+        .mHead { display:grid; grid-template-columns:1fr auto; align-items:center; gap:8px; padding:14px 16px; border-bottom:1px solid var(--border); background: var(--bg2); }
+        .mEyebrow { color:var(--muted); font-size:12px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+        .mTitle { font-weight:900; font-size:18px; }
+        .mClose { border:none; background:transparent; font-size:24px; color:var(--muted); cursor:pointer; line-height:1; }
+        .mBody { display:grid; grid-template-columns:1fr; gap:16px; padding:16px; overflow:auto; }
+        .mBody--single { grid-template-columns:1fr; }
+        .mForm { display:grid; gap:12px; align-content:start; }
+        .g2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+        .lbl { display:grid; gap:6px; font-size:.9rem; font-weight:800; color:var(--text); }
+        .inp { border:1px solid var(--border); background:var(--bg); color:var(--text); border-radius:12px; padding:12px; outline:none; }
+        .readonly { display:inline-flex; gap:8px; align-items:center; border:1px dashed var(--border); background:var(--bg2); padding:10px 12px; border-radius:12px; }
+        .readonly .key { color:var(--muted); font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+        .readonly .val { font-weight:800; }
+        .nutCard { border:1px solid var(--border); background:var(--bg); border-radius:16px; padding:16px; }
+        .nutHead { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+        .nutTitle { font-weight:900; }
+        .nutGrid { display:grid; grid-template-columns:1fr auto; gap:10px 14px; }
+        .nrow { display:contents; }
+        dt { color:var(--muted); } dd { margin:0; font-weight:800; }
+        .suffix { margin-left:2px; color:var(--muted); font-weight:700; font-size:12px; }
+        .consumeBox { display:grid; gap:12px; }
+        .est { display:grid; gap:8px; border:1px dashed var(--border); background:var(--bg); border-radius:12px; padding:10px; }
+        .eRow { display:flex; align-items:center; justify-content:space-between; }
+        .eRow .k { color:var(--muted); font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
+        .mFoot { display:flex; justify-content:flex-end; gap:10px; padding:12px 16px; border-top:1px solid var(--border); background: var(--bg2); }
       `}</style>
-    </div>
+    </>
   );
 }

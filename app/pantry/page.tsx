@@ -18,6 +18,7 @@ import PantryHelpButton from "@/components/pantry/PantryHelpButton";
 import { fetchNutritionByBarcode, NutritionInfo } from "@/lib/nutrition";
 import Fridge from "@/components/pantry/Fridge";
 import TrashCan from "@/components/pantry/TrashCan";
+import HealthCoach from "@/components/pantry/HealthCoach";
 
 /* ---------- TS helpers ---------- */
 type TSLike = Timestamp | { seconds: number; nanoseconds: number } | Date | null | undefined;
@@ -25,10 +26,7 @@ type TSLike = Timestamp | { seconds: number; nanoseconds: number } | Date | null
 /* ---------- utilities ---------- */
 const looksLikeBarcode = (s: string) => /^\d{6,}$/.test(s);
 const capFirst = (s: string) => s.replace(/^\p{L}/u, (m) => m.toUpperCase());
-const todayStr = () => {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
-};
+const todayStr = () => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`; };
 const startOfToday = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
 
 function toDate(ts?: TSLike | null) {
@@ -37,6 +35,7 @@ function toDate(ts?: TSLike | null) {
   const anyTs: any = ts;
   if (typeof anyTs?.toDate === "function") return anyTs.toDate();
   if (typeof anyTs?.seconds === "number") return new Date(anyTs.seconds * 1000);
+  if (typeof ts === "string" && !Number.isNaN(Date.parse(ts))) return new Date(ts);
   return null;
 }
 
@@ -75,6 +74,20 @@ type PantryItemPage = {
   nutrition?: NutritionInfo | null;
 };
 
+/* ---------- consumption log type ---------- */
+type ConsumptionLog = {
+  id: string;
+  uid: string;
+  itemId: string;
+  name: string;
+  grams: number;
+  sugars_g: number;
+  satFat_g: number;
+  sodium_g: number;
+  kcal: number;
+  createdAt: TSLike | null;
+};
+
 export default function PantryPage() {
   const router = useRouter();
 
@@ -88,7 +101,7 @@ export default function PantryPage() {
   const [scannerKey, setScannerKey] = useState(0);
   const [scannerAutoStart, setScannerAutoStart] = useState(false);
 
-  // nutrition
+  // nutrition (for add form)
   const [nutrition, setNutrition] = useState<NutritionInfo | null>(null);
   const [nutriBusy, setNutriBusy] = useState(false);
   const [nutriErr, setNutriErr] = useState<string | null>(null);
@@ -99,41 +112,54 @@ export default function PantryPage() {
   const [items, setItems] = useState<PantryItemPage[]>([]);
   const stopRef = useRef<null | (() => void)>(null);
 
+  // consumption logs
+  const [logs, setLogs] = useState<ConsumptionLog[]>([]);
+
   const minDate = todayStr();
   const todayStart = useMemo(startOfToday, []);
 
   const [fridgeOpen, setFridgeOpen] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
 
-  // edit modal
-  const [editOpen, setEditOpen] = useState(false);
-  const [editItem, setEditItem] = useState<PantryItemPage | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editQty, setEditQty] = useState<number>(1);
-  const [editDate, setEditDate] = useState("");
-
-  /* auth + live items */
+  /* auth + live items + live logs */
   useEffect(() => {
     const stopAuth = onAuthStateChanged(auth, (u) => {
       if (stopRef.current) { stopRef.current(); stopRef.current = null; }
-      if (!u) { router.replace("/auth/login"); setItems([]); return; }
+      if (!u) { router.replace("/auth/login"); setItems([]); setLogs([]); return; }
 
+      // pantry items
       const qy = query(
         collection(db, "pantryItems"),
         where("uid", "==", u.uid),
         orderBy("createdAt", "desc")
       );
-      const stop = onSnapshot(
+      const stopItems = onSnapshot(
         qy,
         (snap) => setItems(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as PantryItemPage[]),
         (e) => setErr(e?.message ?? "Could not load pantry.")
       );
-      stopRef.current = stop;
+
+      // consumption logs (last ~90 days)
+      const since = new Date();
+      since.setDate(since.getDate() - 90);
+      const qLogs = query(
+        collection(db, "consumptionLogs"),
+        where("uid", "==", u.uid),
+        where("createdAt", ">=", Timestamp.fromDate(since)),
+        orderBy("createdAt", "desc")
+      );
+      const stopLogs = onSnapshot(
+        qLogs,
+        (snap) => setLogs(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as ConsumptionLog[]),
+        () => {}
+      );
+
+      stopRef.current = () => { stopItems(); stopLogs(); };
     });
     return () => { if (stopRef.current) stopRef.current(); stopAuth(); };
   }, [router]);
 
-  /* nutrition lookup */
+  /* nutrition lookup (barcode) for add form */
   useEffect(() => {
     const id = setTimeout(async () => {
       if (!barcode) { setNutrition(null); setNutriErr(null); return; }
@@ -269,52 +295,61 @@ export default function PantryPage() {
 
   /* for Fridge/TrashCan */
   const fridgeItems = active.map((it) => ({
-    id: it.id,
-    uid: it.uid,
-    name: it.name,
-    quantity: it.quantity,
-    expiresAt: it.expiresAt ?? null,
-    barcode: it.barcode ?? null,
-    nutrition: it.nutrition ?? null,
+    id: it.id, uid: it.uid, name: it.name, quantity: it.quantity,
+    expiresAt: it.expiresAt ?? null, barcode: it.barcode ?? null, nutrition: it.nutrition ?? null,
   }));
   const trashItems = expired.map((it) => ({
-    id: it.id,
-    uid: it.uid,
-    name: it.name,
-    quantity: it.quantity,
-    expiresAt: it.expiresAt ?? null,
-    barcode: it.barcode ?? null,
-    nutrition: it.nutrition ?? null,
+    id: it.id, uid: it.uid, name: it.name, quantity: it.quantity,
+    expiresAt: it.expiresAt ?? null, barcode: it.barcode ?? null, nutrition: it.nutrition ?? null,
   }));
 
-  /* edit from Fridge item */
-  function openEditFromFridge(it: any) {
-    const d = toDate(it?.expiresAt ?? null);
-    setEditItem({
-      id: it?.id,
-      uid: it?.uid,
-      name: it?.name,
-      quantity: it?.quantity ?? 1,
-      expiresAt: it?.expiresAt ?? null,
-    });
-    setEditName(it?.name || "");
-    setEditQty(it?.quantity ?? 1);
-    setEditDate(
-      d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` : ""
-    );
-    setEditOpen(true);
+  /* ---------- CONSUMPTION: write + totals ---------- */
+  async function logConsumptionForItem(it: PantryItemPage, payload: { grams: number; nutrients: { sugars_g: number; satFat_g: number; sodium_g: number; kcal: number }}) {
+    const u = auth.currentUser;
+    if (!u) { router.replace("/auth/login"); return; }
+    try {
+      await addDoc(collection(db, "consumptionLogs"), {
+        uid: u.uid,
+        itemId: it.id,
+        name: it.name,
+        grams: payload.grams,
+        sugars_g: payload.nutrients.sugars_g,
+        satFat_g: payload.nutrients.satFat_g,
+        sodium_g: payload.nutrients.sodium_g,
+        kcal: payload.nutrients.kcal,
+        createdAt: serverTimestamp(),
+      });
+    } catch (e: any) {
+      console.error("Failed to log consumption", e);
+    }
   }
 
-  async function confirmEdit() {
-    if (!editItem) return;
-    await saveItem(editItem.id, {
-      name: editName.trim(),
-      quantity: editQty,
-      expiresAt: editDate || null,
+  // Aggregate logs -> week/month
+  const totalsWeek = useMemo(() => {
+    const out = { sugars_g: 0, satFat_g: 0, sodium_g: 0, kcal: 0 };
+    const since = new Date(); since.setDate(since.getDate() - 7);
+    logs.forEach(l => {
+      const d = toDate(l.createdAt); if (!d || d < since) return;
+      out.sugars_g += l.sugars_g || 0;
+      out.satFat_g += l.satFat_g || 0;
+      out.sodium_g += l.sodium_g || 0;
+      out.kcal += l.kcal || 0;
     });
-    setEditOpen(false);
-    setEditItem(null);
-  }
+    return out;
+  }, [logs]);
+
+  const totalsMonth = useMemo(() => {
+    const out = { sugars_g: 0, satFat_g: 0, sodium_g: 0, kcal: 0 };
+    const since = new Date(); since.setDate(since.getDate() - 30);
+    logs.forEach(l => {
+      const d = toDate(l.createdAt); if (!d || d < since) return;
+      out.sugars_g += l.sugars_g || 0;
+      out.satFat_g += l.satFat_g || 0;
+      out.sodium_g += l.sodium_g || 0;
+      out.kcal += l.kcal || 0;
+    });
+    return out;
+  }, [logs]);
 
   return (
     <main className="wrap">
@@ -323,31 +358,24 @@ export default function PantryPage() {
         <div className="heroInner">
           <div className="heroLeft">
             <h1 className="title">Pantry</h1>
-            <p className="sub">
-              Log groceries, track freshness, and keep your <span className="hl">Fridge</span> stocked.
-            </p>
+            <p className="sub">Log groceries, track freshness, and keep your <span className="hl">Fridge</span> stocked.</p>
           </div>
-          <div className="heroRight">
-            <PantryHelpButton />
-          </div>
+          <div className="heroRight"><PantryHelpButton /></div>
         </div>
       </section>
 
       {/* QUICK STATS */}
       <section className="stats">
-        <div className="stat">
-          <div className="sTop"><span className="dot dot-ok" /> Active</div>
-          <div className="sNum">{active.length}</div>
-        </div>
-        <div className="stat">
-          <div className="sTop"><span className="dot dot-warn" /> Expired</div>
-          <div className="sNum">{expired.length}</div>
-        </div>
-        <div className="stat">
-          <div className="sTop"><span className="dot" /> Total</div>
-          <div className="sNum">{items.length}</div>
-        </div>
+        <div className="stat"><div className="sTop"><span className="dot dot-ok" /> Active</div><div className="sNum">{active.length}</div></div>
+        <div className="stat"><div className="sTop"><span className="dot dot-warn" /> Expired</div><div className="sNum">{expired.length}</div></div>
+        <div className="stat"><div className="sTop"><span className="dot" /> Total</div><div className="sNum">{items.length}</div></div>
       </section>
+
+      {/* HEALTH COACH */}
+      <HealthCoach
+        week={{ title: "This week", totals: totalsWeek }}
+        month={{ title: "This month", totals: totalsMonth }}
+      />
 
       {/* ADD PRODUCT */}
       <section className="card addCard">
@@ -362,63 +390,27 @@ export default function PantryPage() {
         <div className="addGrid">
           <div className="field">
             <label className="label">Name</label>
-            <input
-              className="input"
-              value={name}
-              onChange={(e)=>setName(e.target.value)}
-              placeholder="Pasta"
-              aria-label="Product name"
-            />
+            <input className="input" value={name} onChange={(e)=>setName(e.target.value)} placeholder="Pasta" aria-label="Product name" />
           </div>
-
           <div className="field">
             <label className="label">Quantity</label>
-            <input
-              className="input"
-              type="number" min={1}
-              value={String(qty)}
-              onChange={(e)=>setQty(Math.max(1, Number(e.target.value) || 1))}
-              aria-label="Quantity"
-            />
+            <input className="input" type="number" min={1} value={String(qty)} onChange={(e)=>setQty(Math.max(1, Number(e.target.value)||1))} aria-label="Quantity" />
           </div>
-
           <div className="field">
             <label className="label">Expiry</label>
-            <input
-              className="input"
-              type="date"
-              min={minDate}
-              value={date}
-              onChange={(e)=>setDate(e.currentTarget.value)}
-              aria-label="Expiry date"
-            />
+            <input className="input" type="date" min={minDate} value={date} onChange={(e)=>setDate(e.currentTarget.value)} aria-label="Expiry date" />
           </div>
-
           <div className="barcodeRow">
             <div className="field">
               <label className="label">Barcode</label>
-              <input
-                className="input"
-                value={barcode}
-                onChange={(e)=>setBarcode(String(e.target.value).trim())}
-                placeholder="Scan or type digits"
-                aria-label="Barcode"
-              />
+              <input className="input" value={barcode} onChange={(e)=>setBarcode(String(e.target.value).trim())} placeholder="Scan or type digits" aria-label="Barcode" />
             </div>
-            <button
-              type="button"
-              className="btn ghost"
-              onClick={() => { setBarcode(""); setNutrition(null); setNutriErr(null); }}
-            >
-              Clear
-            </button>
+            <button type="button" className="btn ghost" onClick={() => { setBarcode(""); setNutrition(null); setNutriErr(null); }}>Clear</button>
           </div>
 
           <div className="scannerCol">
             <label className="label">Scan with camera</label>
-            <div className="scanner">
-              <BarcodeScanner key={scannerKey} autoStart={scannerAutoStart} onDetected={handleDetected} />
-            </div>
+            <div className="scanner"><BarcodeScanner key={scannerKey} autoStart={scannerAutoStart} onDetected={handleDetected} /></div>
             <div className="rowHint">
               {nutriBusy ? <span className="muted small">Looking up nutrition…</span> : <span className="muted small">Tip: hold steady 20–30cm away</span>}
               {nutriErr ? <span className="error small">{nutriErr}</span> : null}
@@ -439,133 +431,99 @@ export default function PantryPage() {
         )}
 
         {err && <p className="error">{err}</p>}
-        <div className="actions">
-          <Button onClick={addOrMergeItem} disabled={busy} type="button">
-            {busy ? "Saving…" : "Add / Merge"}
-          </Button>
-        </div>
+        <div className="actions"><Button onClick={addOrMergeItem} disabled={busy} type="button">{busy ? "Saving…" : "Add / Merge"}</Button></div>
       </section>
 
-      {/* ACTIVE + FRIDGE (no duplicate grid) */}
+      {/* ACTIVE + FRIDGE (focus mode capable) */}
       <section className="list">
-        <div className="sectionHead">
-          <h2 className="secTitle">Active</h2>
-          <div className="fridgeDock">
+        <div className={`twoCol ${fridgeOpen ? "focus" : ""}`}>
+          <aside className="leftCol">
             <Fridge
               items={fridgeItems}
               isOpen={fridgeOpen}
-              onToggleOpen={setFridgeOpen}
-              onEdit={(it) => openEditFromFridge(it)}
-              onDelete={(it) => removeItem((it as any).id)}
+              onToggleOpen={(v) => { setFridgeOpen(v); if (v) setTrashOpen(false); }}
+              minimal
             />
-          </div>
-        </div>
-
-        {/* If nothing active, show an empty state UNDER the fridge */}
-        {active.length === 0 && (
-          <div className="empty">
-            <div className="emoji">🧺</div>
-            <p className="emptyTitle">Your pantry is squeaky clean</p>
-            <p className="muted">Add a few items to get started.</p>
-          </div>
-        )}
-      </section>
-
-      {/* EXPIRED + TRASHCAN */}
-      <section className="list" style={{ marginTop: 20 }}>
-        <div className="sectionHead">
-          <h2 className="secTitle">Expired</h2>
-          <TrashCan
-            items={trashItems as any}
-            isOpen={trashOpen}
-            onToggleOpen={setTrashOpen}
-          />
-        </div>
-
-        {expired.length === 0 ? (
-          <div className="empty ok">
-            <div className="emoji">🎉</div>
-            <p className="emptyTitle">Nothing expired</p>
-            <p className="muted">Keep it fresh!</p>
-          </div>
-        ) : (
-          <div className="gridCards">
-            {expired.map((it) => (
-              <PantryCard
-                key={it.id}
-                item={{ ...it, name: it.name } as unknown as PantryCardItem}
-                onDelete={() => removeItem(it.id)}
-                onSave={(patch) => saveItem(it.id, patch)}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* EDIT MODAL */}
-      {editOpen && editItem && (
-        <div className="overlay" onClick={()=>setEditOpen(false)} role="dialog" aria-modal="true">
-          <div className="modal" onClick={(e)=>e.stopPropagation()}>
-            <div className="mhead">
-              <div className="mtitle">Edit “{editItem.name}”</div>
-              <button className="x" onClick={()=>setEditOpen(false)} aria-label="Close">×</button>
-            </div>
-            <div className="mbody">
-              <div className="gridM">
-                <label className="lbl">Name
-                  <input className="txt" value={editName} onChange={(e)=>setEditName(e.target.value)} />
-                </label>
-                <label className="lbl">Quantity
-                  <input className="txt" type="number" min={1} value={String(editQty)} onChange={(e)=>setEditQty(Math.max(1, Number(e.target.value)||1))} />
-                </label>
-                <label className="lbl">Expiry date
-                  <input className="txt" type="date" value={editDate} onChange={(e)=>setEditDate(e.target.value)} />
-                </label>
+          </aside>
+          <div className="rightCol">
+            <div className="sectionHead"><h2 className="secTitle">Active</h2></div>
+            {active.length === 0 ? (
+              <div className="empty"><div className="emoji">🧺</div><p className="emptyTitle">Your pantry is squeaky clean</p><p className="muted">Add a few items to get started.</p></div>
+            ) : (
+              <div className="gridCards">
+                {active.map((it) => (
+                  <PantryCard
+                    key={it.id}
+                    item={it as unknown as PantryCardItem}
+                    onDelete={() => removeItem(it.id)}
+                    onSave={(patch) => saveItem(it.id, patch)}
+                    onConsume={(payload) => logConsumptionForItem(it, payload)}
+                  />
+                ))}
               </div>
-            </div>
-            <div className="mfoot">
-              <Button variant="secondary" onClick={()=>setEditOpen(false)}>Cancel</Button>
-              <Button onClick={confirmEdit}>Save</Button>
-            </div>
+            )}
           </div>
         </div>
-      )}
+      </section>
+
+      {/* EXPIRED + TRASHCAN (focus mode capable) */}
+      <section className="list" style={{ marginTop: 20 }}>
+        <div className={`twoCol ${trashOpen ? "focus" : ""}`}>
+          <aside className="leftCol">
+            <TrashCan
+              items={trashItems as any}
+              isOpen={trashOpen}
+              onToggleOpen={(v) => { setTrashOpen(v); if (v) setFridgeOpen(false); }}
+              minimal
+            />
+          </aside>
+          <div className="rightCol">
+            <div className="sectionHead"><h2 className="secTitle">Expired</h2></div>
+            {expired.length === 0 ? (
+              <div className="empty ok"><div className="emoji">🎉</div><p className="emptyTitle">Nothing expired</p><p className="muted">Keep it fresh!</p></div>
+            ) : (
+              <div className="gridCards">
+                {expired.map((it) => (
+                  <PantryCard
+                    key={it.id}
+                    item={{ ...it, name: it.name } as unknown as PantryCardItem}
+                    onDelete={() => removeItem(it.id)}
+                    onSave={(patch) => saveItem(it.id, patch)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
 
       <style jsx>{`
         .wrap { max-width: 1120px; margin: 0 auto; padding: 20px 16px 96px; }
 
         /* ---------- HERO ---------- */
         .hero { position: relative; margin: 6px 0 18px; }
-     
-        .heroInner {
-          position: relative;
-          border: 1px solid var(--border);
-          background: color-mix(in oklab, var(--bg) 92%, transparent);
-          backdrop-filter: blur(6px);
-          border-radius: 22px;
-          padding: 18px;
-          display: grid;
-          grid-template-columns: 1fr auto;
-          align-items: center;
-          box-shadow: 0 12px 38px rgba(2,6,23,.08);
-        }
+        .heroInner { position: relative; border: 1px solid var(--border); background: color-mix(in oklab, var(--bg) 92%, transparent); backdrop-filter: blur(6px); border-radius: 22px; padding: 18px; display: grid; grid-template-columns: 1fr auto; align-items: center; box-shadow: 0 12px 38px rgba(2,6,23,.08); }
         .heroLeft { display: grid; gap: 6px; }
         .title { font-size: clamp(26px, 4vw, 36px); font-weight: 900; letter-spacing: -0.02em; margin: 0; color: var(--text); }
         .sub { color: var(--muted); margin: 0; font-size: 15px; }
         .hl { color: var(--text); font-weight: 800; background: linear-gradient(90deg, color-mix(in oklab, var(--primary) 16%, transparent), transparent); padding: 0 6px; border-radius: 8px; }
 
+        /* ---------- LAYOUT ---------- */
+        .twoCol{ display:grid; grid-template-columns: 240px 1fr; gap:16px; align-items:start; }
+        .leftCol{ position: relative; }
+        @media (min-width: 900px){ .leftCol{ position: sticky; top: 8px; height: fit-content; } }
+        .rightCol{ min-width:0; }
+
+        /* Focus mode: hide grid & center the left widget */
+        .twoCol.focus { grid-template-columns: 1fr; position: relative; }
+        .twoCol.focus .leftCol { position: relative; top: auto; margin: 0 auto; width: min(560px, 92vw); transform: translateY(0); z-index: 3; transition: transform .18s ease, width .18s ease, box-shadow .18s ease; }
+        .twoCol.focus .rightCol { display: none; }
+        .twoCol.focus .leftCol > * { box-shadow: 0 24px 64px rgba(2,6,23,.20), 0 4px 12px rgba(2,6,23,.10); transform: scale(1.02); }
+        .twoCol.focus::after { content: ""; position: absolute; inset: -8px; background: radial-gradient(60% 60% at 50% 20%, rgba(2,6,23,.22), transparent 70%); pointer-events: none; border-radius: 20px; }
+
         /* ---------- STATS ---------- */
-        .stats {
-          display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px;
-          margin: 10px 0 18px;
-        }
-        .stat {
-          border: 1px solid var(--border);
-          background: var(--card-bg);
-          border-radius: 16px;
-          padding: 12px 14px;
-          box-shadow: 0 8px 30px rgba(2,6,23,.06);
-        }
+        .stats { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin: 10px 0 18px; }
+        .stat { border: 1px solid var(--border); background: var(--card-bg); border-radius: 16px; padding: 12px 14px; box-shadow: 0 8px 30px rgba(2,6,23,.06); }
         .sTop { display: flex; align-items: center; gap: 8px; color: var(--muted); font-weight: 700; font-size: 12px; }
         .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--muted); display: inline-block; }
         .dot-ok { background: #10b981; }
@@ -573,146 +531,58 @@ export default function PantryPage() {
         .sNum { font-weight: 900; font-size: 24px; line-height: 1; margin-top: 6px; }
 
         /* ---------- CARD BASE ---------- */
-        .card {
-          border: 1px solid var(--border);
-          background: linear-gradient(180deg, color-mix(in oklab, var(--card-bg) 92%, transparent), var(--card-bg));
-          border-radius: 20px;
-          padding: 16px;
-          box-shadow: 0 14px 40px rgba(2,6,23,.06), 0 2px 10px rgba(2,6,23,.04);
-        }
+        .card { border: 1px solid var(--border); background: linear-gradient(180deg, color-mix(in oklab, var(--card-bg) 92%, transparent), var(--card-bg)); border-radius: 20px; padding: 16px; box-shadow: 0 14px 40px rgba(2,6,23,.06), 0 2px 10px rgba(2,6,23,.04); }
 
         /* ---------- ADD CARD ---------- */
         .addCard { margin-bottom: 24px; }
         .addHead { display:flex; align-items:center; gap:12px; margin-bottom: 14px; }
-        .addIcon {
-          width:36px; height:36px; border-radius:12px; display:grid; place-items:center;
-          background: color-mix(in oklab, var(--primary) 18%, var(--bg2));
-          border:1px solid var(--border); font-weight:800;
-          box-shadow: 0 6px 16px rgba(2,6,23,.08);
-        }
+        .addIcon { width:36px; height:36px; border-radius:12px; display:grid; place-items:center; background: color-mix(in oklab, var(--primary) 18%, var(--bg2)); border:1px solid var(--border); font-weight:800; box-shadow: 0 6px 16px rgba(2,6,23,.08); }
         .addTitle { font-weight:900; letter-spacing:-.01em; }
         .addSub { color: var(--muted); font-size: 13px; margin-top: 2px; }
 
-        .addGrid {
-          display:grid;
-          grid-template-columns: 1.2fr .5fr .8fr 1fr;
-          gap: 12px 16px; align-items:end;
-        }
+        .addGrid { display:grid; grid-template-columns: 1.2fr .5fr .8fr 1fr; gap: 12px 16px; align-items:end; }
         @media (max-width: 1000px){ .addGrid{ grid-template-columns:1fr 1fr; } }
         @media (max-width: 560px){ .addGrid{ grid-template-columns:1fr; } }
 
         .field { display:grid; gap:6px; }
         .label { font-size:.84rem; color:var(--muted); font-weight:700; }
-        .input {
-          width:100%; border:1px solid var(--border); border-radius:12px; padding:10px 12px;
-          background: var(--bg2); color: var(--text); outline: none;
-          transition: border-color .15s ease, box-shadow .15s ease, background .2s ease, transform .04s ease;
-        }
-        .input:focus {
-          border-color: color-mix(in oklab, var(--primary) 60%, var(--border));
-          box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 22%, transparent);
-          background: var(--bg);
-        }
+        .input { width:100%; border:1px solid var(--border); border-radius:12px; padding:10px 12px; background: var(--bg2); color: var(--text); outline: none; transition: border-color .15s ease, box-shadow .15s ease, background .2s ease, transform .04s ease; }
+        .input:focus { border-color: color-mix(in oklab, var(--primary) 60%, var(--border)); box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 22%, transparent); background: var(--bg); }
         .input:active { transform: translateY(1px); }
 
         .barcodeRow { display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:end; }
-        .btn {
-          border:1px solid var(--border); background:var(--bg2); padding:10px 14px; border-radius:12px; cursor:pointer; color: var(--text); font-weight:800;
-          transition: background .2s ease, transform .04s ease;
-        }
+        .btn { border:1px solid var(--border); background:var(--bg2); padding:10px 14px; border-radius:12px; cursor:pointer; color: var(--text); font-weight:800; transition: background .2s ease, transform .04s ease; }
         .btn:active{ transform: translateY(1px); }
         .btn.ghost:hover{ background: color-mix(in oklab, var(--bg2) 85%, var(--primary) 15%); }
 
         .scannerCol { display:grid; gap:8px; }
-        .scanner {
-          border:1px dashed var(--border);
-          background: var(--bg);
-          border-radius: 14px;
-          padding: 8px;
-        }
+        .scanner { border:1px dashed var(--border); background: var(--bg); border-radius: 14px; padding: 8px; }
         .rowHint { display:flex; gap:12px; align-items:center; }
         .muted { color: var(--muted); }
         .small { font-size:12px; }
 
-        .nutri {
-          margin-top: 12px;
-          border:1px dashed var(--border);
-          background: color-mix(in oklab, var(--bg) 92%, var(--primary) 8%);
-          border-radius:14px;
-          padding:10px 12px;
-        }
+        .nutri { margin-top: 12px; border:1px dashed var(--border); background: color-mix(in oklab, var(--bg) 92%, var(--primary) 8%); border-radius:14px; padding:10px 12px; }
         .nutTitle { font-weight:900; margin-bottom:6px; color: var(--text); }
         .nutGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px 12px; }
         @media (max-width:560px){ .nutGrid{ grid-template-columns:1fr; } }
 
         .actions { margin-top:14px; display:flex; gap:12px; justify-content:flex-end; }
-        .error {
-          background: color-mix(in oklab, #ef4444 15%, var(--card-bg));
-          color:#7f1d1d;
-          border:1px solid color-mix(in oklab, #ef4444 35%, var(--border));
-          border-radius:10px; padding:8px 10px; font-size:13px;
-        }
+        .error { background: color-mix(in oklab, #ef4444 15%, var(--card-bg)); color:#7f1d1d; border:1px solid color-mix(in oklab, #ef4444 35%, var(--border)); border-radius:10px; padding:8px 10px; font-size:13px; }
 
         /* ---------- LISTS ---------- */
         .list { margin-top: 18px; }
-        .sectionHead {
-          display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom: 10px;
-        }
+        .sectionHead { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom: 10px; }
         .secTitle { font-size:16px; font-weight:900; margin: 0; color: var(--text); letter-spacing: -0.01em; }
 
-        .fridgeDock { display: grid; }
-
-        .gridCards {
-          display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:16px;
-          animation: fadeIn .24s ease-out both;
-        }
+        .gridCards { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:16px; animation: fadeIn .24s ease-out both; }
         @media (max-width: 900px){ .gridCards{ grid-template-columns:repeat(2, minmax(0,1fr)); } }
         @media (max-width: 600px){ .gridCards{ grid-template-columns:1fr; } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: translateY(0) } }
 
-        .empty {
-          text-align:center;
-          border:1px dashed var(--border);
-          border-radius:16px;
-          padding: 24px 14px;
-          background: var(--bg);
-        }
+        .empty { text-align:center; border:1px dashed var(--border); border-radius:16px; padding: 24px 14px; background: var(--bg); }
         .empty.ok { background: color-mix(in oklab, #10b981 10%, var(--bg)); border-color: color-mix(in oklab, #10b981 35%, var(--border)); }
         .emoji { font-size: 28px; }
         .emptyTitle { margin: 6px 0 2px; font-weight: 900; color: var(--text); }
-        .empty .muted { font-size: 14px; }
-
-        /* ---------- EDIT MODAL ---------- */
-        .overlay { position:fixed; inset:0; background:rgba(2,6,23,.55); display:grid; place-items:center; padding:16px; z-index:1200;}
-        .modal {
-          width:100%; max-width:560px;
-          border:1px solid var(--border);
-          background:
-            radial-gradient(130% 60% at 100% -20%, color-mix(in oklab, var(--primary) 20%, transparent), transparent),
-            var(--card-bg);
-          backdrop-filter: blur(8px);
-          border-radius:18px; overflow:hidden;
-          box-shadow:0 24px 60px rgba(0,0,0,.35);
-          animation: modalIn .18s ease-out both;
-        }
-        @keyframes modalIn { from{ opacity:0; transform: translateY(8px) } to{ opacity:1; transform: translateY(0) } }
-        .mhead {
-          display:grid; grid-template-columns:1fr auto; align-items:center; gap:8px;
-          padding:12px 14px; border-bottom:1px solid var(--border); background: var(--bg2);
-        }
-        .mtitle { font-weight:900; color: var(--text); }
-        .x { border:none; background:transparent; font-size:22px; color: var(--muted); cursor:pointer; }
-        .mbody { padding:14px; }
-        .gridM { display:grid; grid-template-columns:1fr 140px 1fr; gap:12px 16px; }
-        @media (max-width:640px){ .gridM{ grid-template-columns:1fr; } }
-        .lbl { display:grid; gap:6px; font-size:.9rem; color:var(--text); font-weight:700; }
-        .txt {
-          width:100%; border:1px solid var(--border); border-radius:12px; padding:12px;
-          background: var(--bg); color: var(--text);
-          outline: none; transition: border-color .15s ease, box-shadow .15s ease, background .2s ease;
-        }
-        .txt:focus { border-color: color-mix(in oklab, var(--primary) 60%, var(--border)); box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 22%, transparent); }
-        .mfoot { padding:12px 14px; border-top:1px solid var(--border); display:flex; gap:10px; justify-content:flex-end; }
       `}</style>
     </main>
   );
