@@ -139,19 +139,14 @@ export default function PantryPage() {
         (e) => setErr(e?.message ?? "Could not load pantry.")
       );
 
-      // consumption logs (last ~90 days)
-      const since = new Date();
-      since.setDate(since.getDate() - 90);
       const qLogs = query(
         collection(db, "consumptionLogs"),
-        where("uid", "==", u.uid),
-        where("createdAt", ">=", Timestamp.fromDate(since)),
-        orderBy("createdAt", "desc")
+        where("uid", "==", u.uid)
       );
       const stopLogs = onSnapshot(
         qLogs,
         (snap) => setLogs(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as ConsumptionLog[]),
-        () => {}
+        (e) => console.error("consumptionLogs listener failed:", (e as FirebaseError)?.code || "", (e as FirebaseError)?.message)
       );
 
       stopRef.current = () => { stopItems(); stopLogs(); };
@@ -434,7 +429,7 @@ export default function PantryPage() {
         <div className="actions"><Button onClick={addOrMergeItem} disabled={busy} type="button">{busy ? "Saving…" : "Add / Merge"}</Button></div>
       </section>
 
-      {/* ACTIVE + FRIDGE (focus mode capable) */}
+      {/* ACTIVE + FRIDGE */}
       <section className="list">
         <div className={`twoCol ${fridgeOpen ? "focus" : ""}`}>
           <aside className="leftCol">
@@ -466,7 +461,7 @@ export default function PantryPage() {
         </div>
       </section>
 
-      {/* EXPIRED + TRASHCAN (focus mode capable) */}
+      {/* EXPIRED + TRASHCAN */}
       <section className="list" style={{ marginTop: 20 }}>
         <div className={`twoCol ${trashOpen ? "focus" : ""}`}>
           <aside className="leftCol">
@@ -514,7 +509,7 @@ export default function PantryPage() {
         @media (min-width: 900px){ .leftCol{ position: sticky; top: 8px; height: fit-content; } }
         .rightCol{ min-width:0; }
 
-        /* Focus mode: hide grid & center the left widget */
+        /* Focus mode */
         .twoCol.focus { grid-template-columns: 1fr; position: relative; }
         .twoCol.focus .leftCol { position: relative; top: auto; margin: 0 auto; width: min(560px, 92vw); transform: translateY(0); z-index: 3; transition: transform .18s ease, width .18s ease, box-shadow .18s ease; }
         .twoCol.focus .rightCol { display: none; }

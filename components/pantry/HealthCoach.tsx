@@ -1,4 +1,3 @@
-// components/pantry/HealthCoach.tsx
 "use client";
 
 import { useMemo } from "react";
@@ -22,11 +21,10 @@ type Props = {
   onViewDetails?: () => void;
 };
 
-// Default daily “soft” targets (user can later make these user-configurable)
 const DAILY_TARGET = {
-  sugars_g: 50,      // ~WHO suggestion for added sugar (very rough)
-  satFat_g: 20,      // typical guidance (varies by region)
-  sodium_g: 2.3,     // 2.3g sodium (~6g salt)
+  sugars_g: 50,
+  satFat_g: 20,
+  sodium_g: 2.3,
   kcal: 2000,
 };
 
@@ -50,7 +48,7 @@ function Bar({ label, value, max, warnAt = 75 }: { label: string; value: number;
       <style jsx>{`
         .bar { display:grid; gap:6px; }
         .barTop { display:flex; align-items:center; justify-content:space-between; }
-        .bLabel { color: var(--muted); font-weight:800; font-size:12px; letter-spacing:.04em; text-transform:uppercase; }
+        .bLabel { color:var(--muted); font-weight:800; font-size:12px; letter-spacing:.04em; text-transform:uppercase; }
         .bVal { font-weight:900; font-size:12px; }
         .bVal.warn { color:#b91c1c; }
         .track { height:8px; background: var(--bg2); border:1px solid var(--border); border-radius:999px; overflow:hidden; }
@@ -62,7 +60,6 @@ function Bar({ label, value, max, warnAt = 75 }: { label: string; value: number;
 }
 
 export default function HealthCoach({ week, month, onViewDetails }: Props) {
-  // Weekly target = DAILY * 7, Monthly target ≈ DAILY * 30
   const weeklyTargets = useMemo(() => ({
     sugars_g: DAILY_TARGET.sugars_g * 7,
     satFat_g: DAILY_TARGET.satFat_g * 7,

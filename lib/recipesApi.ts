@@ -1,156 +1,137 @@
-
+// lib/recipesApi.ts
 
 import type { CommonRecipe, Ingredient } from "@/components/recipes/types";
 
-async function j<T = any>(url: string): Promise<T> {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`);
-  return r.json() as Promise<T>;
-}
-
-function mealToCommon(m: any): CommonRecipe {
+/** Helpers */
+function mealToCommon(meal: any): CommonRecipe {
   const ingredients: Ingredient[] = [];
   for (let i = 1; i <= 20; i++) {
-    const name = (m[`strIngredient${i}`] || "").trim();
-    const measure = (m[`strMeasure${i}`] || "").trim();
-    if (!name) continue;
-    ingredients.push({ name, measure: measure || undefined });
+    const name = (meal[`strIngredient${i}`] || "").trim();
+    const measure = (meal[`strMeasure${i}`] || "").trim();
+    if (name) ingredients.push({ name, measure: measure || null });
   }
   return {
-    id: String(m.idMeal),
+    id: String(meal.idMeal),
     source: "api",
-    title: m.strMeal || "Untitled",
-    image: m.strMealThumb || null,
-    category: m.strCategory || null,
-    area: m.strArea || null,
+    title: meal.strMeal,
+    image: meal.strMealThumb || null,
+    category: meal.strCategory || null,
+    area: meal.strArea || null,
     ingredients,
-    instructions: m.strInstructions || null,
+    instructions: meal.strInstructions || null,
+    author: { uid: null, name: null },
   };
 }
 
-function sanitizeIngredient(raw: string): string {
-  const s = (raw || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!s) return "";
-  const bits = s.split(" ");
-  return bits[bits.length - 1];
-}
-
-function coreTerm(raw: string): string {
-  const s = sanitizeIngredient(raw);
-  const map: Record<string, string> = {
-    breast: "chicken",
-    thighs: "chicken",
-    mince: "beef",
-    minced: "beef",
-    spaghetti: "pasta",
-    penne: "pasta",
-    fusilli: "pasta",
-    rigatoni: "pasta",
-    farfalle: "pasta",
-    macaroni: "pasta",
-    arborio: "rice",
-  };
-  return map[s] || s;
-}
-
+/** Random meals (N results) */
 export async function getRandomMeals(n = 12): Promise<CommonRecipe[]> {
-  const packs = await Promise.all(
-    Array.from({ length: n }, () =>
-      j<any>("https://www.themealdb.com/api/json/v1/1/random.php")
-    )
+  const reqs = Array.from({ length: n }, () =>
+    fetch("https://www.themealdb.com/api/json/v1/1/random.php").then((r) => r.json()).catch(() => null)
   );
-  const meals = packs
-    .map((p) => (p?.meals || [])[0])
-    .filter(Boolean)
-    .map(mealToCommon);
-  const seen = new Set<string>();
-  return meals.filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true)));
+  const pages = await Promise.all(reqs);
+  const out: CommonRecipe[] = [];
+  pages.forEach((p) => {
+    const meal = p?.meals?.[0];
+    if (meal) out.push(mealToCommon(meal));
+  });
+  return out;
 }
 
+/** Search by name */
 export async function searchMealsByName(q: string): Promise<CommonRecipe[]> {
-  const s = q.trim();
-  if (!s) return [];
-  const out = await j<any>(
-    `https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(s)}`
-  );
-  const meals: any[] = out?.meals || [];
+  const url = `https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(q)}`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const json = await res.json();
+  const meals = json?.meals || [];
   return meals.map(mealToCommon);
 }
 
-export async function searchMealsByIngredient(
-  ingredient: string,
-  limit = 24
-): Promise<CommonRecipe[]> {
-  const term = coreTerm(ingredient);
-  if (!term) return [];
-  const res = await j<any>(
-    `https://www.themealdb.com/api/json/v1/1/filter.php?i=${encodeURIComponent(term)}`
-  );
-  const list: any[] = res?.meals || [];
-  const ids: string[] = list.slice(0, limit).map((m) => String(m.idMeal));
-  const full = await Promise.all(ids.map((id) => lookupMealById(id)));
-  return (full.filter(Boolean) as CommonRecipe[]);
+/** Search by a single ingredient (TheMealDB OR-style) */
+export async function searchMealsByIngredient(ing: string): Promise<CommonRecipe[]> {
+  // filter.php returns light objects (id/name/thumb); we need lookup to hydrate
+  const url = `https://www.themealdb.com/api/json/v1/1/filter.php?i=${encodeURIComponent(ing)}`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const json = await res.json();
+  const meals = json?.meals || [];
+  const ids = meals.map((m: any) => String(m.idMeal));
+  const details = await Promise.all(ids.map(lookupMealById));
+  return details.filter(Boolean) as CommonRecipe[];
 }
 
+/** Lookup a single recipe by id */
 export async function lookupMealById(id: string): Promise<CommonRecipe | null> {
-  const res = await j<any>(
-    `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${encodeURIComponent(id)}`
-  );
-  const meal = res?.meals?.[0];
+  const url = `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${encodeURIComponent(id)}`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const json = await res.json();
+  const meal = json?.meals?.[0];
   return meal ? mealToCommon(meal) : null;
 }
 
-
+/**
+ * AND-search across multiple ingredients:
+ * - Normalizes tokens
+ * - Intersects ID sets returned by filter.php?i=
+ * - Falls back to ranked-OR when intersection is empty
+ * - Hydrates each final id with full details
+ */
 export async function searchMealsByIngredientsAND(
   rawTerms: string[],
-  maxHydrate = 30
+  limit = 36
 ): Promise<CommonRecipe[]> {
-  const terms = Array.from(new Set(rawTerms.map(coreTerm).filter(Boolean)));
-  if (terms.length === 0) return [];
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim();
 
-  const resultsPerTerm: string[][] = await Promise.all(
-    terms.map(async (t): Promise<string[]> => {
-      const res = await j<any>(
-        `https://www.themealdb.com/api/json/v1/1/filter.php?i=${encodeURIComponent(t)}`
-      ).catch(() => ({ meals: [] }));
-      const meals: any[] = res?.meals || [];
-      return meals.map((m: any) => String(m.idMeal));
-    })
+  const terms = Array.from(
+    new Set(
+      rawTerms
+        .map(norm)
+        .filter(Boolean)
+        .map((t) => (t.endsWith("s") ? t.slice(0, -1) : t)) // simple plural trim
+    )
   );
 
-  let ids: string[] = [];
-  if (resultsPerTerm.length === 1) {
-    ids = resultsPerTerm[0];
+  if (!terms.length) return [];
+
+  async function idsFor(ing: string): Promise<Set<string>> {
+    const url = `https://www.themealdb.com/api/json/v1/1/filter.php?i=${encodeURIComponent(ing)}`;
+    const res = await fetch(url);
+    if (!res.ok) return new Set<string>();
+    const json = await res.json();
+    const meals = json?.meals || [];
+    return new Set(meals.map((m: any) => String(m.idMeal)));
+  }
+
+  const sets = await Promise.all(terms.map(idsFor));
+
+  // Intersect
+  let inter = sets[0] || new Set<string>();
+  for (let i = 1; i < sets.length; i++) {
+    const next = new Set<string>();
+    inter.forEach((id) => { if (sets[i].has(id)) next.add(id); });
+    inter = next;
+    if (inter.size === 0) break;
+  }
+
+  let finalIds: string[];
+  if (inter.size > 0) {
+    finalIds = Array.from(inter).slice(0, limit);
   } else {
-    const [first, ...rest] = resultsPerTerm;
-    const base = new Set<string>(first);
-    for (const arr of rest) {
-      const s = new Set<string>(arr);
-      for (const id of Array.from(base)) {
-        if (!s.has(id)) base.delete(id);
-      }
-    }
-    ids = Array.from(base);
+    // Ranked OR fallback
+    const counts = new Map<string, number>();
+    sets.forEach((s) => s.forEach((id) => counts.set(id, (counts.get(id) || 0) + 1)));
+    finalIds = Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([id]) => id)
+      .slice(0, limit);
   }
 
-  if (ids.length === 0) {
-    const union = new Set<string>();
-    for (const arr of resultsPerTerm) {
-      arr.forEach((id: string) => union.add(id)); 
-    }
-    ids = Array.from(union);
-  }
-
-  ids = ids.slice(0, maxHydrate);
-  const full = await Promise.all(ids.map((id) => lookupMealById(id)));
-  const seen = new Set<string>();
-  return (full.filter(Boolean) as CommonRecipe[]).filter((r) =>
-    seen.has(r.id) ? false : (seen.add(r.id), true)
-  );
+  const details = await Promise.all(finalIds.map(lookupMealById));
+  return details.filter(Boolean) as CommonRecipe[];
 }

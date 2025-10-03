@@ -1,8 +1,6 @@
-// components/pantry/Fridge.tsx
 "use client";
 
 import React from "react";
-import Button from "@/components/ui/Button";
 
 type TSLike = any;
 
@@ -20,9 +18,8 @@ type Props = {
   items: FridgeItem[];
   isOpen: boolean;
   onToggleOpen: (open: boolean) => void;
+  /** optional prop because page.tsx passes it */
   minimal?: boolean;
-  onEdit?: (item: FridgeItem) => void;
-  onDelete?: (item: FridgeItem) => void;
 };
 
 function toDate(v: any): Date | null {
@@ -35,22 +32,17 @@ function toDate(v: any): Date | null {
   return null;
 }
 
-export default function Fridge({
-  items,
-  isOpen,
-  onToggleOpen,
-  minimal,
-  onEdit,
-  onDelete,
-}: Props) {
+export default function Fridge({ items, isOpen, onToggleOpen }: Props) {
   const count = items.length;
   const label = count === 1 ? "1 item" : `${count} items`;
 
   return (
-    <div className={`fridgeWrap ${isOpen ? "open" : "closed"} ${minimal ? "mini" : ""}`}>
+    <div className={`fridgeWrap ${isOpen ? "open" : "closed"}`}>
       <div className="fridge" aria-label="Fridge">
         <div className="badge">FRIDGE</div>
-        <div className="door">
+
+        <div className="shell">
+          <div className="glass" />
           <div className="handle" />
         </div>
 
@@ -61,142 +53,107 @@ export default function Fridge({
             className="linkBtn"
             onClick={() => onToggleOpen(!isOpen)}
           >
-            {isOpen ? "Close" : "Open"}
+            {isOpen ? "Open" : "Close"}
           </button>
         </div>
       </div>
 
-      {/* TRAY — only render when OPEN so nothing shows outside while closed */}
-      {isOpen && (
-        <div className="tray">
-          {items.length === 0 ? (
-            <div className="empty">
-              <span className="emoji">🧊</span>
-              <div className="tTitle">Your fridge is empty</div>
-              <div className="muted">Add some items to see them here.</div>
-            </div>
-          ) : (
-            <ul className="grid">
-              {items.map((it) => {
-                const d = toDate(it.expiresAt);
-                const exp =
-                  d
-                    ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-                        d.getDate()
-                      ).padStart(2, "0")}`
-                    : "—";
-                return (
-                  <li key={it.id} className="card">
-                    <div className="top">
-                      <h4 className="name" title={it.name}>
-                        {it.name}
-                      </h4>
-                      <div className="actions">
-                        {onEdit ? (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => onEdit(it)}
-                          >
-                            Edit
-                          </Button>
-                        ) : null}
-                        {onDelete ? (
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => onDelete(it)}
-                          >
-                            Delete
-                          </Button>
-                        ) : null}
-                      </div>
-                    </div>
-                    <div className="meta">
-                      <span className="chip">Qty: {it.quantity}</span>
-                      <span className="chip">Exp: {exp}</span>
-                      {it.barcode ? <span className="chip">EAN {it.barcode}</span> : null}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      )}
+      {/* Only render tray when OPEN so products never show while closed */}
+      {isOpen && items.length === 0 && (
+  <div className="tray">
+    <div className="empty">
+      <span className="emoji">🧊</span>
+      <div className="tTitle">Your fridge is empty</div>
+      <div className="muted">Add some items to see them here.</div>
+    </div>
+  </div>
+)}
 
       <style jsx>{`
         .fridgeWrap {
           display: grid;
           gap: 10px;
-          transition: all 180ms ease;
         }
 
-        /* Fridge box */
         .fridge {
           position: relative;
           width: 100%;
-          border: 2px solid rgba(255, 255, 255, 0.14);
-          border-radius: 18px;
-          background:
-            radial-gradient(800px 160px at -10% -30%, rgba(255, 255, 255, 0.08), transparent),
-            linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(20, 24, 35, 0.28));
-          box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04),
-            0 10px 24px rgba(2, 6, 23, 0.35);
+          border-radius: 22px;
           overflow: hidden;
+          background: linear-gradient(180deg, #f5f7fb, #dbe3ef);
+          border: 1px solid rgba(15, 23, 42, 0.08);
+          box-shadow: 0 24px 48px rgba(15, 23, 42, 0.12),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.6);
           display: grid;
           grid-template-rows: 1fr auto;
           height: 220px;
-          transition: height 220ms ease, transform 220ms ease, box-shadow 220ms ease;
-        }
-
-        /* Closed vs open sizing */
-        .fridgeWrap.closed .fridge {
-          height: 220px;
+          transition: height 220ms ease, box-shadow 220ms ease,
+            transform 220ms ease;
         }
         .fridgeWrap.open .fridge {
           height: 280px;
         }
-        .fridgeWrap.mini .fridge {
-          height: 180px;
+        .fridgeWrap.closed .fridge {
+          height: 220px;
         }
 
         .badge {
           position: absolute;
           top: 10px;
-          left: 12px;
+          left: 14px;
           font-size: 11px;
           font-weight: 900;
           letter-spacing: 0.12em;
-          color: rgba(255, 255, 255, 0.6);
-          text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+          color: rgba(15, 23, 42, 0.35);
+          text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
         }
 
-        .door {
+        .shell {
           position: relative;
-          border-radius: 14px;
-          inset: 10px;
-          margin: 6px;
-          background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.12));
-          outline: 1px solid rgba(255, 255, 255, 0.06);
+          inset: 0;
         }
-
+        .glass {
+          position: absolute;
+          left: 14px;
+          right: 14px;
+          top: 16px;
+          bottom: 54px;
+          border-radius: 16px;
+          background: radial-gradient(
+              120% 60% at -10% -20%,
+              rgba(255, 255, 255, 0.9),
+              rgba(255, 255, 255, 0.35) 40%,
+              rgba(255, 255, 255, 0) 65%
+            ),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(170, 182, 200, 0.45));
+          border: 1px solid rgba(255, 255, 255, 0.85);
+          box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.05),
+            inset 0 -6px 10px rgba(15, 23, 42, 0.08);
+          backdrop-filter: blur(1.5px);
+        }
         .handle {
           position: absolute;
-          right: 10px;
-          top: 28px;
+          right: 24px;
+          top: 44px;
           width: 10px;
-          height: 72px;
+          height: 78px;
           border-radius: 8px;
-          background: linear-gradient(180deg, #e9eef7, #c9d0de);
-          box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(2, 6, 23, 0.25);
+          background: linear-gradient(180deg, #f6f9ff, #cfd9ea);
+          box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06),
+            0 10px 18px rgba(15, 23, 42, 0.18);
         }
 
         .footer {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 8px 10px 10px;
+          padding: 10px 12px 12px;
+          background: linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.75),
+            rgba(255, 255, 255, 0.4)
+          );
+          border-top: 1px solid rgba(15, 23, 42, 0.06);
         }
         .pill {
           display: inline-flex;
@@ -205,27 +162,28 @@ export default function Fridge({
           padding: 0 10px;
           font-weight: 900;
           font-size: 12px;
-          color: var(--text);
+          color: #0f172a;
           border-radius: 999px;
-          background: rgba(255, 255, 255, 0.06);
-          border: 1px solid rgba(255, 255, 255, 0.14);
+          background: rgba(255, 255, 255, 0.8);
+          border: 1px solid rgba(15, 23, 42, 0.08);
+          box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
         }
         .linkBtn {
           appearance: none;
           border: none;
           background: transparent;
-          color: #9ec1ff;
+          color: #4f7fff;
           font-weight: 900;
           cursor: pointer;
+          text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
         }
 
-        /* Tray (only exists in DOM when open) */
         .tray {
-          border: 1px solid var(--border);
-          background: var(--card-bg);
-          border-radius: 16px;
+          border: 1px solid rgba(15, 23, 42, 0.08);
+          background: #fff;
+          border-radius: 18px;
           padding: 12px;
-          box-shadow: 0 12px 30px rgba(2, 6, 23, 0.25);
+          box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
           animation: trayIn 180ms ease-out both;
         }
         @keyframes trayIn {
@@ -251,7 +209,7 @@ export default function Fridge({
           margin-top: 6px;
         }
         .muted {
-          color: var(--muted);
+          color: #64748b;
           font-size: 13px;
         }
 
@@ -263,19 +221,10 @@ export default function Fridge({
           grid-template-columns: 1fr;
           gap: 10px;
         }
-
-        .card {
-          border: 1px solid var(--border);
-          background: var(--bg);
-          border-radius: 14px;
-          padding: 12px;
-          display: grid;
-          gap: 8px;
-        }
+ 
         .top {
           display: grid;
-          grid-template-columns: 1fr auto;
-          gap: 8px;
+          grid-template-columns: 1fr;
           align-items: center;
         }
         .name {
@@ -283,16 +232,10 @@ export default function Fridge({
           font-size: 16px;
           font-weight: 900;
           letter-spacing: -0.01em;
-          color: var(--text);
+          color: #0f172a;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
-        }
-        .actions {
-          display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
-          justify-content: flex-end;
         }
         .meta {
           display: flex;
@@ -305,11 +248,11 @@ export default function Fridge({
           height: 26px;
           padding: 0 10px;
           border-radius: 999px;
-          border: 1px solid var(--border);
-          background: var(--bg2);
+          border: 1px solid rgba(15, 23, 42, 0.08);
+          background: #f8fafc;
           font-size: 12px;
           font-weight: 800;
-          color: var(--text);
+          color: #0f172a;
         }
       `}</style>
     </div>

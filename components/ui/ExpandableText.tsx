@@ -1,11 +1,11 @@
-// components/ui/ExpandableText.tsx
+
 "use client";
 
 import { useState, useMemo } from "react";
 
 type Props = {
   text: string;
-  previewChars?: number; // how much to show before "Show more"
+  previewChars?: number; 
   className?: string;
 };
 

@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import React, { useMemo, useRef, useState, useEffect } from "react";
-import { useNavPrefs, defaultNavPrefs } from "./useNavPrefs";
-import { db } from "@/lib/firebase";
+import useNavPrefs, { defaultNavPrefs } from "./useNavPrefs";
 
 type ItemKey = "dashboard" | "pantry" | "recipes" | "fitness" | "profile";
 
@@ -62,7 +61,7 @@ const ALL_ITEMS: Record<ItemKey, { href: string; label: string; icon: JSX.Elemen
 };
 
 export default function FabNav() {
-  const { nav } = useNavPrefs(db);
+  const { nav } = useNavPrefs();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
@@ -87,7 +86,6 @@ export default function FabNav() {
   const posClass =
     placement === "header" ? "pos-header" : placement === "top" ? "pos-top" : "pos-bottom";
 
-  
   const styleVars: React.CSSProperties = {
     ["--pill" as any]: nav?.accent ?? "var(--navbar-bg)",
     ["--icon" as any]: nav?.icon ?? "var(--navbar-fg)",
@@ -137,16 +135,14 @@ export default function FabNav() {
         onClick={() => setOpen((v) => !v)}
       >
         <span className="dots">
-          <i />
-          <i />
-          <i />
+          <i /><i /><i />
         </span>
       </button>
 
       <style jsx>{`
         .fabnav {
-          --pill: var(--navbar-bg);      /* theme token fallback */
-          --icon: var(--navbar-fg);      /* theme token fallback */
+          --pill: var(--navbar-bg);
+          --icon: var(--navbar-fg);
           --h: 56px;
           --w-open: 560px;
           --glow: 0 16px 40px rgba(0,0,0,.18);
@@ -192,7 +188,7 @@ export default function FabNav() {
         }
         .btn:hover { transform: translateY(-2px); }
         .btn:active { transform: translateY(-1px) scale(0.99); }
-        .btn svg { width: 22px; height: 22px; stroke: currentColor; } /* important */
+        .btn svg { width: 22px; height: 22px; stroke: currentColor; }
 
         .visually-hidden {
           position: absolute !important; height: 1px; width: 1px; overflow: hidden;

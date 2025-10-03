@@ -15,21 +15,22 @@ export type RecipeCardProps = {
   title: string;
   imageUrl: string;
   description?: string;
-  ingredients?: IngredientObj[];  
-  steps?: string[];                
+  ingredients?: IngredientObj[];
+  steps?: string[];
   open: boolean;
   onOpen: () => void;
   onClose: () => void;
   panelPlacement: PanelPlacement;
 
-  minutes?: number | null;        
-  baseServings?: number | null;    
+  minutes?: number | null;
+  baseServings?: number | null;
 
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
+
+  /** if provided, shows an Edit button that links to editor */
+  editHref?: string;
 };
-
-
 
 function parseNumber(txt: string): number | null {
   const t = txt.trim();
@@ -74,9 +75,9 @@ export default function RecipeCard({
   panelPlacement,
   minutes = null,
   baseServings = 2,
-
   isFavorite = false,
   onToggleFavorite,
+  editHref,
 }: RecipeCardProps) {
   const [servings, setServings] = useState<number>(Math.max(1, baseServings || 2));
   const [tab, setTab] = useState<"ingredients" | "preparation">("ingredients");
@@ -148,7 +149,7 @@ export default function RecipeCard({
           </div>
 
           <div className="content">
-            {/* Servings + Favorite */}
+            {/* Servings + Favorite + Edit */}
             <div className="servingsRow">
               <label>Servings</label>
               <div className="svCtrls">
@@ -175,6 +176,16 @@ export default function RecipeCard({
               >
                 {isFavorite ? "★ Favorite" : "☆ Favorite"}
               </button>
+
+              {editHref ? (
+                <a
+                  href={editHref}
+                  className="editBtn"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Edit
+                </a>
+              ) : null}
             </div>
 
             {/* ONE section at a time */}
@@ -276,6 +287,19 @@ export default function RecipeCard({
         }
         .favBtn:hover{ transform: translateY(-1px); }
         .favBtn.on{ background:#fde68a; border-color:#f59e0b; }
+
+        .editBtn{
+          margin-left:8px;
+          border:1px solid var(--border);
+          border-radius:999px;
+          padding:6px 10px;
+          background:var(--bg2);
+          color:var(--text);
+          font-weight:700;
+          text-decoration:none;
+          transition:.2s transform, .2s background, .2s border-color;
+        }
+        .editBtn:hover{ transform: translateY(-1px); }
 
         .col { padding:0 20px 8px 20px; text-align:left; }
         .step{ font-weight:800; font-size:14px; color:#36354e; margin:10px 0 6px; }

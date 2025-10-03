@@ -1,8 +1,9 @@
+"use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
-import { getAuth, onAuthStateChanged } from "firebase/auth";
-import type { Firestore } from "firebase/firestore";
+import { useCallback, useEffect, useState } from "react";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "@/lib/firebase";
 
 export type NavPlacement = "header" | "top" | "bottom" | "floating";
 export type NavOrderItem = "dashboard" | "pantry" | "recipes" | "fitness" | "profile";
@@ -10,7 +11,7 @@ export type NavOrderItem = "dashboard" | "pantry" | "recipes" | "fitness" | "pro
 export interface NavPrefs {
   placement?: NavPlacement;
   accent?: string | null;
-  icon?: string | null;   
+  icon?: string | null;   // icon tint
   compact?: boolean;
   glow?: boolean;
   order?: NavOrderItem[];
@@ -23,7 +24,9 @@ export interface UserPrefs {
   nav?: NavPrefs;
 }
 
-export const defaultNavPrefs: Required<Pick<NavPrefs, "placement" | "accent" | "icon" | "compact" | "glow" | "order">> = {
+export const defaultNavPrefs: Required<
+  Pick<NavPrefs, "placement" | "accent" | "icon" | "compact" | "glow" | "order">
+> = {
   placement: "header",
   accent: "var(--primary)",
   icon: "#ffffff",
@@ -32,25 +35,44 @@ export const defaultNavPrefs: Required<Pick<NavPrefs, "placement" | "accent" | "
   order: ["dashboard", "pantry", "recipes", "fitness", "profile"],
 };
 
-export function useNavPrefs(db: Firestore) {
-  const auth = useMemo(() => getAuth(), []);
+type ReturnShape = {
+  uid: string | null;
+  nav: NavPrefs | null;
+  loading: boolean;
+  error: unknown;
+  save: (partial: NavPrefs) => Promise<void>;
+  replace: (next: NavPrefs) => Promise<void>;
+};
+
+/**
+ * Uses your initialized singletons { auth, db } from lib/firebase.
+ * Avoids the app/no-app error by never calling getAuth()/getFirestore() directly here.
+ */
+export default function useNavPrefs(): ReturnShape {
   const [uid, setUid] = useState<string | null>(auth.currentUser?.uid ?? null);
   const [nav, setNav] = useState<NavPrefs | null>(null);
   const [loading, setLoading] = useState<boolean>(!!uid);
   const [error, setError] = useState<unknown>(null);
 
+  // Watch auth
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => setUid(u?.uid ?? null));
+    const unsub = onAuthStateChanged(auth, (user) => {
+      setUid(user?.uid ?? null);
+    });
     return () => unsub();
-  }, [auth]);
+  }, []);
 
+  // Subscribe to user nav prefs
   useEffect(() => {
     if (!uid) {
       setNav(null);
       setLoading(false);
       return;
     }
+
     setLoading(true);
+    setError(null);
+
     const ref = doc(db, "users", uid);
     const unsub = onSnapshot(
       ref,
@@ -64,15 +86,16 @@ export function useNavPrefs(db: Firestore) {
         setLoading(false);
       }
     );
+
     return () => unsub();
-  }, [db, uid]);
+  }, [uid]);
 
   const save = useCallback(
     async (partial: NavPrefs) => {
       if (!uid) throw new Error("Not signed in");
       await setDoc(doc(db, "users", uid), { prefs: { nav: partial } }, { merge: true });
     },
-    [db, uid]
+    [uid]
   );
 
   const replace = useCallback(
@@ -80,11 +103,8 @@ export function useNavPrefs(db: Firestore) {
       if (!uid) throw new Error("Not signed in");
       await setDoc(doc(db, "users", uid), { prefs: { nav: next } }, { merge: true });
     },
-    [db, uid]
+    [uid]
   );
 
   return { uid, nav, loading, error, save, replace };
 }
-
-
-export default useNavPrefs;

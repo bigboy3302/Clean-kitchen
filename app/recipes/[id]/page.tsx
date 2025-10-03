@@ -6,16 +6,33 @@ import Link from "next/link";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
-
 import dynamic from "next/dynamic";
-const RecipePhotos = dynamic(() => import("components/recipes/RecipeImageUploader"), { ssr: false });
+
+type RecipeDoc = {
+  id: string;
+  uid?: string;
+  author?: { uid?: string | null; name?: string | null; avatarURL?: string | null } | null;
+  title?: string | null;
+  imageURL?: string | null;
+  image?: string | null;
+  description?: string | null;
+  ingredients?: { name?: string; qty?: string; unit?: string; measure?: string }[];
+  steps?: string | null;
+  instructions?: string | null;
+  createdAt?: any;
+};
+
+const RecipePhotos = dynamic(
+  () => import("@/components/recipes/RecipeImageUploader"),
+  { ssr: false }
+);
 
 export default function RecipeDetailPage() {
-  const { id } = useParams(); // ✅ available on /recipes/[id]
-  const [me, setMe] = useState(null);
+  const { id } = useParams<{ id: string }>(); // ✅ available on /recipes/[id]
+  const [me, setMe] = useState<{ uid: string } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [recipe, setRecipe] = useState(null);
-  const [err, setErr] = useState(null);
+  const [recipe, setRecipe] = useState<RecipeDoc | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     const stop = onAuthStateChanged(auth, (u) => setMe(u || null));
@@ -34,7 +51,8 @@ export default function RecipeDetailPage() {
           setErr("This recipe doesn’t exist (or was deleted).");
           return;
         }
-        setRecipe({ id: snap.id, ...(snap.data() || {}) });
+        const data = (snap.data() || {}) as any;
+        setRecipe({ id: snap.id, ...data });
         setErr(null);
       },
       (e) => {
@@ -45,7 +63,7 @@ export default function RecipeDetailPage() {
     return () => stop();
   }, [id]);
 
-  function toDateSafe(ts) {
+  function toDateSafe(ts: any): Date | null {
     if (!ts) return null;
     if (typeof ts.toDate === "function") return ts.toDate();
     if (typeof ts.seconds === "number") return new Date(ts.seconds * 1000);
@@ -80,12 +98,16 @@ export default function RecipeDetailPage() {
   }
 
   const created = toDateSafe(recipe.createdAt);
-  const isOwner = me && recipe.uid === me.uid;
+  const isOwner = !!me && recipe.uid === me.uid;
 
   // Prefer username/displayName saved on the recipe when created.
   const author = recipe.author || {};
   const authorName =
-    author.username || author.displayName || recipe.uid?.slice(0, 6) || "Unknown";
+    (author as any).username ||
+    (author as any).displayName ||
+    (recipe.uid ? recipe.uid.slice(0, 6) : "Unknown");
+
+  const cover = recipe.imageURL || recipe.image || null;
 
   return (
     <main className="wrap">
@@ -94,7 +116,8 @@ export default function RecipeDetailPage() {
           <h1 className="title">{recipe.title || "Untitled recipe"}</h1>
           <div className="meta">
             <div className="author">
-              {author.avatarURL ? (
+              {author?.avatarURL ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img className="avatar" src={author.avatarURL} alt="" />
               ) : (
                 <div className="avatar fallback">
@@ -109,8 +132,16 @@ export default function RecipeDetailPage() {
                 ) : null}
               </span>
             </div>
-{/* Photo gallery (read-only for visitors) */}
-<RecipePhotos recipeId={recipe.id} recipeUid={recipe.uid} canEdit={false} />
+
+            {/* Photo gallery (read-only for visitors) */}
+            {recipe.id && recipe.uid ? (
+              <RecipePhotos
+                uid={recipe.uid}
+                recipeId={recipe.id}
+                initialCoverUrl={cover ?? undefined}
+                canEdit={false as any /* component prop compatibility */}
+              />
+            ) : null}
 
             <div className="actions">
               <Link className="btn" href="/recipes">All recipes</Link>
@@ -123,9 +154,10 @@ export default function RecipeDetailPage() {
           </div>
         </header>
 
-        {recipe.imageURL && (
+        {cover && (
           <div className="imgWrap">
-            <img className="img" src={recipe.imageURL} alt={recipe.title || ""} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="img" src={cover} alt={recipe.title || ""} />
           </div>
         )}
 
@@ -142,13 +174,15 @@ export default function RecipeDetailPage() {
             <ul className="ingredients">
               {recipe.ingredients.map((ing, i) => {
                 const name = ing?.name || "Ingredient";
-                const qty  = ing?.qty;
-                const unit = ing?.unit;
+                // Support either {measure} or {qty, unit}
+                const measure = ing?.measure
+                  ? ing.measure
+                  : [ing?.qty, ing?.unit].filter(Boolean).join(" ");
                 return (
                   <li key={i}>
                     <span className="dot" />
                     <span>
-                      {name}{qty ? ` — ${qty}` : ""}{unit ? ` ${unit}` : ""}
+                      {name}{measure ? ` — ${measure}` : ""}
                     </span>
                   </li>
                 );
@@ -157,13 +191,16 @@ export default function RecipeDetailPage() {
           </section>
         )}
 
-        {recipe.steps && (
+        {(recipe.instructions || recipe.steps) && (
           <section className="section">
             <h2 className="h2">Steps</h2>
             <div className="steps">
-              {String(recipe.steps).split("\n").map((line, i) => (
-                <p key={i} className="stepLine">{line.trim()}</p>
-              ))}
+              {String(recipe.instructions || recipe.steps)
+                .split("\n")
+                .filter(Boolean)
+                .map((line, i) => (
+                  <p key={i} className="stepLine">{line.trim()}</p>
+                ))}
             </div>
           </section>
         )}

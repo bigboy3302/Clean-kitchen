@@ -7,6 +7,7 @@ import {
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { getDownloadURL, ref as sref, uploadBytes } from "firebase/storage";
+import { useRouter } from "next/navigation";
 
 import { auth, db, storage } from "@/lib/firebase";
 import Input from "@/components/ui/Input";
@@ -85,10 +86,11 @@ function PantryPicker({
 type Row = { name: string; qty: string; unit: "g" | "kg" | "ml" | "l" | "pcs" | "tbsp" | "tsp" | "cup" };
 
 function CreateRecipeWizard({
-  open, onClose, onSaved, meUid,
+  open, onClose, meUid,
 }: {
-  open: boolean; onClose: () => void; onSaved: () => void; meUid: string | null;
+  open: boolean; onClose: () => void; meUid: string | null;
 }) {
+  const router = useRouter();
   const [step, setStep] = useState<0|1|2|3>(0);
 
   // step 0
@@ -169,10 +171,11 @@ function CreateRecipeWizard({
         const storageRef = sref(storage, path);
         await uploadBytes(storageRef, imgFile, { contentType: imgFile.type });
         const url = await getDownloadURL(storageRef);
-        await updateDoc(refDoc, { image: url });
+        await updateDoc(refDoc, { image: url, imageURL: url });
       }
-      onSaved();
-      onClose();
+      // jump straight to the editor for further tweaks
+      router.push(`/profile/recipes/${refDoc.id}`);
+      return;
     } catch (e: any) {
       setErr(e?.message ?? "Failed to save recipe.");
     } finally { setBusy(false); }
@@ -276,10 +279,7 @@ function CreateRecipeWizard({
           {step<3 ? (
             <Button onClick={()=>setStep((s)=>((s+1) as any))}>Next</Button>
           ) : (
-            <>
-              <Button variant="secondary" onClick={()=>setStep(0)}>No, go back</Button>
-              <Button onClick={save} disabled={busy}>{busy ? "Saving…" : "Yes, save recipe"}</Button>
-            </>
+            <Button onClick={save} disabled={busy}>{busy ? "Saving…" : "Yes, save recipe"}</Button>
           )}
         </footer>
       </div>
@@ -684,6 +684,8 @@ export default function RecipesPage() {
             const minutes = (r as any).minutes ?? null;
             const baseServings = (r as any).servings ?? 2;
 
+            const isUserOwned = r.source === "user" && (r.author?.uid || null) === (me || null);
+
             return (
               <div key={key} className={`cardWrap ${isOpen && !isLastCol ? "span2" : ""}`}>
                 <RecipeCard
@@ -699,6 +701,7 @@ export default function RecipesPage() {
                   baseServings={baseServings}
                   isFavorite={!!fav}
                   onToggleFavorite={() => toggleFav(r)}
+                  editHref={isUserOwned ? `/profile/recipes/${r.id}` : undefined}
                 />
               </div>
             );
@@ -731,7 +734,6 @@ export default function RecipesPage() {
         <CreateRecipeWizard
           open={showWizard}
           onClose={() => setShowWizard(false)}
-          onSaved={() => {}}
           meUid={me}
         />
       )}

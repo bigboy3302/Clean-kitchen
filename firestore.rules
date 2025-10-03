@@ -91,18 +91,20 @@ service cloud.firestore {
 
     /* ---------- pantryItems (OWNER-ONLY) ---------- */
     match /pantryItems/{id} {
-      // user can read only their own items
-      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow read:    if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create:  if creatingAsSelf();
+      allow update:  if isSignedIn() && resource.data.uid == request.auth.uid && ownershipUnchanged();
+      allow delete:  if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
 
-      // create as yourself
+    /* ---------- consumptionLogs (OWNER-ONLY)  <-- NEW ---------- */
+    match /consumptionLogs/{logId} {
+      // read only your own logs
+      allow read:   if isSignedIn() && resource.data.uid == request.auth.uid;
+      // create only as yourself (must include uid == auth.uid)
       allow create: if creatingAsSelf();
-
-      // update/delete only your own docs; uid cannot change
-      allow update: if isSignedIn()
-                    && resource.data.uid == request.auth.uid
-                    && ownershipUnchanged();
-
-      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+      // typically immutable; lock these down
+      allow update, delete: if false;
     }
 
     /* ---------- recipes (+ photos) ---------- */
@@ -140,12 +142,10 @@ service cloud.firestore {
     match /posts/{postId} {
       allow read: if true;
 
-      // Create post
       allow create: if isSignedIn()
                     && request.resource.data.uid == request.auth.uid
                     && cleanOptional('text');
 
-      // counter-bump helpers (if denormalized)
       function canBump(field) {
         return (field in request.resource.data)
                && (field in resource.data)
@@ -159,7 +159,6 @@ service cloud.firestore {
         return changed.hasOnly(["likes","reposts"]);
       }
 
-      // Owner edits OR safe public bumps
       allow update: if isSignedIn()
                     && (
                          (resource.data.uid == request.auth.uid && ownershipUnchanged())
@@ -169,24 +168,20 @@ service cloud.firestore {
                           && (("reposts" in request.resource.data) ? canBump("reposts") : true))
                        );
 
-      // Owner delete
       allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
 
-      // Likes (toggle; doc id == auth.uid)
       match /likes/{uid} {
         allow read: if true;
         allow create, delete: if isSignedIn() && request.auth.uid == uid;
         allow update: if false;
       }
 
-      // Reposts (toggle; doc id == auth.uid)
       match /reposts/{uid} {
         allow read: if true;
         allow create, delete: if isSignedIn() && request.auth.uid == uid;
         allow update: if false;
       }
 
-      // Comments (and their reposts/replies)
       match /comments/{cid} {
         allow read: if true;
 
@@ -208,14 +203,12 @@ service cloud.firestore {
                            request.auth.uid == get(/databases/$(database)/documents/posts/$(postId)).data.uid
                          );
 
-        // Comment reposts
         match /reposts/{uid} {
           allow read: if true;
           allow create, delete: if isSignedIn() && request.auth.uid == uid;
           allow update: if false;
         }
 
-        // Replies (with their reposts)
         match /replies/{rid} {
           allow read: if true;
 
@@ -245,7 +238,6 @@ service cloud.firestore {
         }
       }
 
-      // Reports (private)
       match /reports/{uid} {
         allow read: if false;
         allow create: if isSignedIn() && request.auth.uid == uid;

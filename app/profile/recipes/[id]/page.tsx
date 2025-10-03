@@ -1,346 +1,424 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { auth, db, storage } from "@/lib/firebase";
-import { onAuthStateChanged, User } from "firebase/auth";
-import { doc, onSnapshot, updateDoc, serverTimestamp } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import Link from "next/link";
+import { auth, db } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  serverTimestamp,
+  deleteDoc,
+} from "firebase/firestore";
 import dynamic from "next/dynamic";
 
+const RecipeImageUploader = dynamic(
+  () => import("@/components/recipes/RecipeImageUploader"),
+  { ssr: false }
+);
 
-
-type Ingredient = { name: string; qty?: number | null; unit?: string | null };
-type Author = { username?: string; displayName?: string; avatarURL?: string | null } | null;
-
-type Recipe = {
+/* ---------------- types ---------------- */
+type IngredientRow = { name: string; qty: string; unit: string };
+type RecipeDoc = {
   id: string;
   uid: string;
   title?: string | null;
-  description?: string | null;
-  steps?: string | null;
+  image?: string | null;
   imageURL?: string | null;
-  ingredients?: Ingredient[];
+  category?: string | null;
+  area?: string | null;
+  ingredients?: { name?: string; measure?: string | null; qty?: string; unit?: string }[];
+  instructions?: string | null;
+  steps?: string | null;
+  author?: { uid?: string | null; name?: string | null; avatarURL?: string | null } | null;
   createdAt?: any;
-  author?: Author;
 };
 
-function toDateSafe(ts: any): Date | null {
-  if (!ts) return null;
-  if (typeof ts.toDate === "function") return ts.toDate();
-  if (typeof ts.seconds === "number") return new Date(ts.seconds * 1000);
-  return null;
+/* ---------------- helpers ---------------- */
+function parseMeasure(measure?: string | null): { qty: string; unit: string } {
+  if (!measure) return { qty: "", unit: "" };
+  // split like "250 g", "1 1/2 cup", "2pcs" → we try a basic split
+  const m = String(measure).trim();
+  const match = m.match(/^\s*([0-9.\s/]+)\s*([^\s].*)?$/);
+  if (!match) return { qty: "", unit: m };
+  return {
+    qty: (match[1] || "").trim(),
+    unit: (match[2] || "").trim(),
+  };
 }
 
-function parseIngredients(src: string): Ingredient[] {
-  return src
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [nameRaw, qtyRaw, unitRaw] = line.split("|").map((x) => (x ?? "").trim());
-      const name = nameRaw || "";
-      const qty = qtyRaw ? Number(qtyRaw) : null;
-      const unit = unitRaw || null;
-      return { name, qty: Number.isFinite(qty as number) ? (qty as number) : null, unit };
-    });
+function packMeasure(row: IngredientRow): string {
+  const q = row.qty.trim();
+  const u = row.unit.trim();
+  return [q, u].filter(Boolean).join(" ").trim();
 }
 
-function formatIngredients(list?: Ingredient[] | null): string {
-  if (!Array.isArray(list)) return "";
-  return list
-    .map((i) => {
-      const name = (i?.name ?? "").trim();
-      const qty = i?.qty ?? "";
-      const unit = (i?.unit ?? "") || "";
-      return [name, qty, unit].filter((p, idx) => (idx === 0 ? true : String(p).length > 0)).join(" | ");
-    })
-    .join("\n");
-}
-
-export default function RecipeEditPage() {
+/* =========================================================================
+   PAGE
+   ========================================================================= */
+export default function EditRecipePage() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const params = useParams<{ id: string }>();
-  const id = params?.id;
 
-  const [me, setMe] = useState<User | null>(null);
-  const [loadingAuth, setLoadingAuth] = useState(true);
-
-  const [loadingDoc, setLoadingDoc] = useState(true);
-  const [recipe, setRecipe] = useState<Recipe | null>(null);
-
-  const [title, setTitle] = useState("");
-  const [desc, setDesc] = useState("");
-  const [steps, setSteps] = useState("");
-  const [ings, setIngs] = useState("");
-
-  const [file, setFile] = useState<File | null>(null);
-  const fileRef = useRef<HTMLInputElement | null>(null);
-
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [me, setMe] = useState<{ uid: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // form
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState("");
+  const [area, setArea] = useState("");
+  const [rows, setRows] = useState<IngredientRow[]>([{ name: "", qty: "", unit: "" }]);
+  const [instructions, setInstructions] = useState("");
+  const [cover, setCover] = useState<string | null>(null);
+
+  const [ownerUid, setOwnerUid] = useState<string | null>(null);
+
+  // auth
   useEffect(() => {
-    const stop = onAuthStateChanged(auth, (u) => {
-      setMe(u || null);
-      setLoadingAuth(false);
-    });
+    const stop = onAuthStateChanged(auth, (u) => setMe(u || null));
     return () => stop();
   }, []);
 
+  // load recipe
   useEffect(() => {
-    if (!id) return;
-    const refDoc = doc(db, "recipes", String(id));
-    const stop = onSnapshot(
-      refDoc,
-      (snap) => {
-        setLoadingDoc(false);
+    (async () => {
+      if (!id) return;
+      try {
+        const ref = doc(db, "recipes", String(id));
+        const snap = await getDoc(ref);
         if (!snap.exists()) {
-          setRecipe(null);
-          setErr("This recipe doesn’t exist (or was deleted).");
+          setErr("Recipe not found.");
+          setLoading(false);
           return;
         }
-        const data = { id: snap.id, ...(snap.data() as any) } as Recipe;
-        setRecipe(data);
+        const data = { id: snap.id, ...(snap.data() as any) } as RecipeDoc;
+
+        setOwnerUid(data.uid || null);
         setTitle(data.title || "");
-        setDesc(data.description || "");
-        setSteps(data.steps || "");
-        setIngs(formatIngredients(data.ingredients));
+        setCategory(data.category || "");
+        setArea(data.area || "");
+        setCover(data.image || data.imageURL || null);
+
+        // Ingredients: support either {measure} or {qty, unit}
+        const ingRows: IngredientRow[] = Array.isArray(data.ingredients)
+          ? data.ingredients.map((i) => {
+              const name = i?.name || "";
+              const measure = i?.measure ?? [i?.qty, i?.unit].filter(Boolean).join(" ");
+              const { qty, unit } = parseMeasure(measure);
+              return { name, qty, unit };
+            })
+          : [{ name: "", qty: "", unit: "" }];
+        setRows(ingRows.length ? ingRows : [{ name: "", qty: "", unit: "" }]);
+
+        const steps = data.instructions || data.steps || "";
+        setInstructions(steps);
+
         setErr(null);
-      },
-      (e) => {
-        setLoadingDoc(false);
-        setErr(e?.message ?? "Could not load recipe.");
+      } catch (e: any) {
+        setErr(e?.message || "Could not load recipe.");
+      } finally {
+        setLoading(false);
       }
-    );
-    return () => stop();
+    })();
   }, [id]);
 
-  
-  useEffect(() => {
-    if (loadingAuth || loadingDoc) return;
-    if (!recipe) return;
-    if (!me || recipe.uid !== me.uid) {
-      router.replace(`/recipes/${id}`);
-    }
-  }, [loadingAuth, loadingDoc, me, recipe, id, router]);
+  const isOwner = useMemo(() => !!me && !!ownerUid && me.uid === ownerUid, [me, ownerUid]);
 
-  const created = toDateSafe(recipe?.createdAt);
-  const authorName = useMemo(() => {
-    const a = recipe?.author || {};
-    return (a as any)?.username || (a as any)?.displayName || recipe?.uid?.slice(0, 6) || "Unknown";
-  }, [recipe]);
+  function setRow(i: number, patch: Partial<IngredientRow>) {
+    setRows((list) => list.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  }
+  function addRow() {
+    setRows((l) => [...l, { name: "", qty: "", unit: "" }]);
+  }
+  function removeRow(i: number) {
+    setRows((l) => (l.length > 1 ? l.filter((_, idx) => idx !== i) : l));
+  }
 
-  async function saveChanges() {
-    if (!recipe || !me) return;
-    setErr(null);
-    setMsg(null);
-
-    if (!title.trim()) {
-      setErr("Please add a title.");
+  async function save() {
+    if (!id) return;
+    if (!isOwner) {
+      setErr("You can only edit your own recipe.");
       return;
     }
-
-    const payload: any = {
-      title: title.trim(),
-      description: desc.trim() || null,
-      steps: steps.trim() || null,
-      ingredients: parseIngredients(ings).filter(i => (i?.name || "").trim().length > 0),
-      updatedAt: serverTimestamp(),
-    };
-
-    setBusy(true);
+    if (!title.trim()) {
+      setErr("Please enter a title.");
+      return;
+    }
+    setSaving(true);
+    setErr(null);
     try {
-      await updateDoc(doc(db, "recipes", recipe.id), payload);
-      setMsg("Saved!");
+      const ref = doc(db, "recipes", String(id));
+      const ingredients = rows
+        .map((r) => ({
+          name: r.name.trim(),
+          measure: packMeasure(r),
+        }))
+        .filter((x) => x.name);
+
+      await updateDoc(ref, {
+        title: title.trim(),
+        titleLower: title.trim().toLowerCase(),
+        category: category.trim() || null,
+        area: area.trim() || null,
+        ingredients,
+        instructions: instructions.trim() || null,
+        updatedAt: serverTimestamp(),
+      });
+
+      // done
+      router.push(`/recipes/${id}`);
     } catch (e: any) {
-      setErr(e?.message ?? "Failed to save changes.");
+      setErr(e?.message || "Failed to save.");
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   }
 
-  async function replaceImage() {
-    if (!recipe || !me || !file) return;
-    setErr(null); setMsg(null);
-    setBusy(true);
+  async function remove() {
+    if (!id || !isOwner) return;
+    if (!confirm("Delete this recipe? This cannot be undone.")) return;
+    setSaving(true);
     try {
-     
-      const path = `recipeImages/${recipe.uid}/${recipe.id}`;
-      const sref = ref(storage, path);
-      await uploadBytes(sref, file);
-      const url = await getDownloadURL(sref);
-      await updateDoc(doc(db, "recipes", recipe.id), { imageURL: url, updatedAt: serverTimestamp() });
-      setFile(null);
-      if (fileRef.current) fileRef.current.value = "";
-      setMsg("Image updated!");
+      await deleteDoc(doc(db, "recipes", String(id)));
+      router.push("/recipes");
     } catch (e: any) {
-      setErr(e?.message ?? "Failed to update image.");
+      setErr(e?.message || "Failed to delete.");
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   }
 
-  async function removeImage() {
-    if (!recipe || !me) return;
-    setErr(null); setMsg(null);
-    setBusy(true);
-    try {
-      const path = `recipeImages/${recipe.uid}/${recipe.id}`;
-      try { await deleteObject(ref(storage, path)); } catch {}
-      await updateDoc(doc(db, "recipes", recipe.id), { imageURL: null, updatedAt: serverTimestamp() });
-      setMsg("Image removed.");
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to remove image.");
-    } finally {
-      setBusy(false);
-    }
+  if (loading) {
+    return (
+      <main className="wrap">
+        <div className="card">Loading…</div>
+        <style jsx>{styles}</style>
+      </main>
+    );
   }
 
-  if (loadingAuth || loadingDoc) {
-    return <main className="wrap"><div className="card">Loading…</div></main>;
+  if (!isOwner) {
+    return (
+      <main className="wrap">
+        <div className="card error">
+          You don’t have permission to edit this recipe.
+          <div style={{ marginTop: 10 }}>
+            <Link className="btn" href={`/recipes/${id}`}>View recipe</Link>
+          </div>
+        </div>
+        <style jsx>{styles}</style>
+      </main>
+    );
   }
-  if (!recipe || !me || recipe.uid !== me.uid) return null;
 
   return (
     <main className="wrap">
-      <h1 className="title">Edit recipe</h1>
-
-      {msg && <p className="ok">{msg}</p>}
-      {err && <p className="bad">{err}</p>}
-
-      <section className="card">
-        <header className="head">
-          <div className="meta">
-            <div className="author">
-              {recipe.author?.avatarURL ? (
-                <img className="avatar" src={recipe.author.avatarURL} alt="" />
-              ) : (
-                <div className="avatar fallback">{authorName[0]?.toUpperCase() || "U"}</div>
-              )}
-              <span>
-                by <strong>{authorName}</strong>
-                {created ? <> • {created.toLocaleDateString()} {created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</> : null}
-              </span>
-            </div>
-            <div className="actions">
-              <Link className="btn" href={`/recipes/${recipe.id}`}>View</Link>
-              <Link className="btn" href="/recipes">All recipes</Link>
-            </div>
-          </div>
-        </header>
-
-        <div className="grid">
-          <div className="full">
-            <label className="label">Title</label>
-            <input className="textInput" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Best pasta ever" />
-          </div>
-
-          <div className="full">
-            <label className="label">Short description</label>
-            <textarea className="textArea" rows={3} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="A quick, rich tomato pasta…" />
-          </div>
-
-          <div className="full">
-            <label className="label">Ingredients (one per line — “Name | qty | unit”)</label>
-            <textarea className="textArea mono" rows={6} value={ings} onChange={(e) => setIngs(e.target.value)} placeholder={"Tomato | 2 | pcs\nOlive oil | 1 | tbsp\nSalt"} />
-          </div>
-
-          <div className="full">
-            <label className="label">Steps</label>
-            <textarea className="textArea" rows={6} value={steps} onChange={(e) => setSteps(e.target.value)} placeholder={"1) Chop tomatoes\n2) Heat oil\n3) Add salt…"} />
-          </div>
-
-          <div className="full">
-            <label className="label">Image</label>
-
-       
-
-            {recipe.imageURL ? (
-              <div className="imgRow">
-                <img className="thumb" src={recipe.imageURL} alt="" />
-                <div className="col">
-                  <div className="rowBtns">
-                    <label className="btn">
-                      Choose new
-                      <input
-                        ref={fileRef}
-                        type="file"
-                        accept="image/*"
-                        style={{ display: "none" }}
-                        onChange={(e) => setFile(e.target.files?.[0] || null)}
-                      />
-                    </label>
-                    <button className="btn danger" onClick={removeImage} disabled={busy}>Remove image</button>
-                    <button className="btn primary" onClick={replaceImage} disabled={!file || busy}>
-                      {busy ? "Uploading…" : "Replace image"}
-                    </button>
-                  </div>
-                  {file ? <div className="muted">Selected: {file.name}</div> : null}
-                </div>
-              </div>
-            ) : (
-              <div className="rowBtns">
-                <label className="btn">
-                  Choose image
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/*"
-                    style={{ display: "none" }}
-                    onChange={(e) => setFile(e.target.files?.[0] || null)}
-                  />
-                </label>
-                <button className="btn primary" onClick={replaceImage} disabled={!file || busy}>
-                  {busy ? "Uploading…" : "Upload"}
-                </button>
-                {file ? <div className="muted">Selected: {file.name}</div> : null}
-              </div>
-            )}
-          </div>
+      {/* Sticky top action bar */}
+      <div className="stickyBar">
+        <div className="left">
+          <h1 className="pageTitle">Edit recipe</h1>
+          <span className="subtle">Make changes and save</span>
         </div>
-
-        <div className="actions end">
-          <button className="btn" onClick={() => router.push(`/recipes/${recipe.id}`)}>Cancel</button>
-          <button className="btn primary" onClick={saveChanges} disabled={busy}>
-            {busy ? "Saving…" : "Save changes"}
+        <div className="right">
+          <Link className="btn ghost" href={`/recipes/${id}`}>Cancel</Link>
+          <button className="btn danger" onClick={remove} disabled={saving}>Delete</button>
+          <button className="btn primary" onClick={save} disabled={saving}>
+            {saving ? "Saving…" : "Save changes"}
           </button>
         </div>
-      </section>
+      </div>
 
-      <style jsx>{`
-        .wrap { max-width: 960px; margin: 0 auto; padding: 24px; }
-        .title { font-size: 28px; font-weight: 800; margin-bottom: 12px; }
-        .ok  { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; border-radius:8px; padding:8px 10px; font-size:13px; margin-bottom:10px; }
-        .bad { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:8px 10px; font-size:13px; margin-bottom:10px; }
-        .card { border:1px solid #e5e7eb; background:#fff; border-radius:16px; padding:16px; box-shadow:0 10px 30px rgba(2,6,23,.04); }
-        .head { padding-bottom:10px; border-bottom:1px solid #eef2f7; margin-bottom:12px; }
-        .meta { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-        .author { display:flex; align-items:center; gap:10px; color:#475569; }
-        .avatar { width:34px; height:34px; border-radius:999px; object-fit:cover; border:1px solid #e2e8f0; }
-        .avatar.fallback { width:34px; height:34px; border-radius:999px; display:grid; place-items:center; background:#f1f5f9; color:#0f172a; font-weight:700; border:1px solid #e2e8f0; }
-        .grid { display:grid; grid-template-columns: 1fr 1fr; gap:12px 16px; }
-        .full { grid-column: 1 / -1; }
-        @media (max-width: 860px){ .grid { grid-template-columns: 1fr; } }
-        .label { display:block; margin-bottom:6px; font-weight:600; color:#0f172a; }
-        .textInput, .textArea { width:100%; border:1px solid #d1d5db; border-radius:12px; padding:10px 12px; background:#fff; font-size:14px; }
-        .textArea { min-height: 100px; }
-        .textArea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
-        .imgRow { display:flex; gap:12px; align-items:flex-start; }
-        .thumb { width:220px; height:160px; object-fit:cover; border:1px solid #e5e7eb; border-radius:12px; }
-        .col { display:flex; flex-direction:column; gap:8px; }
-        .rowBtns { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-        .actions { display:flex; gap:10px; }
-        .actions.end { justify-content:flex-end; }
-        .btn { border:1px solid #e5e7eb; border-radius:10px; padding:8px 12px; background:#fff; cursor:pointer; }
-        .btn:hover { background:#f8fafc; }
-        .btn.primary { background:#0f172a; color:#fff; border-color:#0f172a; }
-        .btn.primary:hover { opacity:.95; }
-        .btn.danger { background:#fee2e2; color:#991b1b; border-color:#fecaca; }
-        .muted { color:#64748b; font-size:12px; }
-      `}</style>
+      {/* Content grid */}
+      <div className="grid">
+        <section className="pane">
+          <h3 className="h3">Basics</h3>
+          <div className="field">
+            <label className="label">Title</label>
+            <input
+              className="input"
+              value={title}
+              onChange={(e) => setTitle(e.currentTarget.value)}
+              placeholder="Best Tomato Pasta"
+            />
+          </div>
+          <div className="row2">
+            <div className="field">
+              <label className="label">Category (optional)</label>
+              <input
+                className="input"
+                value={category}
+                onChange={(e) => setCategory(e.currentTarget.value)}
+                placeholder="Pasta"
+              />
+            </div>
+            <div className="field">
+              <label className="label">Area (optional)</label>
+              <input
+                className="input"
+                value={area}
+                onChange={(e) => setArea(e.currentTarget.value)}
+                placeholder="Italian"
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className="pane">
+          <h3 className="h3">Cover</h3>
+          <div className="muted small" style={{ marginBottom: 8 }}>
+            Tip: big, wide images look best.
+          </div>
+          {/* Use your existing uploader; it writes back via onCoverSaved */}
+          {me?.uid ? (
+            <RecipeImageUploader
+              uid={me.uid}
+              recipeId={String(id)}
+              initialCoverUrl={cover ?? undefined}
+              onCoverSaved={async (url) => {
+                setCover(url);
+                try {
+                  await updateDoc(doc(db, "recipes", String(id)), { image: url });
+                } catch {}
+              }}
+            />
+          ) : null}
+        </section>
+
+        <section className="pane">
+          <h3 className="h3">Ingredients</h3>
+
+          <div className="rows">
+            {rows.map((r, i) => (
+              <div key={i} className="ingRow">
+                <input
+                  className="ing name"
+                  placeholder="Ingredient (e.g. Tomato)"
+                  value={r.name}
+                  onChange={(e) => setRow(i, { name: e.currentTarget.value })}
+                />
+                <input
+                  className="ing qty"
+                  placeholder="Qty"
+                  value={r.qty}
+                  onChange={(e) => setRow(i, { qty: e.currentTarget.value })}
+                />
+                <input
+                  className="ing unit"
+                  placeholder="Unit (g, ml, cup, pcs…)"
+                  value={r.unit}
+                  onChange={(e) => setRow(i, { unit: e.currentTarget.value })}
+                />
+                <button className="minus" onClick={() => removeRow(i)} aria-label="Remove">
+                  −
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="footerRow">
+            <button className="btn" onClick={addRow} type="button">
+              Add ingredient
+            </button>
+          </div>
+        </section>
+
+        <section className="pane">
+          <h3 className="h3">Instructions</h3>
+          <textarea
+            className="ta"
+            rows={10}
+            value={instructions}
+            onChange={(e) => setInstructions(e.currentTarget.value)}
+            placeholder={`1) Boil salted water.\n2) Cook pasta until al dente.\n3) Toss with sauce…`}
+          />
+        </section>
+      </div>
+
+      {err && <p className="errorCard">{err}</p>}
+
+      <style jsx>{styles}</style>
     </main>
   );
 }
+
+/* ---------------- styles (modern, sticky header, glassy panes) ---------------- */
+const styles = `
+:root{
+  --border: #e5e7eb;
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --text: #0f172a;
+  --muted: #64748b;
+  --primary: #0f172a;
+  --primary-contrast: #ffffff;
+}
+
+*{box-sizing:border-box}
+.wrap{max-width:1100px;margin:0 auto;padding:18px}
+
+.stickyBar{
+  position:sticky; top:8px; z-index:10;
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  background: color-mix(in oklab, var(--card) 80%, transparent);
+  border:1px solid var(--border); border-radius:14px; padding:10px 12px;
+  backdrop-filter: blur(6px);
+  box-shadow:0 10px 30px rgba(2,6,23,.06);
+}
+.pageTitle{margin:0; font-size:18px; font-weight:900; letter-spacing:-.01em; color:var(--text)}
+.subtle{color:var(--muted); font-size:12px; margin-left:8px}
+.right{display:flex; gap:8px; align-items:center}
+.btn{
+  border:1px solid var(--border); background:var(--card);
+  color:var(--text); border-radius:10px; padding:8px 12px; font-weight:800; cursor:pointer;
+}
+.btn:hover{ background:#f3f4f6 }
+.btn.primary{ background:var(--primary); color:var(--primary-contrast); border-color:var(--primary) }
+.btn.primary:hover{ filter:brightness(1.05) }
+.btn.ghost{ background:transparent }
+.btn.danger{ background:#fee2e2; border-color:#fecaca; color:#7f1d1d }
+.btn.danger:hover{ background:#fecaca }
+
+.grid{
+  margin-top:14px;
+  display:grid; grid-template-columns: 1.2fr .8fr; gap:14px;
+}
+@media (max-width: 980px){ .grid{ grid-template-columns: 1fr; } }
+
+.pane{
+  border:1px solid var(--border);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--card) 92%, transparent), var(--card));
+  border-radius:16px; padding:14px;
+  box-shadow:0 10px 30px rgba(0,0,0,.04);
+}
+.h3{margin:0 0 10px; font-size:16px; font-weight:900; letter-spacing:-.01em; color:var(--text)}
+.field{display:grid; gap:6px; margin-bottom:10px}
+.label{font-size:.84rem; color:var(--muted); font-weight:800}
+.input{
+  width:100%; border:1px solid var(--border); border-radius:12px; padding:10px 12px;
+  background:#fff; color:var(--text); outline:none;
+}
+.input:focus{ border-color: color-mix(in oklab, var(--primary) 60%, var(--border)); box-shadow:0 0 0 4px color-mix(in oklab, var(--primary) 18%, transparent)}
+.row2{display:grid; grid-template-columns: 1fr 1fr; gap:12px}
+@media (max-width: 720px){ .row2{ grid-template-columns:1fr } }
+
+.rows{display:grid; gap:8px}
+.ingRow{display:grid; grid-template-columns: 1.5fr .5fr .6fr 36px; gap:8px; align-items:center}
+.ing{
+  border:1px solid var(--border); border-radius:10px; padding:9px 10px; background:#fff; color:var(--text);
+}
+.minus{border:0; background:#ef4444; color:#fff; border-radius:10px; font-weight:800; cursor:pointer}
+.footerRow{display:flex; justify-content:flex-end; margin-top:6px}
+
+.ta{
+  width:100%; border:1px solid var(--border); border-radius:12px; padding:10px 12px; background:#fff; color:var(--text);
+  min-height:220px; resize:vertical; line-height:1.5;
+}
+
+.card{ border:1px solid var(--border); background:var(--card); border-radius:16px; padding:16px }
+.errorCard{ margin-top:12px; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; border-radius:10px; padding:10px 12px; }
+
+.btn:disabled{opacity:.7; cursor:not-allowed}
+`;

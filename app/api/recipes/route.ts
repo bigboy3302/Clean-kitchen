@@ -91,7 +91,7 @@ async function lookupMany(ids: string[], limit = 30): Promise<Recipe[]> {
   return (full.filter(Boolean) as Recipe[]);
 }
 
-async function randomMeals(n = 12): Promise<Recipe[]> {
+async function randomMeals(n = 15): Promise<Recipe[]> {
   const packs = await Promise.all(
     Array.from({ length: n }, () => j<any>(`${BASE}/random.php`).catch(() => ({ meals: [] })))
   );
