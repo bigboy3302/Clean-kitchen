@@ -7,7 +7,6 @@ import {
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { getDownloadURL, ref as sref, uploadBytes } from "firebase/storage";
-import { useRouter } from "next/navigation";
 
 import { auth, db, storage } from "@/lib/firebase";
 import Input from "@/components/ui/Input";
@@ -81,28 +80,23 @@ function PantryPicker({
 }
 
 /* =========================================================================
-   CREATE RECIPE WIZARD (structured ingredients + auto-numbered steps)
+   CREATE RECIPE WIZARD
    ========================================================================= */
 type Row = { name: string; qty: string; unit: "g" | "kg" | "ml" | "l" | "pcs" | "tbsp" | "tsp" | "cup" };
 
 function CreateRecipeWizard({
-  open, onClose, meUid,
+  open, onClose, onSaved, meUid,
 }: {
-  open: boolean; onClose: () => void; meUid: string | null;
+  open: boolean; onClose: () => void; onSaved: () => void; meUid: string | null;
 }) {
-  const router = useRouter();
   const [step, setStep] = useState<0|1|2|3>(0);
 
-  // step 0
   const [title, setTitle] = useState("");
   const [imgFile, setImgFile] = useState<File | null>(null);
   const [imgPrev, setImgPrev] = useState<string | null>(null);
 
-  // step 1: ingredients as structured rows
   const [rows, setRows] = useState<Row[]>([{ name:"", qty:"", unit:"g" }]);
-
-  // step 2: steps with auto numbers
-  const [steps, setSteps] = useState<string[]>(["", "", ""]); // 3 by default
+  const [steps, setSteps] = useState<string[]>(["", "", ""]);
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -139,7 +133,6 @@ function CreateRecipeWizard({
     if (!t) { setErr("Please enter a title."); setStep(0); return; }
     if (cleanRows.length === 0) { setErr("Please add at least one ingredient."); setStep(1); return; }
 
-    // pack like { name, measure: "100 g" } or "3 pcs"
     const ingredients: Ingredient[] = cleanRows.map(r => ({
       name: r.name,
       measure: `${r.qty} ${r.unit}`.trim(),
@@ -171,11 +164,10 @@ function CreateRecipeWizard({
         const storageRef = sref(storage, path);
         await uploadBytes(storageRef, imgFile, { contentType: imgFile.type });
         const url = await getDownloadURL(storageRef);
-        await updateDoc(refDoc, { image: url, imageURL: url });
+        await updateDoc(refDoc, { image: url });
       }
-      // jump straight to the editor for further tweaks
-      router.push(`/profile/recipes/${refDoc.id}`);
-      return;
+      onSaved();
+      onClose();
     } catch (e: any) {
       setErr(e?.message ?? "Failed to save recipe.");
     } finally { setBusy(false); }
@@ -197,7 +189,6 @@ function CreateRecipeWizard({
               <label className="lab">Cover photo <span className="muted small">(optional)</span></label>
               {imgPrev ? (
                 <div className="pick">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img className="cover" src={imgPrev} alt="preview" />
                   <Button variant="secondary" size="sm" onClick={()=>{ setImgPrev(null); setImgFile(null); }}>Remove</Button>
                 </div>
@@ -279,7 +270,10 @@ function CreateRecipeWizard({
           {step<3 ? (
             <Button onClick={()=>setStep((s)=>((s+1) as any))}>Next</Button>
           ) : (
-            <Button onClick={save} disabled={busy}>{busy ? "Saving…" : "Yes, save recipe"}</Button>
+            <>
+              <Button variant="secondary" onClick={()=>setStep(0)}>No, go back</Button>
+              <Button onClick={save} disabled={busy}>{busy ? "Saving…" : "Yes, save recipe"}</Button>
+            </>
           )}
         </footer>
       </div>
@@ -315,7 +309,7 @@ function CreateRecipeWizard({
 }
 
 /* =========================================================================
-   FAVORITES OVERLAY (unchanged)
+   FAVORITES OVERLAY
    ========================================================================= */
 function FavOverlay({
   uid, onClose, onOpen,
@@ -417,7 +411,7 @@ export default function RecipesPage() {
   // search + filters
   const [q, setQ] = useState("");
   const [mode, setMode] = useState<"name" | "ingredient">("name");
-  const [areaFilter, setAreaFilter] = useState<string>("any"); // world-wide feel
+  const [areaFilter, setAreaFilter] = useState<string>("any");
   const [busySearch, setBusySearch] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -596,13 +590,11 @@ export default function RecipesPage() {
     return userRecipes.filter(r => (r.title || "").toLowerCase().includes(s));
   }, [userRecipes, q, mode]);
 
-  // combine: show pantryResults if present; otherwise API + user (user first)
   const combined = useMemo(() => {
     if (pantryRecipes) return pantryRecipes;
     return [...userFiltered, ...apiRecipes];
   }, [pantryRecipes, userFiltered, apiRecipes]);
 
-  // area filter choices from combined list
   const areas = useMemo(() => {
     const set = new Set<string>();
     combined.forEach(r => { if (r.area) set.add(String(r.area)); });
@@ -619,7 +611,7 @@ export default function RecipesPage() {
       <div className="topbar">
         <h1 className="title">Recipes</h1>
         <div className="right">
-          <button className="linkBtn" onClick={() => setShowFavs(true)}>favorites</button>
+          
         </div>
       </div>
 
@@ -684,7 +676,9 @@ export default function RecipesPage() {
             const minutes = (r as any).minutes ?? null;
             const baseServings = (r as any).servings ?? 2;
 
-            const isUserOwned = r.source === "user" && (r.author?.uid || null) === (me || null);
+            // ✅ only show Edit for your own user recipes
+            const isMine = r.source === "user" && !!me && (r.author?.uid === me);
+            const editHref = isMine ? `/profile/recipes/${r.id}` : undefined;
 
             return (
               <div key={key} className={`cardWrap ${isOpen && !isLastCol ? "span2" : ""}`}>
@@ -701,7 +695,7 @@ export default function RecipesPage() {
                   baseServings={baseServings}
                   isFavorite={!!fav}
                   onToggleFavorite={() => toggleFav(r)}
-                  editHref={isUserOwned ? `/profile/recipes/${r.id}` : undefined}
+                  editHref={editHref}   // 👈 shows inline Edit button for owners
                 />
               </div>
             );
@@ -734,6 +728,7 @@ export default function RecipesPage() {
         <CreateRecipeWizard
           open={showWizard}
           onClose={() => setShowWizard(false)}
+          onSaved={() => {}}
           meUid={me}
         />
       )}

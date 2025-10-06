@@ -3,12 +3,7 @@
 import { useMemo, useState } from "react";
 
 /* ---------- types ---------- */
-
-export type IngredientObj = {
-  name: string;
-  measure?: string | null;
-};
-
+export type IngredientObj = { name: string; measure?: string | null };
 type PanelPlacement = "push" | "overlay-left" | "overlay-right";
 
 export type RecipeCardProps = {
@@ -21,13 +16,10 @@ export type RecipeCardProps = {
   onOpen: () => void;
   onClose: () => void;
   panelPlacement: PanelPlacement;
-
   minutes?: number | null;
   baseServings?: number | null;
-
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
-
   /** if provided, shows an Edit button that links to editor */
   editHref?: string;
 };
@@ -46,7 +38,6 @@ function parseNumber(txt: string): number | null {
   }
   return total > 0 ? total : null;
 }
-
 function splitMeasure(m?: string | null) {
   if (!m) return { value: null as number | null, unit: "" };
   const match = m.match(/^\s*([0-9.\s/]+)\s*(.*)$/);
@@ -55,14 +46,12 @@ function splitMeasure(m?: string | null) {
   const unit = (match[2] || "").trim();
   return { value, unit };
 }
-
 function fmt(n: number): string {
   const r = Math.round(n * 100) / 100;
   return Math.abs(r - Math.round(r)) < 1e-9 ? String(Math.round(r)) : String(r);
 }
 
 /* ---------- component ---------- */
-
 export default function RecipeCard({
   title,
   imageUrl,
