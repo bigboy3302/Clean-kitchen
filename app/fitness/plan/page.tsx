@@ -1,193 +1,197 @@
 "use client";
 
-import { useEffect, useState, FormEvent } from "react";
-import { auth, db } from "@/lib/firebase";
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
-import Input from "@/components/ui/Input";
-import Button from "@/components/ui/Button";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Button from "@/components/ui/Button";
+import {
+  getWeekPlan, upsertDayItem, toggleDone, getMetrics,
+  weekIdFromDate, type WeekPlan, type WorkoutItem, type DayKey, suggestMeals, type SuggestedMeal
+} from "@/lib/fitness/store";
 
-type Metrics = {
-  height?: number; // cm
-  weight?: number; // kg
-  age?: number;
-  sex?: "male" | "female";
-  activity?: "sedentary"|"light"|"moderate"|"active"|"very";
-  goal?: "bulk"|"cut"|"maintain";
-  updatedAt?: any;
+type Exercise = {
+  id: string; name: string; bodyPart: string; target: string; equipment: string; gifUrl: string;
 };
 
-function calcTDEE({weight=0,height=0,age=0,sex="male",activity="light"}: Metrics){
-  const s = sex==="male" ? 5 : -161;
-  const bmr = (10*weight)+(6.25*height)-(5*age)+s;
-  const mult = activity==="sedentary"?1.2: activity==="light"?1.375: activity==="moderate"?1.55: activity==="active"?1.725: 1.9;
-  return Math.max(1200, Math.round(bmr*mult));
-}
+const dayKeys: DayKey[] = ["mon","tue","wed","thu","fri","sat","sun"];
+const dayNames: Record<DayKey,string> = { mon:"Mon",tue:"Tue",wed:"Wed",thu:"Thu",fri:"Fri",sat:"Sat",sun:"Sun" };
+const cap = (s:string)=>s? s[0].toUpperCase()+s.slice(1):s;
+const gif = (id: string, res=180) => `/api/workouts/gif?id=${encodeURIComponent(id)}&res=${res}`;
 
-export default function FitnessPlanPage(){
-  const [userId,setUserId]=useState<string|null>(null);
-  const [metrics,setMetrics]=useState<Metrics|null>(null);
-  const [loading,setLoading]=useState(true);
-  const [editing,setEditing]=useState(false);
-  const [msg,setMsg]=useState<string|null>(null);
+export default function WeeklyPlan() {
+  const [weekId, setWeekId] = useState(weekIdFromDate());
+  const [plan, setPlan] = useState<WeekPlan | null>(null);
+  const [busy, setBusy] = useState(true);
+  const [goal, setGoal] = useState<"bulk"|"cut"|"maintain">("maintain");
+  const [mealMap, setMealMap] = useState<Record<DayKey, SuggestedMeal[]>>({mon:[],tue:[],wed:[],thu:[],fri:[],sat:[],sun:[]});
+  const [exCache, setExCache] = useState<Record<string, Exercise | null>>({}); // name -> first match
 
-  const [height,setHeight]=useState<string>("");
-  const [weight,setWeight]=useState<string>("");
-  const [age,setAge]=useState<string>("");
-  const [sex,setSex]=useState<"male"|"female">("male");
-  const [activity,setActivity]=useState<Metrics["activity"]>("light");
-  const [goal,setGoal]=useState<Metrics["goal"]>("maintain");
+  useEffect(() => {
+    (async () => {
+      setBusy(true);
+      try {
+        const m = await getMetrics().catch(()=>null);
+        if (m?.goal) setGoal(m.goal);
+        const wk = await getWeekPlan(weekId);
+        setPlan(wk);
 
-  useEffect(()=>{
-    const u = auth.currentUser;
-    if(!u){ setLoading(false); setUserId(null); return; }
-    setUserId(u.uid);
-    (async ()=>{
-      const ref = doc(db,"users",u.uid);
-      const snap = await getDoc(ref);
-      if (snap.exists()){
-        const d = snap.data() as any;
-        const m: Metrics = {
-          height: d.height, weight: d.weight, age: d.age,
-          sex: d.sex, activity: d.activity, goal: d.goal
-        };
-        setMetrics(m);
-        if (!m.height || !m.weight || !m.age || !m.sex || !m.activity || !m.goal) {
-          setHeight((m.height ?? "").toString());
-          setWeight((m.weight ?? "").toString());
-          setAge((m.age ?? "").toString());
-          setSex((m.sex ?? "male"));
-          setActivity((m.activity ?? "light"));
-          setGoal((m.goal ?? "maintain"));
-          setEditing(true);
-        }
-      } else {
-        setEditing(true);
+        // get 14 suggestions and assign two per day
+        const suggestions = await suggestMeals(m?.goal ?? "maintain", 20);
+        const perDay: Record<DayKey, SuggestedMeal[]> = {mon:[],tue:[],wed:[],thu:[],fri:[],sat:[],sun:[]};
+        let idx = 0;
+        dayKeys.forEach(k=>{
+          perDay[k] = suggestions.slice(idx, idx+2);
+          idx += 2;
+        });
+        setMealMap(perDay);
+
+        // warmup: fetch one GIF per first item name (if present)
+        const names = dayKeys.flatMap(k => (wk.days[k]?.items?.[0]?.name ? [wk.days[k].items[0].name] : []));
+        const map: Record<string, Exercise | null> = {};
+        await Promise.all(names.map(async (nm) => {
+          try {
+            const r = await fetch(`/api/workouts?q=${encodeURIComponent(nm)}&limit=1`, { cache: "no-store" });
+            const js = await r.json();
+            map[nm] = Array.isArray(js) && js[0] ? js[0] : null;
+          } catch { map[nm] = null; }
+        }));
+        setExCache(map);
+      } finally {
+        setBusy(false);
       }
-      setLoading(false);
     })();
-  },[]);
+  }, [weekId]);
 
-  async function save(e:FormEvent){
-    e.preventDefault();
-    if(!userId) return;
-    const payload: Metrics = {
-      height: Number(height), weight: Number(weight), age: Number(age),
-      sex, activity, goal, updatedAt: serverTimestamp()
-    };
-    const ref = doc(db,"users",userId);
-    await setDoc(ref, payload, {merge:true});
-    setMetrics(payload);
-    setEditing(false);
-    setMsg("Dati saglabāti.");
+  const title = useMemo(() => {
+    const [y, w] = weekId.split("-W");
+    return `Week ${w}, ${y}`;
+  }, [weekId]);
+
+  async function addItem(day: DayKey) {
+    if (!plan) return;
+    const name = prompt("Workout name (e.g., Push day, Squat 5x5, HIIT 20m)");
+    if (!name) return;
+    const item: WorkoutItem = { id: crypto.randomUUID(), name, done: false };
+    setBusy(true);
+    await upsertDayItem(plan.weekId, day, item);
+    const next = await getWeekPlan(plan.weekId);
+    setPlan(next);
+    setBusy(false);
   }
 
-  if (loading) return <p>Ielādē…</p>;
-
-
-  if(!userId){
-    return (
-      <div className="card card--pad">
-        <h2 className="card__title">Nepieciešama autorizācija</h2>
-        <p className="card__sub">Lai izveidotu personalizētu plānu, lūdzu <Link href="/auth/login">ielogojies</Link> vai <Link href="/auth/register">reģistrējies</Link>.</p>
-      </div>
-    );
+  async function setDone(day: DayKey, id: string, done: boolean) {
+    if (!plan) return;
+    setBusy(true);
+    await toggleDone(plan.weekId, day, id, done);
+    const next = await getWeekPlan(plan.weekId);
+    setPlan(next);
+    setBusy(false);
   }
-
-
-  if (editing){
-    return (
-      <div className="card card--pad">
-        <h2 className="card__title">Tavi dati</h2>
-        <form onSubmit={save} className="grid form-row form-2">
-          <Input label="Augums (cm)" value={height} onChange={e=>setHeight((e.target as HTMLInputElement).value)} required />
-          <Input label="Svars (kg)" value={weight} onChange={e=>setWeight((e.target as HTMLInputElement).value)} required />
-          <Input label="Vecums" value={age} onChange={e=>setAge((e.target as HTMLInputElement).value)} required />
-
-          <div>
-            <label className="label">Dzimums</label>
-            <select className="input" value={sex} onChange={e=>setSex(e.target.value as any)}>
-              <option value="male">Vīrietis</option>
-              <option value="female">Sieviete</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="label">Aktivitāte</label>
-            <select className="input" value={activity} onChange={e=>setActivity(e.target.value as any)}>
-              <option value="sedentary">Sēdošs</option>
-              <option value="light">Viegls</option>
-              <option value="moderate">Mērens</option>
-              <option value="active">Aktīvs</option>
-              <option value="very">Ļoti aktīvs</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="label">Mērķis</label>
-            <select className="input" value={goal} onChange={e=>setGoal(e.target.value as any)}>
-              <option value="maintain">Uzturēt</option>
-              <option value="bulk">Uzsvara pieaugums (bulk)</option>
-              <option value="cut">Samazināt (cut)</option>
-            </select>
-          </div>
-
-          <div className="right mt-2">
-            <Button style={{width:200}}>Saglabāt</Button>
-          </div>
-        </form>
-      </div>
-    );
-  }
-
-
-  const tdee = calcTDEE(metrics ?? {});
-  const cal = metrics?.goal==="bulk" ? tdee+250 : metrics?.goal==="cut" ? tdee-300 : tdee;
-  const protein = Math.round((metrics?.weight ?? 0)*2); // g
-  const fat = Math.round((metrics?.weight ?? 0)*0.8);  // g
-  const carbs = Math.max(0, Math.round((cal - (protein*4) - (fat*9))/4));
 
   return (
-    <div className="grid" style={{gap:16}}>
-      {msg && <div className="card card--pad"><p className="card__sub">{msg}</p></div>}
-
-      <div className="card card--pad">
-        <div className="flex items-center gap-3">
-          <h2 className="card__title">Tavs plāns</h2>
-          <span className="badge">{metrics?.goal?.toUpperCase()}</span>
+    <main className="shell">
+      <header className="top">
+        <div>
+          <h1 className="title">Weekly plan</h1>
+          <div className="muted">{title}</div>
         </div>
-        <p className="card__sub">Balstīts uz taviem datiem, neviens “basic bulking/cutting” viesiem netiek rādīts.</p>
-
-        <div className="grid grid-3 mt-3">
-          <div className="card card--pad">
-            <h3 className="card__title">Kalorijas</h3>
-            <p className="card__sub">{cal} kcal / dienā</p>
-          </div>
-          <div className="card card--pad">
-            <h3 className="card__title">Olbaltumvielas</h3>
-            <p className="card__sub">{protein} g</p>
-          </div>
-          <div className="card card--pad">
-            <h3 className="card__title">Tauki / Ogļhidrāti</h3>
-            <p className="card__sub">{fat} g tauki · {carbs} g ogļh.</p>
-          </div>
+        <div className="row gap">
+          <Button onClick={() => setWeekId(weekIdFromDate(new Date(Date.now() - 7*86400000)))}>← Prev</Button>
+          <Button onClick={() => setWeekId(weekIdFromDate())}>This week</Button>
+          <Button onClick={() => setWeekId(weekIdFromDate(new Date(Date.now() + 7*86400000)))}>Next →</Button>
+          <Link className="btn" href="/fitness/day">Today</Link>
+          <Link className="btn ghost" href="/fitness">Back</Link>
         </div>
+      </header>
 
-        <div className="mt-3">
-          <Button variant="secondary" onClick={()=>setEditing(true)} style={{width:220}}>
-            Rediģēt manus datus
-          </Button>
-        </div>
-      </div>
+      {busy || !plan ? (
+        <div className="glass center"><div className="spinner" /> Loading…</div>
+      ) : (
+        <section className="grid7">
+          {dayKeys.map((k) => {
+            const d = plan.days[k];
+            const firstName = d.items[0]?.name;
+            const ex = firstName ? exCache[firstName] : null;
+            return (
+              <div key={k} className="col glass">
+                <div className="hdr">
+                  <div className="d">{dayNames[k]}</div>
+                  <div className="date">{d.date}</div>
+                </div>
 
-      <div className="card card--pad">
-        <h3 className="card__title">Treniņu ieteikumi</h3>
-        <ul className="card__sub">
-          <li>3–4 spēka treniņi nedēļā (pilna ķermeņa / push-pull-legs)</li>
-          <li>Bulk: 6–10 atkārtojumi pamatvingrinājumos, progresīva pārslodze</li>
-          <li>Cut: 8–12 atkārtojumi, saglabā darba svarus, pievieno 1–2 kardio sesijas</li>
-        </ul>
-      </div>
-    </div>
+                {/* quick preview GIF */}
+                {ex ? (
+                  <div className="preview">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img className="gif" src={gif(ex.id)} alt={ex.name} loading="lazy"
+                        onError={(e)=>((e.currentTarget as HTMLImageElement).style.display="none")} />
+                    <div className="ex">{cap(ex.name)}</div>
+                  </div>
+                ) : <div className="preview placeholder">No preview</div>}
+
+                <ul className="list">
+                  {d.items.map((it) => (
+                    <li key={it.id} className={`it ${it.done ? "done" : ""}`}>
+                      <label className="chk">
+                        <input type="checkbox" checked={!!it.done} onChange={(e)=>setDone(k, it.id, e.currentTarget.checked)} />
+                        <span>{it.name}</span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+
+                <Button variant="secondary" onClick={() => addItem(k)} style={{ width: "100%" }}>
+                  + Add workout
+                </Button>
+
+                <div className="meals">
+                  <div className="msT">Meals</div>
+                  <div className="mgrid">
+                    {mealMap[k]?.length ? mealMap[k].map(m => (
+                      <div key={m.id} className="meal" title={m.title}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={m.image || "/placeholder.png"} alt={m.title} />
+                        <div className="mt">{m.title}</div>
+                      </div>
+                    )) : <div className="muted small">No suggestions</div>}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </section>
+      )}
+
+      <style jsx>{`
+        .shell{max-width:1200px;margin:0 auto;padding:18px}
+        .title{margin:0;font-size:28px;font-weight:900}
+        .muted{color:#64748b}.btn{border:1px solid #e5e7eb;background:#fff;border-radius:12px;padding:8px 12px}
+        .btn.ghost{background:transparent}
+        .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:10px}
+        .grid7{display:grid;grid-template-columns:repeat(7,1fr);gap:12px}
+        @media (max-width:1200px){ .grid7{grid-template-columns:repeat(3,1fr)} }
+        @media (max-width:720px){ .grid7{grid-template-columns:1fr} }
+        .glass{border:1px solid #e5e7eb;background:linear-gradient(180deg,#fff,#f8fafc);border-radius:18px;padding:12px;box-shadow:0 10px 30px rgba(2,6,23,.06)}
+        .center{display:grid;place-items:center;min-height:160px}
+        .spinner{width:18px;height:18px;border-radius:50%;border:3px solid #e5e7eb;border-top-color:#0f172a;animation:sp 1s linear infinite}
+        @keyframes sp{to{transform:rotate(360deg)}}
+        .col{display:flex;flex-direction:column;gap:8px}
+        .hdr{display:flex;justify-content:space-between;align-items:center}
+        .d{font-weight:900}.date{font-size:12px;color:#64748b}
+        .preview{border:1px dashed #e5e7eb;border-radius:12px;padding:6px;display:grid;gap:6px;place-items:center;background:#fafafa}
+        .preview.placeholder{color:#94a3b8;font-size:12px}
+        .gif{width:100%;max-height:140px;object-fit:contain;background:#f8fafc;border-radius:10px}
+        .ex{font-size:12px;font-weight:700}
+        .list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+        .it{border:1px solid #eef2f7;border-radius:10px;padding:8px;background:#fff}
+        .it.done{opacity:.7;text-decoration:line-through}
+        .chk{display:flex;gap:8px;align-items:center}
+        .meals{margin-top:6px}
+        .msT{font-size:12px;color:#64748b;margin-bottom:4px}
+        .mgrid{display:grid;grid-template-columns:1fr;gap:6px}
+        .meal{display:grid;grid-template-columns:44px 1fr;gap:8px;align-items:center;border:1px solid #eef2f7;border-radius:10px;padding:6px;background:#fff}
+        .meal img{width:44px;height:44px;object-fit:cover;border-radius:8px;background:#f3f4f6}
+        .mt{font-size:13px;font-weight:600;color:#0f172a}
+      `}</style>
+    </main>
   );
 }

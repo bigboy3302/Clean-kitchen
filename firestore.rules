@@ -72,8 +72,9 @@ service cloud.firestore {
       return baseOk && prefsOk;
     }
 
-    /* ---------- users ---------- */
+    /* ---------- users (doc) ---------- */
     match /users/{uid} {
+      // User can read/update their own user doc
       allow read: if isSignedIn() && request.auth.uid == uid;
 
       allow create: if isSignedIn()
@@ -87,6 +88,11 @@ service cloud.firestore {
                     && validUserWrite();
 
       allow delete: if isSignedIn() && request.auth.uid == uid;
+
+      /* --- NEW: allow ALL subcollections under the user's doc (planner, logs, etc.) --- */
+      match /{sub=**} {
+        allow read, create, update, delete: if isSignedIn() && request.auth.uid == uid;
+      }
     }
 
     /* ---------- pantryItems (OWNER-ONLY) ---------- */
@@ -97,13 +103,10 @@ service cloud.firestore {
       allow delete:  if isSignedIn() && resource.data.uid == request.auth.uid;
     }
 
-    /* ---------- consumptionLogs (OWNER-ONLY)  <-- NEW ---------- */
+    /* ---------- consumptionLogs (OWNER-ONLY) ---------- */
     match /consumptionLogs/{logId} {
-      // read only your own logs
       allow read:   if isSignedIn() && resource.data.uid == request.auth.uid;
-      // create only as yourself (must include uid == auth.uid)
       allow create: if creatingAsSelf();
-      // typically immutable; lock these down
       allow update, delete: if false;
     }
 
@@ -114,24 +117,31 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
 
       allow update: if isSignedIn()
-                    && (resource.data.uid == request.auth.uid || resource.data.author.uid == request.auth.uid)
+                    && (
+                         resource.data.uid == request.auth.uid ||
+                         (resource.data.author != null && resource.data.author.uid == request.auth.uid)
+                       )
                     && ownershipUnchanged();
 
       allow delete: if isSignedIn()
-                    && (resource.data.uid == request.auth.uid || resource.data.author.uid == request.auth.uid);
+                    && (
+                         resource.data.uid == request.auth.uid ||
+                         (resource.data.author != null && resource.data.author.uid == request.auth.uid)
+                       );
 
       match /photos/{pid} {
         allow read: if true;
         allow create, delete: if isSignedIn()
                                && (
                                     get(/databases/$(database)/documents/recipes/$(id)).data.uid == request.auth.uid
-                                 || get(/databases/$(database)/documents/recipes/$(id)).data.author.uid == request.auth.uid
+                                 || (get(/databases/$(database)/documents/recipes/$(id)).data.author != null
+                                     && get(/databases/$(database)/documents/recipes/$(id)).data.author.uid == request.auth.uid)
                                );
         allow update: if false;
       }
     }
 
-    /* ---------- fav recipes ---------- */
+    /* ---------- fav recipes (kept explicit; also covered by users/{uid}/{sub=**}) ---------- */
     match /users/{uid}/favoriteRecipes/{rid} {
       allow read: if isSignedIn() && request.auth.uid == uid;
       allow create, delete: if isSignedIn() && request.auth.uid == uid;
@@ -252,6 +262,11 @@ service cloud.firestore {
                     && !exists(/databases/$(database)/documents/usernames/$(uname))
                     && request.resource.data.uid == request.auth.uid;
       allow update, delete: if false;
+    }
+
+    /* ---------- default deny ---------- */
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

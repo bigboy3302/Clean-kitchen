@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import ThemeScript from "@/components/theme/ThemeScript";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import FabNav from "@/components/nav/FabNav";
-
+import EnsureUserDoc from "@/components/auth/EnsureUserDoc";
 export const metadata = {
   title: "Clean Kitchen",
   description: "Plan, cook, and enjoy.",
@@ -15,6 +15,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <ThemeScript />
         <ThemeProvider>
+          <EnsureUserDoc />
           <header className="ck-navbar">
             <div className="ck-navbar-inner">
               <div aria-hidden />
