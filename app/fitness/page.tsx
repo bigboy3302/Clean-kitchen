@@ -160,8 +160,8 @@ export default function FitnessPage() {
         .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
         .title{margin:0;font-size:28px;font-weight:900}
         .muted{color:#64748b}
-        .btn{border:1px solid #e5e7eb;background:#fff;border-radius:10px;padding:8px 12px;display:inline-block}
-        .card{border:1px solid #e5e7eb;background:#fff;border-radius:16px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.04)}
+        .btn{border:1px solidrgb(82, 88, 99);background:#fff;border-radius:10px;padding:8px 12px;display:inline-block}
+        .card{border:1px solidrgb(82, 88, 99);background:#fff;border-radius:16px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.04)}
         .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}
         @media (max-width:900px){ .grid2{grid-template-columns:1fr} }
         .row3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
@@ -169,9 +169,9 @@ export default function FitnessPage() {
         .form{grid-template-columns:repeat(4,1fr);gap:12px}
         @media (max-width:900px){ .form{grid-template-columns:repeat(2,1fr)} }
         .lab{font-size:.9rem;color:#111827;font-weight:600;margin-bottom:4px}
-        .inp{border:1px solid #d1d5db;border-radius:12px;padding:10px 12px;width:100%}
+        .inp{border:1px solidrgb(82, 88, 99) #d1d5db;border-radius:12px;padding:10px 12px;width:100%}
         .chips{display:flex;gap:8px;flex-wrap:wrap}
-        .chip{border:1px solid #e5e7eb;background:#fff;border-radius:999px;padding:6px 10px;cursor:pointer}
+        .chip{border:1px solidrgb(82, 88, 99);background:#fff;border-radius:999px;padding:6px 10px;cursor:pointer}
         .chip.on{background:#0f172a;color:#fff;border-color:#0f172a}
         .actions{grid-column:1/-1;display:flex;justify-content:flex-end}
         .tbl{width:100%;border-collapse:collapse}

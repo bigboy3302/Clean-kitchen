@@ -129,7 +129,7 @@ export default function BarcodeScanner({
       <style jsx>{`
         .scanWrap { display:grid; gap:10px; }
         .row { display:flex; gap:8px; }
-        .btn { border:1px solid #e5e7eb; background:#fff; padding:8px 12px; border-radius:10px; cursor:pointer; }
+        .btn { border:1px solid #e5e7eb; background:#000000; padding:8px 12px; border-radius:10px; cursor:pointer; }
         .cam { display:grid; gap:6px; }
         .video {
           width: 100%;
@@ -143,7 +143,7 @@ export default function BarcodeScanner({
         .hint { color:#64748b; font-size:12px; }
         .err {
           background:#fef2f2; color:#991b1b;
-          border:1px solid #fecaca; border-radius:8px;
+          border:1px solidrgb(153, 32, 32); border-radius:8px;
           padding:6px 8px; font-size:12px;
         }
       `}</style>

@@ -47,7 +47,8 @@ export default function PantryHelpButton() {
                 <li><strong>Add / Merge:</strong> Scan or type. We auto-clean names and merge by barcode or name.</li>
                 <li><strong>Active vs Expired:</strong> Past-dated items move to <em>Expired</em>.</li>
                 <li><strong>Camera tips:</strong> HTTPS + camera permission; hold steady 20–30 cm away.</li>
-                <li><strong>Edit quickly:</strong> Use the ✎ icon on cards for an inline editor.</li>
+                <li><strong>Edit quickly:</strong> Use edit button on cards for an inline editor.</li>
+                <li><strong>Edit name for products:</strong> Edit product names, so the recipes page can finde the right recipes with your pantry items</li>
               </ol>
               <p className="muted">Only you can see your pantry items.</p>
             </div>

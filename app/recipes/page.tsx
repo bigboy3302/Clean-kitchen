@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   addDoc, collection, deleteDoc, doc, getDoc, onSnapshot, query,
   serverTimestamp, setDoc, updateDoc, where
@@ -24,7 +25,56 @@ const capFirst = (s: string) => s.replace(/^\p{L}/u, (m) => m.toUpperCase());
 const ridFor = (r: CommonRecipe) => (r.source === "api" ? `api-${r.id}` : `user-${r.id}`);
 
 /* =========================================================================
-   PANTRY PICKER (popup)
+   SIGN-IN PROMPT (replaces window.alert)
+   ========================================================================= */
+function SignInPrompt({
+  open,
+  onClose,
+  onSigninHref = "/login",
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSigninHref?: string;
+}) {
+  if (!open) return null;
+  return (
+    <div className="ov" role="dialog" aria-modal aria-labelledby="si-title" onClick={onClose}>
+      <div className="card" onClick={(e) => e.stopPropagation()}>
+        <div className="hdr">
+          <div id="si-title" className="t">Please sign in</div>
+          <button className="x" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <div className="body">
+          <p className="p">
+            You need an account to favorite recipes. Sign in to save and view your favorites across devices.
+          </p>
+        </div>
+        <div className="actions">
+          <Link className="btn primary" href={onSigninHref}>Sign in</Link>
+          <button className="btn" onClick={onClose}>Not now</button>
+        </div>
+      </div>
+      <style jsx>{`
+        .ov{position:fixed;inset:0;background:rgba(2,6,23,.55);display:grid;place-items:center;padding:16px;z-index:1600;animation:fade .15s ease-out}
+        @keyframes fade{from{opacity:.5}to{opacity:1}}
+        .card{width:100%;max-width:460px;background:var(--card-bg);border:1px solid var(--border);border-radius:16px;box-shadow:0 20px 50px rgba(2,6,23,.2);transform:translateY(8px);animation:pop .18s ease-out forwards}
+        @keyframes pop{to{transform:translateY(0)}}
+        .hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);background:color-mix(in oklab, var(--card-bg) 92%, #fff)}
+        .t{font-weight:800;color:var(--text)}
+        .x{border:none;background:var(--bg2);color:var(--text);border-radius:10px;padding:4px 10px;cursor:pointer}
+        .body{padding:14px}
+        .p{margin:0;color:var(--text)}
+        .actions{display:flex;gap:8px;justify-content:flex-end;padding:12px 14px;border-top:1px solid var(--border);background:color-mix(in oklab, var(--card-bg) 96%, #fff)}
+        .btn{border:1px solid var(--border);background:var(--bg2);border-radius:12px;padding:8px 12px;cursor:pointer;text-decoration:none;color:inherit}
+        .btn.primary{background:var(--primary);border-color:var(--primary);color:var(--primary-contrast)}
+        .btn:hover{filter:brightness(.98)}
+      `}</style>
+    </div>
+  );
+}
+
+/* =========================================================================
+   PANTRY PICKER (popup) — only used when signed in
    ========================================================================= */
 function PantryPicker({
   open, onClose, allItems, onSearch, busy,
@@ -80,7 +130,7 @@ function PantryPicker({
 }
 
 /* =========================================================================
-   CREATE RECIPE WIZARD
+   CREATE RECIPE WIZARD — only used when signed in
    ========================================================================= */
 type Row = { name: string; qty: string; unit: "g" | "kg" | "ml" | "l" | "pcs" | "tbsp" | "tsp" | "cup" };
 
@@ -125,7 +175,7 @@ function CreateRecipeWizard({
   }
 
   async function save() {
-    if (!meUid) return alert("Please sign in.");
+    if (!meUid) return; // guarded by parent
     const t = capFirst(title.trim());
     const cleanRows = rows
       .map(r => ({ name: r.name.trim(), qty: r.qty.trim(), unit: r.unit }))
@@ -309,7 +359,7 @@ function CreateRecipeWizard({
 }
 
 /* =========================================================================
-   FAVORITES OVERLAY
+   FAVORITES OVERLAY — only used when signed in
    ========================================================================= */
 function FavOverlay({
   uid, onClose, onOpen,
@@ -419,6 +469,9 @@ export default function RecipesPage() {
   const [openModal, setOpenModal] = useState<CommonRecipe | null>(null);
   const [showPantryPicker, setShowPantryPicker] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
+
+  // sign-in prompt
+  const [showSigninPrompt, setShowSigninPrompt] = useState(false);
 
   // card expansion
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -538,7 +591,7 @@ export default function RecipesPage() {
   /* ---------- favorites ---------- */
   async function toggleFav(r: CommonRecipe) {
     const uid = me;
-    if (!uid) { alert("Please sign in to favorite."); return; }
+    if (!uid) { setShowSigninPrompt(true); return; } // 🔔 show popup instead of alert
     const id = ridFor(r);
     const ref = doc(db, "users", uid, "favoriteRecipes", id);
     if (favs[id]) {
@@ -606,12 +659,19 @@ export default function RecipesPage() {
     return combined.filter(r => (r.area || "").toLowerCase() === areaFilter.toLowerCase());
   }, [combined, areaFilter]);
 
+  /* ---------- signed-in only controls visibility ---------- */
+  const isSignedIn = !!me;
+
   return (
     <main className="container">
       <div className="topbar">
         <h1 className="title">Recipes</h1>
         <div className="right">
-          
+          {!isSignedIn && (
+            <div className="signinHint">
+              <strong>Tip:</strong> Sign in to create recipes, favorite, and search with your pantry.
+            </div>
+          )}
         </div>
       </div>
 
@@ -646,11 +706,16 @@ export default function RecipesPage() {
             </select>
           </div>
 
-          <div className="actionsRow">
-            <Button variant="secondary" onClick={() => setShowPantryPicker(true)}>Find with my pantry</Button>
-            <Button onClick={() => setShowWizard(true)}>Create recipe</Button>
-            <Button className="linkBtn" onClick={() => setShowFavs(true)}>Favorites</Button>
-          </div>
+          {/* actions — ONLY when signed in */}
+          {isSignedIn ? (
+            <div className="actionsRow">
+              <Button variant="secondary" onClick={() => setShowPantryPicker(true)}>Find with my pantry</Button>
+              <Button onClick={() => setShowWizard(true)}>Create recipe</Button>
+              <Button className="linkBtn" onClick={() => setShowFavs(true)}>Favorites</Button>
+            </div>
+          ) : (
+            <div className="actionsRow" />
+          )}
         </div>
 
         {busySearch && <p className="muted small">Searching…</p>}
@@ -676,7 +741,7 @@ export default function RecipesPage() {
             const minutes = (r as any).minutes ?? null;
             const baseServings = (r as any).servings ?? 2;
 
-            // ✅ only show Edit for your own user recipes
+            // Only show Edit for your own user recipes
             const isMine = r.source === "user" && !!me && (r.author?.uid === me);
             const editHref = isMine ? `/profile/recipes/${r.id}` : undefined;
 
@@ -695,7 +760,7 @@ export default function RecipesPage() {
                   baseServings={baseServings}
                   isFavorite={!!fav}
                   onToggleFavorite={() => toggleFav(r)}
-                  editHref={editHref}   // 👈 shows inline Edit button for owners
+                  editHref={editHref}
                 />
               </div>
             );
@@ -713,8 +778,8 @@ export default function RecipesPage() {
         />
       ) : null}
 
-      {/* Overlays */}
-      {showPantryPicker && (
+      {/* Overlays — only mount when signed in */}
+      {isSignedIn && showPantryPicker && (
         <PantryPicker
           open={showPantryPicker}
           onClose={() => setShowPantryPicker(false)}
@@ -724,7 +789,7 @@ export default function RecipesPage() {
         />
       )}
 
-      {showWizard && (
+      {isSignedIn && showWizard && (
         <CreateRecipeWizard
           open={showWizard}
           onClose={() => setShowWizard(false)}
@@ -733,7 +798,7 @@ export default function RecipesPage() {
         />
       )}
 
-      {showFavs && (
+      {isSignedIn && showFavs && (
         <FavOverlay
           uid={me}
           onClose={() => setShowFavs(false)}
@@ -741,18 +806,22 @@ export default function RecipesPage() {
         />
       )}
 
+      {/* Sign-in prompt (shown for favorite when signed out) */}
+      <SignInPrompt open={showSigninPrompt} onClose={() => setShowSigninPrompt(false)} onSigninHref="/auth/login" />
+
       <style jsx>{`
         .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
         .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
         .title{font-size:28px;font-weight:800;margin:0}
         .right{display:flex;gap:10px}
-        .linkBtn{border:none;background:none;color:var(--text);text-decoration:underline;cursor:pointer;font-size:13px}
+        .signinHint{font-size:13px;color:var(--muted);background:var(--bg2);border:1px dashed var(--border);padding:6px 10px;border-radius:10px}
 
         .card { border:1px solid var(--border); background:var(--card-bg); border-radius:16px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.04); }
         .controls .row{display:grid;align-items:end;grid-template-columns:auto 1fr auto auto;gap:14px;flex-wrap:wrap}
         .actionsRow{display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end}
         .filters{display:grid;gap:4px;align-items:end}
         .select{border:1px solid var(--border);border-radius:10px;padding:8px 10px;background:var(--bg2);color:var(--text)}
+        .linkBtn{border:none;background:none;color:var(--text);text-decoration:underline;cursor:pointer;font-size:13px}
 
         .seg{display:inline-grid; grid-auto-flow:column; gap:0; border:1px solid var(--border); border-radius:12px; overflow:hidden; background:var(--bg2);}
         .segBtn{padding:10px 12px; font-weight:700; border:0; background:transparent; color:var(--text); cursor:pointer;}
@@ -779,6 +848,15 @@ export default function RecipesPage() {
         .gridCards{ display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: minmax(440px, auto); gap: 22px; overflow: visible; }
         .cardWrap{ position: relative; overflow: visible; }
         .cardWrap.span2 { grid-column: span 2; }
+
+        @media (max-width: 980px){
+          .controls .row{ grid-template-columns: 1fr; }
+          .actionsRow{ justify-content:flex-start; }
+          .gridCards{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 640px){
+          .gridCards{ grid-template-columns: 1fr; }
+        }
       `}</style>
     </main>
   );

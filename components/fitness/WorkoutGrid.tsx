@@ -205,13 +205,13 @@ export default function WorkoutGrid({
       </p>
 
       <style jsx>{`
-        .card{border:1px solid #e5e7eb;background:#fff;border-radius:16px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.04)}
+        .card{border:1px solidrgb(77, 88, 110);background:#fff;border-radius:16px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.04)}
         .head{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
         .h3{margin:0}
         .sub{color:#475569;font-size:13px;margin-top:2px}
-        .search .inp{border:1px solid #d1d5db;border-radius:12px;padding:8px 10px;min-width:240px}
+        .search .inp{border:1px solidrgb(25, 50, 86);border-radius:12px;padding:8px 10px;min-width:240px}
         .tabs{display:flex;gap:8px;overflow:auto;padding:8px 0}
-        .tab{border:1px solid #e5e7eb;background:#fff;border-radius:999px;padding:6px 10px;cursor:pointer;white-space:nowrap}
+        .tab{border:1px solid#000000;background:#000000;border-radius:999px;padding:6px 10px;cursor:pointer;white-space:nowrap}
         .tab.on{background:#0f172a;border-color:#0f172a;color:#fff}
         .muted{color:#64748b}
         .small{font-size:12px}
@@ -220,14 +220,14 @@ export default function WorkoutGrid({
         @media (max-width:1000px){ .grid{grid-template-columns:repeat(3,1fr);} }
         @media (max-width:720px){ .grid{grid-template-columns:repeat(2,1fr);} }
         @media (max-width:520px){ .grid{grid-template-columns:1fr;} }
-        .item{border:1px solid #eef2f7;border-radius:12px;overflow:hidden;background:#fff;display:flex;flex-direction:column}
+        .item{border:1px solidrgb(62, 82, 105);border-radius:12px;overflow:hidden;background:#fff;display:flex;flex-direction:column}
         .gif{width:100%;height:220px;object-fit:contain;background:#f8fafc}
         .meta{padding:8px;display:flex;flex-direction:column;gap:6px}
         .name{font-weight:800;color:#0f172a}
         .row{display:flex;gap:6px;flex-wrap:wrap}
-        .chip{font-size:12px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:999px;padding:2px 8px}
+        .chip{font-size:12px;background:#f1f5f9;border:1px solidrgb(45, 70, 102);border-radius:999px;padding:2px 8px}
         .actions{display:flex;justify-content:flex-end;margin-top:4px}
-        .open{border:1px solid #e5e7eb;background:#fff;border-radius:10px;padding:6px 10px;cursor:pointer}
+        .open{border:1px solidrgb(44, 72, 128);background:#000000;border-radius:10px;padding:6px 10px;cursor:pointer}
       `}</style>
     </section>
   );

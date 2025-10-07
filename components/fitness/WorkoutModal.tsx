@@ -68,16 +68,16 @@ export default function WorkoutModal({ exercise, goal, onClose, zIndex = 2200 }:
       </div>
 
       <style jsx>{`
-        .ov{position:fixed;inset:0;background:rgba(2,6,23,.55);display:grid;place-items:center;padding:16px}
-        .box{width:100%;max-width:880px;max-height:92vh;overflow:auto;background:#fff;border-radius:16px;border:1px solid #e5e7eb}
-        .head{position:sticky;top:0;background:#fff;display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #eef2f7}
+        .ov{position:fixed;inset:0;background:rgba(64, 81, 156, 0.55);display:grid;place-items:center;padding:16px}
+        .box{width:100%;max-width:880px;max-height:92vh;overflow:auto;background:#fff;border-radius:16px;border:1px solidrgb(67, 93, 146)}
+        .head{position:sticky;top:0;background:#fff;display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solidrgb(57, 90, 131)}
         .title{margin:0;font-weight:800}
         .x{border:none;background:#0f172a;color:#fff;border-radius:10px;padding:4px 10px;cursor:pointer}
         .gif{width:100%;max-height:360px;object-fit:contain;background:#f8fafc;display:block}
-        .fallback{padding:10px 14px;color:#991b1b;background:#fef2f2;border-top:1px solid #fecaca;border-bottom:1px solid #fecaca}
+        .fallback{padding:10px 14px;color:#991b1b;background:#fef2f2;border-top:1px solidrgb(100, 61, 61);border-bottom:1px solidrgb(100, 79, 79)}
         .alink{color:#0f172a;text-decoration:underline}
         .tags{display:flex;gap:8px;flex-wrap:wrap;padding:10px 14px}
-        .chip{font-size:12px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:999px;padding:2px 8px}
+        .chip{font-size:12px;background:#000000;border:1px solidrgb(53, 91, 140);border-radius:999px;padding:2px 8px}
         .sec{padding:0 14px 14px}
         .p{margin:8px 0 0}
         .list{margin:8px 0 0; padding-left:18px}
