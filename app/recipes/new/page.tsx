@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import Input from "@/components/ui/Input";
-import Button from "@/components/ui/Button";
+import Button from "@/components/ui/button";
 
 export default function NewRecipePage() {
   const router = useRouter();

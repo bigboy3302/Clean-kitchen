@@ -4,7 +4,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import Button from "@/components/ui/Button";
+import Button from "@/components/ui/button";
 
 export type NutritionInfo = {
   name?: string | null;

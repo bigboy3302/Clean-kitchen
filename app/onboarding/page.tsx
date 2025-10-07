@@ -7,7 +7,7 @@ import { updateProfile } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import AuthShell from "@/components/auth/AuthShell";
 import Input from "@/components/ui/Input";
-import Button from "@/components/ui/Button";
+import Button from "@/components/ui/button";
 
 
 function slugifyName(s: string) {

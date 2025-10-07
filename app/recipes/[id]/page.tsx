@@ -139,7 +139,6 @@ export default function RecipeDetailPage() {
                 uid={recipe.uid}
                 recipeId={recipe.id}
                 initialCoverUrl={cover ?? undefined}
-                canEdit={false as any /* component prop compatibility */}
               />
             ) : null}
 

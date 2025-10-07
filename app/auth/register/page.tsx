@@ -12,7 +12,7 @@ import {
 import { auth } from "@/lib/firebase";
 import AuthShell from "@/components/auth/AuthShell";
 import Input from "components/ui/Input";
-import Button from "@/components/ui/Button";
+import Button from "@/components/ui/button";
 
 type Phase = "form" | "verify";
 

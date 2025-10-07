@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
@@ -8,7 +8,7 @@ import { auth, db, storage } from "@/lib/firebase";
 import { doc, updateDoc, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { getDownloadURL, ref as sref, uploadBytes } from "firebase/storage";
 import BookWritingLoader from "./BookWritingLoader";
-import ConfirmDialog from "@/components/ui/ConfirmDialog"; // ⬅️ added
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 /* ---------------- types ---------------- */
 type Row = { name: string; qty: string; unit: "g" | "kg" | "ml" | "l" | "pcs" | "tbsp" | "tsp" | "cup" };
@@ -96,7 +96,7 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // ⬇️ added for delete confirmation UX
+  // Delete confirm UX
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
@@ -115,10 +115,16 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
   function addStep() { setSteps((s) => [...s, ""]); }
   function removeStep(i: number) { setSteps((s) => (s.length > 1 ? s.filter((_, idx) => idx !== i) : s)); }
 
-  /* ---------- cover upload ---------- */
+  /* ---------- cover upload (fix pooled event with a ref) ---------- */
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   async function onPickCover(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.currentTarget.files?.[0];
-    if (!file || !me?.uid || !id) return;
+    const inputEl = fileInputRef.current;            // safe reference
+    const file = e.currentTarget.files?.[0];         // read immediately
+    if (!file || !me?.uid || !id) {
+      if (inputEl) inputEl.value = "";
+      return;
+    }
     setSaving(true);
     try {
       const path = `recipeImages/${me.uid}/${id}/cover`;
@@ -131,9 +137,10 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
       setErr(e?.message || "Failed to upload cover.");
     } finally {
       setSaving(false);
-      e.currentTarget.value = "";
+      if (inputEl) inputEl.value = "";              // reset selection reliably
     }
   }
+
   async function onRemoveCover() {
     if (!id) return;
     setSaving(true);
@@ -170,7 +177,6 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
         updatedAt: serverTimestamp(),
       });
 
-      // After save, go back to the list (as you wanted)
       router.push("/recipes");
     } catch (e: any) {
       setErr(e?.message || "Failed to save.");
@@ -179,14 +185,12 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
     }
   }
 
-  // ⬇️ changed: show dialog instead of window.confirm
   function remove() {
     if (!id || !isOwner) return;
     setDeleteErr(null);
     setConfirmOpen(true);
   }
 
-  // ⬇️ new: actual delete happens only after confirming
   async function doDelete() {
     if (!id || !isOwner || deleting) return;
     setDeleteErr(null);
@@ -203,8 +207,6 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
   }
 
   /* ---------- render ---------- */
-
-  // ✅ Avoid the permission flash: wait until auth is ready
   if (!authReady) {
     return <BookWritingLoader variant="flip" />;
   }
@@ -258,7 +260,13 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
           <div className="heroActions">
             <label className="btn sm primary">
               Change cover
-              <input type="file" accept="image/*" onChange={onPickCover} hidden />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={onPickCover}
+                hidden
+              />
             </label>
             {cover ? <button className="btn sm ghost" onClick={onRemoveCover} disabled={saving}>Remove</button> : null}
           </div>
@@ -309,7 +317,7 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
       {err && <p className="errorCard">{err}</p>}
       {deleteErr && <p className="errorCard">{deleteErr}</p>}
 
-      {/* 🔔 Confirm deletion popup */}
+      {/* Confirm deletion popup */}
       <ConfirmDialog
         open={confirmOpen}
         title="Delete this recipe?"

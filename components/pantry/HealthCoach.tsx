@@ -1,7 +1,8 @@
+//components/pantry/HealthCoach.tsx
 "use client";
 
 import { useMemo } from "react";
-import Button from "@/components/ui/Button";
+import Button from "@/components/ui/button";
 
 export type NutrientTotals = {
   sugars_g: number;

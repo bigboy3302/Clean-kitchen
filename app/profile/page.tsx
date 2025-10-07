@@ -22,7 +22,7 @@ import { ref as sref, uploadBytes, getDownloadURL, listAll, deleteObject } from 
 import ThemePicker from "@/components/theme/ThemePicker";
 import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
-import Button from "@/components/ui/Button";
+import Button from "@/components/ui/button";
 
 
 type UserDoc = {

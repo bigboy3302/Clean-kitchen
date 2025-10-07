@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import Button from "@/components/ui/Button";
+import Button from "@/components/ui/button";
 import {
   getWeekPlan, upsertDayItem, toggleDone, getMetrics,
   weekIdFromDate, type WeekPlan, type WorkoutItem, type DayKey, suggestMeals, type SuggestedMeal

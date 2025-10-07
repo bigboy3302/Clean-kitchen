@@ -11,7 +11,7 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 
-import Button from "@/components/ui/Button";
+import Button from "@/components/ui/button";
 import PantryCard, { PantryCardItem } from "@/components/pantry/PantryCard";
 import BarcodeScanner from "@/components/pantry/BarcodeScanner";
 import PantryHelpButton from "@/components/pantry/PantryHelpButton";
@@ -426,7 +426,10 @@ export default function PantryPage() {
         )}
 
         {err && <p className="error">{err}</p>}
-        <div className="actions"><Button onClick={addOrMergeItem} disabled={busy} type="button">{busy ? "Saving…" : "Add / Merge"}</Button></div>
+        <div className="actions">
+          <Button onClick={addOrMergeItem} disabled={busy} type="button">{busy ? "Saving…" : "Add / Merge"}</Button>
+          <Button variant="secondary" onClick={()=>setScannerAutoStart((v)=>!v)}>{scannerAutoStart ? "Stop camera" : "Use camera"}</Button>
+        </div>
       </section>
 
       {/* ACTIVE + FRIDGE */}
@@ -469,7 +472,7 @@ export default function PantryPage() {
               items={trashItems as any}
               isOpen={trashOpen}
               onToggleOpen={(v) => { setTrashOpen(v); if (v) setFridgeOpen(false); }}
-              minimal
+              
             />
           </aside>
           <div className="rightCol">
@@ -504,20 +507,20 @@ export default function PantryPage() {
         .hl { color: var(--text); font-weight: 800; background: linear-gradient(90deg, color-mix(in oklab, var(--primary) 16%, transparent), transparent); padding: 0 6px; border-radius: 8px; }
 
         /* ---------- LAYOUT ---------- */
-        .twoCol{ display:grid; grid-template-columns: 240px 1fr; gap:16px; align-items:start; }
+        .twoCol{ display:grid; grid-template-columns: 260px 1fr; gap:16px; align-items:start; }
         .leftCol{ position: relative; }
         @media (min-width: 900px){ .leftCol{ position: sticky; top: 8px; height: fit-content; } }
         .rightCol{ min-width:0; }
 
-        /* Focus mode */
+        /* Focus mode (mobile sheet effect) */
         .twoCol.focus { grid-template-columns: 1fr; position: relative; }
-        .twoCol.focus .leftCol { position: relative; top: auto; margin: 0 auto; width: min(560px, 92vw); transform: translateY(0); z-index: 3; transition: transform .18s ease, width .18s ease, box-shadow .18s ease; }
-        .twoCol.focus .rightCol { display: none; }
-        .twoCol.focus .leftCol > * { box-shadow: 0 24px 64px rgba(2,6,23,.20), 0 4px 12px rgba(2,6,23,.10); transform: scale(1.02); }
-        .twoCol.focus::after { content: ""; position: absolute; inset: -8px; background: radial-gradient(60% 60% at 50% 20%, rgba(2,6,23,.22), transparent 70%); pointer-events: none; border-radius: 20px; }
+        .twoCol.focus .leftCol { position: fixed; left: 50%; transform: translate(-50%, 0); bottom: 16px; width: min(560px, 94vw); z-index: 8; }
+        .twoCol.focus::after { content: ""; position: fixed; inset: 0; background: rgba(2,6,23,.55); backdrop-filter: blur(2px); z-index: 6; }
+        .twoCol.focus .leftCol > * { box-shadow: 0 24px 64px rgba(2,6,23,.28), 0 4px 12px rgba(2,6,23,.10); }
 
         /* ---------- STATS ---------- */
         .stats { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin: 10px 0 18px; }
+        @media (max-width: 560px){ .stats{ grid-template-columns: 1fr; } }
         .stat { border: 1px solid var(--border); background: var(--card-bg); border-radius: 16px; padding: 12px 14px; box-shadow: 0 8px 30px rgba(2,6,23,.06); }
         .sTop { display: flex; align-items: center; gap: 8px; color: var(--muted); font-weight: 700; font-size: 12px; }
         .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--muted); display: inline-block; }
@@ -529,7 +532,7 @@ export default function PantryPage() {
         .card { border: 1px solid var(--border); background: linear-gradient(180deg, color-mix(in oklab, var(--card-bg) 92%, transparent), var(--card-bg)); border-radius: 20px; padding: 16px; box-shadow: 0 14px 40px rgba(2,6,23,.06), 0 2px 10px rgba(2,6,23,.04); }
 
         /* ---------- ADD CARD ---------- */
-        .addCard { margin-bottom: 24px; }
+        .addCard { margin-bottom: 24px; position: relative; }
         .addHead { display:flex; align-items:center; gap:12px; margin-bottom: 14px; }
         .addIcon { width:36px; height:36px; border-radius:12px; display:grid; place-items:center; background: color-mix(in oklab, var(--primary) 18%, var(--bg2)); border:1px solid var(--border); font-weight:800; box-shadow: 0 6px 16px rgba(2,6,23,.08); }
         .addTitle { font-weight:900; letter-spacing:-.01em; }
@@ -542,7 +545,7 @@ export default function PantryPage() {
         .field { display:grid; gap:6px; }
         .label { font-size:.84rem; color:var(--muted); font-weight:700; }
         .input { width:100%; border:1px solid var(--border); border-radius:12px; padding:10px 12px; background: var(--bg2); color: var(--text); outline: none; transition: border-color .15s ease, box-shadow .15s ease, background .2s ease, transform .04s ease; }
-        .input:focus { border-color: color-mix(in oklab, var(--primary) 60%, var(--border)); box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 22%, transparent); background: var(--bg); }
+        .input:focus { border-color: var(--ring); box-shadow: 0 0 0 4px color-mix(in oklab, var(--ring) 35%, transparent); background: var(--bg); }
         .input:active { transform: translateY(1px); }
 
         .barcodeRow { display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:end; }
@@ -552,7 +555,7 @@ export default function PantryPage() {
 
         .scannerCol { display:grid; gap:8px; }
         .scanner { border:1px dashed var(--border); background: var(--bg); border-radius: 14px; padding: 8px; }
-        .rowHint { display:flex; gap:12px; align-items:center; }
+        .rowHint { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
         .muted { color: var(--muted); }
         .small { font-size:12px; }
 
@@ -561,7 +564,7 @@ export default function PantryPage() {
         .nutGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px 12px; }
         @media (max-width:560px){ .nutGrid{ grid-template-columns:1fr; } }
 
-        .actions { margin-top:14px; display:flex; gap:12px; justify-content:flex-end; }
+        .actions { position: sticky; bottom: -16px; display:flex; gap:12px; justify-content:flex-end; padding-top: 10px; background: linear-gradient(180deg, transparent, var(--bg) 40%); }
         .error { background: color-mix(in oklab, #ef4444 15%, var(--card-bg)); color:#7f1d1d; border:1px solid color-mix(in oklab, #ef4444 35%, var(--border)); border-radius:10px; padding:8px 10px; font-size:13px; }
 
         /* ---------- LISTS ---------- */
