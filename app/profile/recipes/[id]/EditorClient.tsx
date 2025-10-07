@@ -8,6 +8,7 @@ import { auth, db, storage } from "@/lib/firebase";
 import { doc, updateDoc, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { getDownloadURL, ref as sref, uploadBytes } from "firebase/storage";
 import BookWritingLoader from "./BookWritingLoader";
+import ConfirmDialog from "@/components/ui/ConfirmDialog"; // ⬅️ added
 
 /* ---------------- types ---------------- */
 type Row = { name: string; qty: string; unit: "g" | "kg" | "ml" | "l" | "pcs" | "tbsp" | "tsp" | "cup" };
@@ -95,6 +96,11 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // ⬇️ added for delete confirmation UX
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
+
   const isOwner = useMemo(() => !!me && !!ownerUid && me.uid === ownerUid, [me, ownerUid]);
 
   /* ---------- ingredient rows ---------- */
@@ -173,17 +179,26 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
     }
   }
 
-  async function remove() {
+  // ⬇️ changed: show dialog instead of window.confirm
+  function remove() {
     if (!id || !isOwner) return;
-    if (!confirm("Delete this recipe? This cannot be undone.")) return;
-    setSaving(true);
+    setDeleteErr(null);
+    setConfirmOpen(true);
+  }
+
+  // ⬇️ new: actual delete happens only after confirming
+  async function doDelete() {
+    if (!id || !isOwner || deleting) return;
+    setDeleteErr(null);
+    setDeleting(true);
     try {
       await deleteDoc(doc(db, "recipes", String(id)));
+      setConfirmOpen(false);
       router.push("/recipes");
     } catch (e: any) {
-      setErr(e?.message || "Failed to delete.");
+      setDeleteErr(e?.message || "Failed to delete.");
     } finally {
-      setSaving(false);
+      setDeleting(false);
     }
   }
 
@@ -218,8 +233,12 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
         </div>
         <div className="right">
           <Link className="btn ghost" href={`/recipes`}>Cancel</Link>
-          <button className="btn danger" onClick={remove} disabled={saving}>Delete</button>
-          <button className="btn primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save changes"}</button>
+          <button className="btn danger" onClick={remove} disabled={saving || deleting}>
+            {deleting ? "Deleting…" : "Delete"}
+          </button>
+          <button className="btn primary" onClick={save} disabled={saving}>
+            {saving ? "Saving…" : "Save changes"}
+          </button>
         </div>
       </div>
 
@@ -288,6 +307,20 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
       </div>
 
       {err && <p className="errorCard">{err}</p>}
+      {deleteErr && <p className="errorCard">{deleteErr}</p>}
+
+      {/* 🔔 Confirm deletion popup */}
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Delete this recipe?"
+        message={`“${title || "Untitled"}” will be permanently removed.`}
+        confirmText={deleting ? "Deleting…" : "Delete"}
+        cancelText="Cancel"
+        onConfirm={doDelete}
+        onCancel={() => (deleting ? null : setConfirmOpen(false))}
+        zIndex={2400}
+      />
+
       <style jsx>{styles}</style>
     </main>
   );

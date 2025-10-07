@@ -233,3 +233,101 @@ input:focus, select:focus, textarea:focus {
 .rounded { border-radius: var(--radius) }
 .hidden { display: none !important }
 
+
+/* Base type */
+html { font-size: 16px; }
+@media (max-width: 420px) {
+  html { font-size: 15.5px; }
+}
+body {
+  -webkit-tap-highlight-color: transparent;
+  padding-bottom: max(16px, env(safe-area-inset-bottom)); /* iOS safe area */
+}
+
+/* Buttons & inputs: phone-friendly hit areas */
+button, .btn, input, select {
+  min-height: 44px; /* Apple HIG */
+  touch-action: manipulation;
+}
+
+/* Make images never overflow */
+img, video { max-width: 100%; height: auto; }
+
+/* Responsive helpers */
+:root {
+  --space-1: 6px;
+  --space-2: 10px;
+  --space-3: 14px;
+  --space-4: 18px;
+  --radius: 14px;
+}
+
+.container {
+  width: min(1120px, 100%);
+  margin-inline: auto;
+  padding-inline: 16px;
+}
+/* ===== Mobile nav & safe areas ===== */
+:root {
+  --bottomnav-h: 64px;
+}
+
+/* Hide the top app bar on small screens (we switch to bottom tabs) */
+@media (max-width: 768px) {
+  .ck-navbar { display: none; }
+}
+
+/* Give pages breathing room so the bottom bar doesn't cover content */
+.has-bottomnav {
+  padding-bottom: max(24px, var(--bottomnav-h) + env(safe-area-inset-bottom) + 12px);
+}
+
+/* Bottom tab bar */
+.ck-bottomnav {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  height: calc(var(--bottomnav-h) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  display: none; /* default hidden on desktop */
+  grid-template-columns: repeat(5, 1fr);
+  background: var(--bg-raised);
+  border-top: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+}
+
+@media (max-width: 768px) {
+  .ck-bottomnav { display: grid; }
+}
+
+.ck-tab {
+  min-width: 0;
+  text-decoration: none;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ck-tab-ico {
+  width: 22px;
+  height: 22px;
+}
+
+.ck-tab-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  line-height: 1;
+}
+
+.ck-tab--active {
+  color: var(--text);
+}
+
+.ck-tab--active .ck-tab-ico {
+  /* tiny emphasis on active icon */
+  filter: saturate(1.2);
+}

@@ -1,4 +1,4 @@
-
+/* components/theme/ThemeProvider.tsx */
 "use client";
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
@@ -61,11 +61,14 @@ function applyCssVars(p: Palette, dataTheme?: "light" | "dark" | "custom") {
   el.style.setProperty("--muted", p.muted);
   el.style.setProperty("--border", p.border);
   el.style.setProperty("--ring", p.ring);
+
+  // extra tokens used by components
   el.style.setProperty("--card-bg", p.bg2);
   el.style.setProperty("--card-border", p.border);
   el.style.setProperty("--btn-bg", p.primary);
   el.style.setProperty("--btn-fg", p.primaryContrast);
   el.style.setProperty("--btn-border", "transparent");
+
   const isDark = dataTheme === "dark" || (dataTheme === "custom" && isPerceivedDark(p));
   el.style.colorScheme = isDark ? ("dark" as any) : ("light" as any);
 }
@@ -73,7 +76,7 @@ function applyCssVars(p: Palette, dataTheme?: "light" | "dark" | "custom") {
 function isPerceivedDark(p: Palette) {
   const [r, g, b] = hexToRgb(p.bg);
   const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return lum < 140; 
+  return lum < 140;
 }
 function hexToRgb(hex: string): [number, number, number] {
   const h = hex.replace("#", "");
@@ -126,7 +129,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const value = useMemo<Ctx>(() => ({ mode, setMode: (m)=>{ setMode(m); apply(m); }, palette, setPalette: (p)=>{ setPalette(p); if (mode==='custom') apply('custom', p); }, apply }), [mode, palette]);
+  const value = useMemo<Ctx>(
+    () => ({
+      mode,
+      setMode: (m) => { setMode(m); apply(m); },
+      palette,
+      setPalette: (p) => { setPalette(p); if (mode === "custom") apply("custom", p); },
+      apply
+    }),
+    [mode, palette]
+  );
 
   return <ThemeCtx.Provider value={value}>{children}</ThemeCtx.Provider>;
 }

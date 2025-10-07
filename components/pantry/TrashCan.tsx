@@ -1,3 +1,4 @@
+//components/pantry/TrashCan.tsx
 "use client";
 
 import React from "react";

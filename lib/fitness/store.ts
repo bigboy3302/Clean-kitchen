@@ -1,4 +1,3 @@
-// lib/fitness/store.ts
 "use client";
 
 import { onAuthStateChanged, type User } from "firebase/auth";
@@ -360,6 +359,47 @@ export async function suggestMealsForWeek(
   );
 
   return out;
+}
+
+/* =========================
+   NEW: Per-user “today” meals
+   ========================= */
+
+// Create a UTC date key (YYYY-MM-DD)
+function todayKeyUTC(d = new Date()): string {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Returns today's meals for the signed-in user.
+ * If a list has already been saved today, it returns the same list (stable for the day).
+ * Otherwise it pulls new suggestions (from `/api/recipes`), saves them, and returns them.
+ */
+export async function getOrCreateDailyMeals(
+  uid?: string, // optional to allow calling with pre-known uid
+  goal: "bulk" | "cut" | "maintain" = "maintain",
+  count = 4
+): Promise<SuggestedMeal[]> {
+  const userId = uid || (await requireSignedIn()).uid;
+  const key = todayKeyUTC();
+  const ref = doc(db, "users", userId, "dailyMeals", key);
+  const snap = await getDoc(ref);
+
+  if (snap.exists()) {
+    const data = snap.data() as { meals?: SuggestedMeal[] };
+    if (Array.isArray(data.meals) && data.meals.length) {
+      return data.meals.slice(0, count);
+    }
+  }
+
+  // Fetch fresh, persist, and return
+  const recs = await suggestMeals(goal, Math.max(10, count + 2));
+  const chosen = recs.slice(0, count);
+  await setDoc(ref, { uid: userId, goal, meals: chosen, createdAt: serverTimestamp() }, { merge: true });
+  return chosen;
 }
 
 /* =========================

@@ -3,6 +3,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Button from "@/components/ui/Button";
 
 export type NutritionInfo = {
@@ -114,6 +115,11 @@ export default function PantryCard({ item, onSave, onDelete, onConsume }: Props)
   const [consumeOpen, setConsumeOpen] = useState(false);
   const [consumeGrams, setConsumeGrams] = useState<number>(item.lastConsumedGrams ?? 100);
 
+  // DELETE confirm dialog
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
+
   const est = useMemo(() => {
     const g = Math.max(0, Number(consumeGrams) || 0);
     const f = (x?: number | null) => (x != null ? (x / 100) * g : 0);
@@ -180,6 +186,20 @@ export default function PantryCard({ item, onSave, onDelete, onConsume }: Props)
     setConsumeOpen(false);
   }
 
+  async function confirmDelete() {
+    if (!onDelete || deleting) return;
+    setDeleteErr(null);
+    setDeleting(true);
+    try {
+      await onDelete();
+      setConfirmOpen(false);
+    } catch (e: any) {
+      setDeleteErr(e?.message || "Failed to delete.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const facts: Array<{ label: string; value: any; suffix?: string }> = [
     { label: "Serving size", value: n.servingSize },
     { label: "kcal / 100g", value: n.kcalPer100g },
@@ -207,6 +227,8 @@ export default function PantryCard({ item, onSave, onDelete, onConsume }: Props)
           {item.barcode ? <Chip>EAN: {item.barcode}</Chip> : null}
         </div>
 
+        {deleteErr ? <p className="err">{deleteErr}</p> : null}
+
         {/* Always-visible actions */}
         <div className="actionsRow">
           {hasNutrition && onConsume ? (
@@ -221,8 +243,12 @@ export default function PantryCard({ item, onSave, onDelete, onConsume }: Props)
             Edit
           </Button>
           {onDelete ? (
-            <Button variant="danger" onClick={onDelete}>
-              Delete
+            <Button
+              variant="danger"
+              onClick={() => setConfirmOpen(true)}
+              disabled={deleting}
+            >
+              {deleting ? "Deleting…" : "Delete"}
             </Button>
           ) : null}
         </div>
@@ -425,6 +451,22 @@ export default function PantryCard({ item, onSave, onDelete, onConsume }: Props)
           document.body
         )}
 
+      {/* DELETE CONFIRM POPUP (uses your ConfirmDialog component) */}
+      {onDelete &&
+        createPortal(
+          <ConfirmDialog
+            open={confirmOpen}
+            title="Delete this item?"
+            message={`“${item.name}” will be removed from your pantry.`}
+            confirmText={deleting ? "Deleting…" : "Delete"}
+            cancelText="Cancel"
+            onConfirm={confirmDelete}
+            onCancel={() => (deleting ? null : setConfirmOpen(false))}
+            zIndex={3200}
+          />,
+          document.body
+        )}
+
       <style jsx>{`
         .card {
           border: 1px solid var(--border);
@@ -447,13 +489,20 @@ export default function PantryCard({ item, onSave, onDelete, onConsume }: Props)
           flex-wrap: wrap;
           gap: 8px;
         }
-
-        /* NEW: big, obvious actions row */
         .actionsRow {
           display: flex;
           flex-wrap: wrap;
           gap: 8px;
           padding-top: 2px;
+        }
+        .err {
+          margin: 0;
+          font-size: 13px;
+          color: #7f1d1d;
+          background: #fee2e2;
+          border: 1px solid #fecaca;
+          border-radius: 10px;
+          padding: 6px 8px;
         }
 
         /* Modals */

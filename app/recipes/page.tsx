@@ -1,3 +1,4 @@
+/* app/recipes/page.tsx */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -239,6 +240,7 @@ function CreateRecipeWizard({
               <label className="lab">Cover photo <span className="muted small">(optional)</span></label>
               {imgPrev ? (
                 <div className="pick">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img className="cover" src={imgPrev} alt="preview" />
                   <Button variant="secondary" size="sm" onClick={()=>{ setImgPrev(null); setImgFile(null); }}>Remove</Button>
                 </div>
@@ -409,6 +411,7 @@ function FavOverlay({
           <div className="gridFav">
             {rows.map((r) => (
               <div key={r.id} className="fi">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 {r.image ? <img className="fimg" src={r.image} alt={r.title} /> : <div className="fimg" />}
                 <div className="ft">{r.title}</div>
                 <div className="btns">
@@ -689,7 +692,7 @@ export default function RecipesPage() {
 
           <div className="grow">
             <div className="wave-group">
-              <input required type="text" className="input" value={q} onChange={(e) => setQ(e.currentTarget.value)} />
+              <input required aria-label="Search" type="text" className="input" value={q} onChange={(e) => setQ(e.currentTarget.value)} />
               <span className="bar" />
               <label className="label" aria-hidden>
                 {["S","e","a","r","c","h"].map((ch, i) => (
@@ -818,7 +821,10 @@ export default function RecipesPage() {
 
         .card { border:1px solid var(--border); background:var(--card-bg); border-radius:16px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.04); }
         .controls .row{display:grid;align-items:end;grid-template-columns:auto 1fr auto auto;gap:14px;flex-wrap:wrap}
+        @media (max-width: 980px){ .controls .row{ grid-template-columns: 1fr; } }
         .actionsRow{display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end}
+        @media (max-width:980px){ .actionsRow{ justify-content:flex-start; } }
+
         .filters{display:grid;gap:4px;align-items:end}
         .select{border:1px solid var(--border);border-radius:10px;padding:8px 10px;background:var(--bg2);color:var(--text)}
         .linkBtn{border:none;background:none;color:var(--text);text-decoration:underline;cursor:pointer;font-size:13px}
@@ -850,8 +856,6 @@ export default function RecipesPage() {
         .cardWrap.span2 { grid-column: span 2; }
 
         @media (max-width: 980px){
-          .controls .row{ grid-template-columns: 1fr; }
-          .actionsRow{ justify-content:flex-start; }
           .gridCards{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 640px){

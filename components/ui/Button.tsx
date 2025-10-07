@@ -1,17 +1,13 @@
-
+/* components/ui/Button.tsx */
 "use client";
+
 import React from "react";
 
 type Props = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "ghost" | "danger";
   size?: "sm" | "md" | "lg";
 };
-const VARIANT = {
-  primary: "btn-primary",
-  secondary: "btn-secondary",
-  ghost: "btn-ghost",
-  danger: "btn-danger", 
-};
+
 export default function Button({ variant = "primary", size = "md", className = "", ...rest }: Props) {
   return (
     <>
@@ -26,10 +22,12 @@ export default function Button({ variant = "primary", size = "md", className = "
           border:1px solid var(--btn-border);
           background: var(--btn-bg);
           color: var(--btn-fg);
-          transition: filter .15s, transform .02s;
+          transition: filter .15s, transform .02s, box-shadow .15s;
+          outline: none;
         }
         .btn:hover{ filter: brightness(1.05); }
         .btn:active{ transform: translateY(1px); }
+        .btn:focus-visible{ box-shadow: 0 0 0 4px color-mix(in oklab, var(--ring) 40%, transparent); }
 
         .primary{}
         .secondary{
@@ -37,16 +35,21 @@ export default function Button({ variant = "primary", size = "md", className = "
           color: var(--text);
           border-color: var(--border);
         }
-        .secondary:hover{ filter:none; background: rgba(0,0,0,.04); }
-        :root[data-theme="dark"] .secondary:hover{ background: rgba(255,255,255,.06); }
+        .secondary:hover{ filter:none; background: color-mix(in oklab, var(--bg2) 90%, var(--text) 10% / 6%); }
+        :root[data-theme="dark"] .secondary:hover{ background: color-mix(in oklab, var(--bg2) 90%, #fff 10% / 6%); }
 
         .ghost{
           background: transparent;
           color: var(--text);
           border-color: var(--border);
         }
-        .ghost:hover{ background: rgba(0,0,0,.04); }
-        :root[data-theme="dark"] .ghost:hover{ background: rgba(255,255,255,.06); }
+        .ghost:hover{ background: color-mix(in oklab, var(--bg2) 85%, var(--primary) 15% / 10%); }
+
+        .danger{
+          --btn-bg: #ef4444;
+          --btn-fg: #fff;
+          border-color: transparent;
+        }
 
         .sm{ padding:6px 10px; font-size:.9rem; }
         .md{ padding:8px 14px; font-size:1rem; }
