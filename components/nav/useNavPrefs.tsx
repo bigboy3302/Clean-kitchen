@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { auth, db } from "@/lib/firebase";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
 
 export type NavPlacement = "header" | "top" | "bottom" | "floating";
 export type NavOrderItem = "dashboard" | "pantry" | "recipes" | "fitness" | "profile";
@@ -37,10 +37,20 @@ export const defaultNavPrefs: Required<
 
 type ReturnShape = {
   uid: string | null;
+  /** Raw value from Firestore (can be null if none saved yet) */
   nav: NavPrefs | null;
+  /** Defaults merged with current nav (safe to render immediately) */
+  effective: Required<NavPrefs>;
   loading: boolean;
   error: unknown;
+  /**
+   * Shallow update: only provided keys are changed, others in prefs.nav are preserved.
+   * Example: save({ compact: true })
+   */
   save: (partial: NavPrefs) => Promise<void>;
+  /**
+   * Replace entire prefs.nav with the provided object (use with care).
+   */
   replace: (next: NavPrefs) => Promise<void>;
 };
 
@@ -90,10 +100,21 @@ export default function useNavPrefs(): ReturnShape {
     return () => unsub();
   }, [uid]);
 
+  const effective = useMemo<Required<NavPrefs>>(() => {
+    return {
+      ...defaultNavPrefs,
+      ...(nav ?? {}),
+    };
+  }, [nav]);
+
   const save = useCallback(
     async (partial: NavPrefs) => {
       if (!uid) throw new Error("Not signed in");
-      await setDoc(doc(db, "users", uid), { prefs: { nav: partial } }, { merge: true });
+      const updates: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(partial)) {
+        updates[`prefs.nav.${k}`] = v;
+      }
+      await setDoc(doc(db, "users", uid), updates, { merge: true });
     },
     [uid]
   );
@@ -101,10 +122,14 @@ export default function useNavPrefs(): ReturnShape {
   const replace = useCallback(
     async (next: NavPrefs) => {
       if (!uid) throw new Error("Not signed in");
-      await setDoc(doc(db, "users", uid), { prefs: { nav: next } }, { merge: true });
+      await setDoc(
+        doc(db, "users", uid),
+        { prefs: { nav: next } },
+        { merge: true }
+      );
     },
     [uid]
   );
 
-  return { uid, nav, loading, error, save, replace };
+  return { uid, nav, effective, loading, error, save, replace };
 }
