@@ -2,7 +2,7 @@
 "use client";
 
 import { useMemo } from "react";
-import Button from "@/components/ui/button";
+import Button from "@/components/ui/Button";
 
 export type NutrientTotals = {
   sugars_g: number;

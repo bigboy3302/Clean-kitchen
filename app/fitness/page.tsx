@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import Button from "@/components/ui/button";
+import Button from "@/components/ui/Button";
 import Meter from "@/components/ui/Meter";
 import { Goal, Activity, mifflinStJeor, tdee, targetCalories, macroTargets, goalSuitability } from "@/lib/fitness/calc";
 import { getMetrics, saveMetrics, Metrics } from "@/lib/fitness/store";

@@ -12,7 +12,7 @@ import { getDownloadURL, ref as sref, uploadBytes } from "firebase/storage";
 
 import { auth, db, storage } from "@/lib/firebase";
 import Input from "@/components/ui/Input";
-import Button from "@/components/ui/button";
+import Button from "@/components/ui/Button";
 import type { CommonRecipe, Ingredient } from "@/components/recipes/types";
 import RecipeModal from "@/components/recipes/RecipeModal";
 import RecipeCard, { IngredientObj } from "@/components/recipes/RecipeCard";

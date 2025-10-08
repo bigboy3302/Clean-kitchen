@@ -11,7 +11,7 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 
-import Button from "@/components/ui/button";
+import Button from "@/components/ui/Button";
 import PantryCard, { PantryCardItem } from "@/components/pantry/PantryCard";
 import BarcodeScanner from "@/components/pantry/BarcodeScanner";
 import PantryHelpButton from "@/components/pantry/PantryHelpButton";

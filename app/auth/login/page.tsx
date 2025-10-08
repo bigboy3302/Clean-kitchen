@@ -8,7 +8,7 @@ import { auth, db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import AuthShell from "@/components/auth/AuthShell";
 import Input from "@/components/ui/Input";
-import Button from "@/components/ui/button";
+import Button from "@/components/ui/Button";
 
 export default function LoginPage() {
   const router = useRouter();

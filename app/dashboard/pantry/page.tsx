@@ -8,7 +8,7 @@ import {
 import { useRouter } from "next/navigation";
 import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
-import Button from "@/components/ui/button";
+import Button from "@/components/ui/Button";
 
 type PantryItem = {
   id: string;
