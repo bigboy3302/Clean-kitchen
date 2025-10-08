@@ -3,15 +3,46 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import dynamic from "next/dynamic";
 
+// Use relative imports so this works even if the @ alias isn't configured
+import { auth, db } from "../../../lib/firebase";
+
+/** Props of the uploader component (kept in sync with components/recipes/RecipeImageUploader.tsx) */
+type RecipeImageUploaderProps = {
+  uid: string;
+  recipeId: string;
+  initialCoverUrl?: string | null;
+  onCoverSaved?: (url: string) => void;
+  onGalleryAdd?: (item: { id: string; url: string }) => void;
+  onGalleryRemove?: (id: string) => void;
+  gallery?: { id: string; url: string }[];
+};
+
+// Type the dynamic component directly with its Props.
+// Return the module's default export so the loader matches the expected type.
+const RecipePhotos = dynamic<RecipeImageUploaderProps>(
+  () =>
+    import("../../../components/recipes/RecipeImageUploader").then(
+      (m) => m.default
+    ),
+  { ssr: false }
+);
+
 type RecipeDoc = {
   id: string;
   uid?: string;
-  author?: { uid?: string | null; name?: string | null; avatarURL?: string | null } | null;
+  author?:
+    | {
+        uid?: string | null;
+        name?: string | null;
+        avatarURL?: string | null;
+        username?: string | null;
+        displayName?: string | null;
+      }
+    | null;
   title?: string | null;
   imageURL?: string | null;
   image?: string | null;
@@ -22,13 +53,8 @@ type RecipeDoc = {
   createdAt?: any;
 };
 
-const RecipePhotos = dynamic(
-  () => import("@/components/recipes/RecipeImageUploader"),
-  { ssr: false }
-);
-
 export default function RecipeDetailPage() {
-  const { id } = useParams<{ id: string }>(); // ✅ available on /recipes/[id]
+  const { id } = useParams<{ id: string }>(); // available on /recipes/[id]
   const [me, setMe] = useState<{ uid: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [recipe, setRecipe] = useState<RecipeDoc | null>(null);
@@ -116,9 +142,9 @@ export default function RecipeDetailPage() {
           <h1 className="title">{recipe.title || "Untitled recipe"}</h1>
           <div className="meta">
             <div className="author">
-              {author?.avatarURL ? (
+              {author && (author as any).avatarURL ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img className="avatar" src={author.avatarURL} alt="" />
+                <img className="avatar" src={(author as any).avatarURL} alt="" />
               ) : (
                 <div className="avatar fallback">
                   {(authorName?.[0] || "U").toUpperCase()}
@@ -127,13 +153,16 @@ export default function RecipeDetailPage() {
               <span>
                 by <strong>{authorName}</strong>
                 {created ? (
-                  <> • {created.toLocaleDateString()}{" "}
-                  {created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</>
+                  <>
+                    {" "}
+                    • {created.toLocaleDateString()}{" "}
+                    {created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </>
                 ) : null}
               </span>
             </div>
 
-            {/* Photo gallery (read-only for visitors) */}
+            {/* Photo uploader (read-only for visitors, but safe to render) */}
             {recipe.id && recipe.uid ? (
               <RecipePhotos
                 uid={recipe.uid}
@@ -143,7 +172,9 @@ export default function RecipeDetailPage() {
             ) : null}
 
             <div className="actions">
-              <Link className="btn" href="/recipes">All recipes</Link>
+              <Link className="btn" href="/recipes">
+                All recipes
+              </Link>
               {isOwner && (
                 <Link className="btn primary" href={`/profile/recipes/${recipe.id}`}>
                   Edit
@@ -181,7 +212,8 @@ export default function RecipeDetailPage() {
                   <li key={i}>
                     <span className="dot" />
                     <span>
-                      {name}{measure ? ` — ${measure}` : ""}
+                      {name}
+                      {measure ? ` — ${measure}` : ""}
                     </span>
                   </li>
                 );
@@ -198,7 +230,9 @@ export default function RecipeDetailPage() {
                 .split("\n")
                 .filter(Boolean)
                 .map((line, i) => (
-                  <p key={i} className="stepLine">{line.trim()}</p>
+                  <p key={i} className="stepLine">
+                    {line.trim()}
+                  </p>
                 ))}
             </div>
           </section>
