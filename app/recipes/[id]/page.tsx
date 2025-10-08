@@ -1,70 +1,81 @@
+// app/recipes/[id]/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
-import dynamic from "next/dynamic";
+import { auth, db } from "@/lib/firebase";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 
-// Use relative imports so this works even if the @ alias isn't configured
-import { auth, db } from "../../../lib/firebase";
+/* ---------------- types ---------------- */
+type Author = {
+  uid?: string | null;
+  username?: string | null;
+  displayName?: string | null;
+  avatarURL?: string | null;
+} | null;
 
-/** Props of the uploader component (kept in sync with components/recipes/RecipeImageUploader.tsx) */
-type RecipeImageUploaderProps = {
-  uid: string;
-  recipeId: string;
-  initialCoverUrl?: string | null;
-  onCoverSaved?: (url: string) => void;
-  onGalleryAdd?: (item: { id: string; url: string }) => void;
-  onGalleryRemove?: (id: string) => void;
-  gallery?: { id: string; url: string }[];
-};
-
-// Type the dynamic component directly with its Props.
-// Return the module's default export so the loader matches the expected type.
-const RecipePhotos = dynamic<RecipeImageUploaderProps>(
-  () =>
-    import("../../../components/recipes/RecipeImageUploader").then(
-      (m) => m.default
-    ),
-  { ssr: false }
-);
+type Ingredient = { name?: string; measure?: string | null; qty?: string; unit?: string };
 
 type RecipeDoc = {
   id: string;
   uid?: string;
-  author?:
-    | {
-        uid?: string | null;
-        name?: string | null;
-        avatarURL?: string | null;
-        username?: string | null;
-        displayName?: string | null;
-      }
-    | null;
   title?: string | null;
-  imageURL?: string | null;
-  image?: string | null;
   description?: string | null;
-  ingredients?: { name?: string; qty?: string; unit?: string; measure?: string }[];
+  image?: string | null;
+  imageURL?: string | null;
+  gallery?: { id: string; url: string }[];
+  category?: string | null;
+  area?: string | null;
+  ingredients?: Ingredient[];
   steps?: string | null;
   instructions?: string | null;
+  author?: Author;
   createdAt?: any;
 };
 
-export default function RecipeDetailPage() {
-  const { id } = useParams<{ id: string }>(); // available on /recipes/[id]
+/* tiny helpers */
+function toMillis(ts: any): number {
+  try {
+    if (!ts) return 0;
+    if (typeof ts?.toDate === "function") return ts.toDate().getTime();
+    if (typeof ts?.seconds === "number") return ts.seconds * 1000;
+  } catch {}
+  return 0;
+}
+function toLines(txt?: string | null): string[] {
+  if (!txt) return [];
+  return String(txt)
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/* =======================================================================
+   PUBLIC RECIPE PAGE
+   ======================================================================= */
+export default function RecipePublicPage() {
+  const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+
   const [me, setMe] = useState<{ uid: string } | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [ready, setReady] = useState(false);
+
   const [recipe, setRecipe] = useState<RecipeDoc | null>(null);
+  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
+  // auth
   useEffect(() => {
-    const stop = onAuthStateChanged(auth, (u) => setMe(u || null));
+    const stop = onAuthStateChanged(auth, (u) => {
+      setMe(u || null);
+      setReady(true);
+    });
     return () => stop();
   }, []);
 
+  // live recipe
   useEffect(() => {
     if (!id) return;
     const ref = doc(db, "recipes", String(id));
@@ -89,12 +100,22 @@ export default function RecipeDetailPage() {
     return () => stop();
   }, [id]);
 
-  function toDateSafe(ts: any): Date | null {
-    if (!ts) return null;
-    if (typeof ts.toDate === "function") return ts.toDate();
-    if (typeof ts.seconds === "number") return new Date(ts.seconds * 1000);
-    return null;
-  }
+  const isOwner = useMemo(
+    () => !!me && !!recipe?.uid && me.uid === recipe.uid,
+    [me, recipe?.uid]
+  );
+
+  const created = useMemo(() => (recipe ? new Date(toMillis(recipe.createdAt)) : null), [recipe?.createdAt]);
+  const title = recipe?.title || "Untitled recipe";
+  const cover = recipe?.imageURL || recipe?.image || null;
+  const gallery = Array.isArray(recipe?.gallery) ? recipe!.gallery : [];
+  const desc = recipe?.description || "";
+  const steps = toLines(recipe?.instructions || recipe?.steps);
+  const ing = Array.isArray(recipe?.ingredients) ? recipe!.ingredients : [];
+  const authorName =
+    recipe?.author?.displayName ||
+    recipe?.author?.username ||
+    (recipe?.uid ? recipe.uid.slice(0, 6) : "Unknown");
 
   if (loading) {
     return (
@@ -104,16 +125,14 @@ export default function RecipeDetailPage() {
       </main>
     );
   }
-
   if (err) {
     return (
       <main className="wrap">
-        <div className="card error">{err}</div>
+        <div className="card bad">{err}</div>
         <style jsx>{styles}</style>
       </main>
     );
   }
-
   if (!recipe) {
     return (
       <main className="wrap">
@@ -123,156 +142,210 @@ export default function RecipeDetailPage() {
     );
   }
 
-  const created = toDateSafe(recipe.createdAt);
-  const isOwner = !!me && recipe.uid === me.uid;
-
-  // Prefer username/displayName saved on the recipe when created.
-  const author = recipe.author || {};
-  const authorName =
-    (author as any).username ||
-    (author as any).displayName ||
-    (recipe.uid ? recipe.uid.slice(0, 6) : "Unknown");
-
-  const cover = recipe.imageURL || recipe.image || null;
-
   return (
     <main className="wrap">
-      <article className="recipe">
-        <header className="head">
-          <h1 className="title">{recipe.title || "Untitled recipe"}</h1>
+      {/* top bar */}
+      <header className="strip">
+        <Link className="btn ghost" href="/recipes">← All recipes</Link>
+        <div className="actions">
+            <span className="hint">You’re viewing a public recipe</span>
+        </div>
+      </header>
+
+      {/* hero section */}
+      <section className="hero">
+        <div className="cover">
+          {cover ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={cover} alt={title} />
+          ) : (
+            <div className="ph" aria-hidden>
+              <svg width="28" height="28" viewBox="0 0 24 24">
+                <path d="M4 5h16v14H4z M8 11a2 2 0 114 0 2 2 0 01-4 0zm10 6l-4.5-6-3.5 4.5L8 13l-4 4h14z" fill="currentColor"/>
+              </svg>
+            </div>
+          )}
+        </div>
+
+        <div className="head">
+          <h1 className="title">{title}</h1>
           <div className="meta">
-            <div className="author">
-              {author && (author as any).avatarURL ? (
+            <div className="who">
+              {recipe?.author?.avatarURL ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img className="avatar" src={(author as any).avatarURL} alt="" />
+                <img className="avatar" src={recipe.author.avatarURL} alt="" />
               ) : (
-                <div className="avatar fallback">
-                  {(authorName?.[0] || "U").toUpperCase()}
-                </div>
+                <div className="avatar ph">{authorName[0]?.toUpperCase() || "U"}</div>
               )}
-              <span>
-                by <strong>{authorName}</strong>
+              <div className="names">
+                <div className="name">{authorName}</div>
                 {created ? (
-                  <>
-                    {" "}
-                    • {created.toLocaleDateString()}{" "}
+                  <div className="time">
+                    {created.toLocaleDateString()}{" "}
                     {created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                  </>
+                  </div>
                 ) : null}
-              </span>
+              </div>
             </div>
-
-            {/* Photo uploader (read-only for visitors, but safe to render) */}
-            {recipe.id && recipe.uid ? (
-              <RecipePhotos
-                uid={recipe.uid}
-                recipeId={recipe.id}
-                initialCoverUrl={cover ?? undefined}
-              />
-            ) : null}
-
-            <div className="actions">
-              <Link className="btn" href="/recipes">
-                All recipes
-              </Link>
-              {isOwner && (
-                <Link className="btn primary" href={`/profile/recipes/${recipe.id}`}>
-                  Edit
-                </Link>
-              )}
+            <div className="chips">
+              {recipe?.category ? <span className="chip">{recipe.category}</span> : null}
+              {recipe?.area ? <span className="chip">{recipe.area}</span> : null}
             </div>
           </div>
-        </header>
 
-        {cover && (
-          <div className="imgWrap">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="img" src={cover} alt={recipe.title || ""} />
-          </div>
-        )}
+          {desc ? <p className="desc">{desc}</p> : null}
+        </div>
+      </section>
 
-        {recipe.description && (
-          <section className="section">
-            <h2 className="h2">Description</h2>
-            <p className="text">{recipe.description}</p>
-          </section>
-        )}
-
-        {Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0 && (
-          <section className="section">
-            <h2 className="h2">Ingredients</h2>
-            <ul className="ingredients">
-              {recipe.ingredients.map((ing, i) => {
-                const name = ing?.name || "Ingredient";
-                // Support either {measure} or {qty, unit}
-                const measure = ing?.measure
-                  ? ing.measure
-                  : [ing?.qty, ing?.unit].filter(Boolean).join(" ");
+      {/* content grid */}
+      <section className="grid">
+        {/* ingredients side */}
+        <aside className="panel">
+          <div className="panelHead"><span className="dot" /> Ingredients</div>
+          {ing.length === 0 ? (
+            <p className="muted">No ingredients listed.</p>
+          ) : (
+            <ul className="ingList">
+              {ing.map((it, idx) => {
+                const name = it?.name || "Ingredient";
+                // support measure or {qty,unit}
+                const measure =
+                  it?.measure ??
+                  [it?.qty, it?.unit].filter(Boolean).join(" ");
                 return (
-                  <li key={i}>
-                    <span className="dot" />
-                    <span>
-                      {name}
-                      {measure ? ` — ${measure}` : ""}
-                    </span>
+                  <li key={idx} className="ing">
+                    <span className="bullet" />
+                    <span className="itName">{name}</span>
+                    {measure ? <span className="itQty">{measure}</span> : null}
                   </li>
                 );
               })}
             </ul>
-          </section>
-        )}
+          )}
+        </aside>
 
-        {(recipe.instructions || recipe.steps) && (
-          <section className="section">
+        {/* steps + gallery */}
+        <article className="body">
+          <section className="steps">
             <h2 className="h2">Steps</h2>
-            <div className="steps">
-              {String(recipe.instructions || recipe.steps)
-                .split("\n")
-                .filter(Boolean)
-                .map((line, i) => (
-                  <p key={i} className="stepLine">
-                    {line.trim()}
-                  </p>
+            {steps.length === 0 ? (
+              <p className="muted">No steps provided.</p>
+            ) : (
+              <ol className="stepList">
+                {steps.map((line, i) => (
+                  <li key={i} className="step">
+                    <span className="num">{i + 1}</span>
+                    <p className="txt">{line}</p>
+                  </li>
                 ))}
-            </div>
+              </ol>
+            )}
           </section>
-        )}
-      </article>
+
+          <section className="gallery">
+            <h2 className="h2">Gallery</h2>
+            {gallery.length === 0 ? (
+              <p className="muted">No gallery photos.</p>
+            ) : (
+              <div className="gGrid">
+                {gallery.map((g) => (
+                  <figure key={g.id} className="gItem">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={g.url} alt="" />
+                  </figure>
+                ))}
+              </div>
+            )}
+          </section>
+        </article>
+      </section>
 
       <style jsx>{styles}</style>
     </main>
   );
 }
 
+/* ---------------- styles ---------------- */
 const styles = `
-.wrap { max-width: 900px; margin: 0 auto; padding: 24px; }
-.card { border:1px solid #e5e7eb; background:#fff; border-radius:16px; padding:16px; }
-.error { background:#fef2f2; color:#991b1b; border-color:#fecaca; }
+.wrap{ max-width: 1100px; margin: 0 auto; padding: 14px; color: var(--text); }
+.card{ border:1px solid var(--border); background: var(--card-bg); border-radius: 14px; padding: 12px; }
+.bad{ background: color-mix(in oklab, #ef4444 12%, var(--card-bg)); color: color-mix(in oklab, #7f1d1d 70%, var(--text) 30%); border-color: color-mix(in oklab, #ef4444 35%, var(--border)); }
 
-.recipe { background:#fff; border:1px solid #e5e7eb; border-radius:16px; box-shadow:0 20px 50px rgba(2,6,23,.04); overflow:hidden; }
-.head { padding:18px 18px 8px; border-bottom:1px solid #f1f5f9; }
-.title { margin:0; font-size:28px; font-weight:800; color:#0f172a; }
-.meta { margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-.author { display:flex; align-items:center; gap:10px; color:#475569; }
-.avatar { width:34px; height:34px; border-radius:999px; object-fit:cover; border:1px solid #e2e8f0; }
-.avatar.fallback { width:34px; height:34px; border-radius:999px; display:grid; place-items:center; background:#f1f5f9; color:#0f172a; font-weight:700; border:1px solid #e2e8f0; }
-.actions { display:flex; gap:8px; }
-.btn { border:1px solid #e5e7eb; border-radius:10px; padding:8px 12px; font-size:14px; color:#0f172a; text-decoration:none; background:#fff; }
-.btn:hover { background:#f8fafc; }
-.btn.primary { background:#0f172a; color:#fff; border-color:#0f172a; }
-.btn.primary:hover { opacity:.95; }
+.strip{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
+.btn{ border:1px solid var(--border); background: var(--bg2); color: var(--text); border-radius:12px; padding:8px 12px; text-decoration:none; font-weight:800; }
+.btn:hover{ background: color-mix(in oklab, var(--bg2) 90%, var(--bg)); }
+.btn.primary{ background: var(--primary); color: var(--primary-contrast); border-color: color-mix(in oklab, var(--primary) 40%, var(--border)); }
+.btn.ghost{ background: transparent; }
+.hint{ color: var(--muted); font-size: 13px; }
 
-.imgWrap { width:100%; max-height:520px; overflow:hidden; border-bottom:1px solid #f1f5f9; }
-.img { width:100%; display:block; object-fit:cover; }
+.hero{ display:grid; gap:14px; grid-template-columns: 1.4fr 1fr; align-items: stretch; }
+@media (max-width: 900px){ .hero{ grid-template-columns: 1fr; } }
 
-.section { padding:16px 18px; }
-.h2 { font-size:18px; font-weight:700; color:#0f172a; margin:0 0 8px; }
-.text { color:#334155; }
+.cover{ border:1px solid var(--border); background:#000; border-radius:16px; overflow:hidden; aspect-ratio: 16/10; }
+.cover img{ width:100%; height:100%; object-fit:cover; display:block; }
+.cover .ph{ width:100%; height:100%; display:grid; place-items:center; color: var(--muted); background: var(--bg2); }
 
-.ingredients { list-style:none; padding:0; margin:0; display:grid; gap:8px; }
-.ingredients li { display:flex; align-items:center; gap:8px; color:#0f172a; }
-.dot { width:6px; height:6px; border-radius:999px; background:#0f172a; display:inline-block; }
+.head{
+  border:1px solid var(--border);
+  background: var(--card-bg);
+  border-radius:16px;
+  padding:14px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.06);
+  display:grid; gap:8px;
+}
+.title{ margin:0; font-size: clamp(22px, 3.4vw, 30px); font-weight:900; letter-spacing:-.02em; }
+.meta{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.who{ display:flex; align-items:center; gap:10px; }
+.avatar{ width:44px; height:44px; border-radius:999px; object-fit:cover; border:1px solid var(--border); }
+.avatar.ph{ width:44px; height:44px; border-radius:999px; display:grid; place-items:center; background:var(--bg2); color:var(--text); font-weight:900; }
+.names{ line-height:1.1 }
+.name{ font-weight:800 }
+.time{ font-size:12px; color: var(--muted) }
+.chips{ display:flex; gap:8px; flex-wrap:wrap }
+.chip{ font-size:12px; font-weight:800; padding: 4px 10px; border-radius:999px; background: color-mix(in oklab, var(--primary) 12%, var(--bg)); border: 1px solid color-mix(in oklab, var(--primary) 35%, var(--border)); }
+.desc{ margin: 6px 0 0; color: var(--text) }
 
-.steps { display:grid; gap:8px; }
-.stepLine { margin:0; color:#0f172a; }
+.grid{ display:grid; gap:14px; grid-template-columns: 340px 1fr; align-items:start; margin-top:14px; }
+@media (max-width: 1024px){ .grid{ grid-template-columns: 1fr; } }
+
+.panel{
+  position: sticky; top: 14px;
+  border:1px solid var(--border); background: var(--card-bg);
+  border-radius:16px; padding:12px; box-shadow: 0 10px 30px rgba(0,0,0,.06);
+}
+.panelHead{ display:flex; align-items:center; gap:8px; font-weight:900; margin-bottom:8px; letter-spacing:-.01em; }
+.dot{ width:10px; height:10px; border-radius:999px; background: var(--primary); box-shadow: 0 0 12px color-mix(in oklab, var(--primary) 60%, transparent); }
+
+.ingList{ list-style:none; margin:0; padding:0; display:grid; gap:8px; }
+.ing{ display:grid; grid-template-columns: auto 1fr auto; gap:8px; align-items:center; }
+.bullet{ width:6px; height:6px; border-radius:999px; background: var(--text); }
+.itName{ font-weight:600; color: var(--text) }
+.itQty{ color: var(--muted); font-size: 13px; }
+
+.body{
+  border:1px solid var(--border); background: var(--card-bg);
+  border-radius:16px; box-shadow: 0 10px 30px rgba(0,0,0,.06);
+  padding: 12px;
+}
+.h2{ margin:0 0 8px; font-size:18px; font-weight:900; letter-spacing:-.01em; }
+
+.stepList{ list-style:none; margin:0; padding:0; display:grid; gap:10px; }
+.step{ display:grid; grid-template-columns: 28px 1fr; gap:10px; align-items:start; }
+.num{
+  width:28px; height:28px; border-radius:10px; border:1px solid var(--border);
+  display:grid; place-items:center; font-weight:800; background: var(--bg2);
+}
+.txt{ margin:0; color: var(--text); }
+
+.gGrid{
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap:10px;
+}
+.gItem{
+  border:1px solid var(--border); border-radius:12px; overflow:hidden; background:#000; aspect-ratio: 4/3;
+}
+.gItem img{ width:100%; height:100%; object-fit:cover; display:block; }
+
+.muted{ color: var(--muted) }
 `;

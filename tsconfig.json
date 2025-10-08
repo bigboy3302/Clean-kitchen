@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "allowJs": false,
@@ -16,8 +20,15 @@
     "isolatedModules": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
-    }
+      "@/*": [
+        "./*"
+      ]
+    },
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
   },
   "include": [
     "next-env.d.ts",
@@ -28,7 +39,8 @@
     "hooks/**/*",
     "styles/**/*",
     "middleware.ts",
-    "env.d.ts"
+    "env.d.ts",
+    ".next/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
@@ -38,7 +50,7 @@
     "dist",
     "build",
     "coverage",
-    "functions",         // 👈 keep Next away from Cloud Functions
-    "functions/**/*"     // 👈 (important)
+    "functions", // 👈 keep Next away from Cloud Functions
+    "functions/**/*" // 👈 (important)
   ]
 }

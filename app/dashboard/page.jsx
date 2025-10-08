@@ -1,4 +1,3 @@
-// app/dashboard/page.jsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -18,7 +17,6 @@ import {
   limit as fsLimit,
   addDoc,
   updateDoc,
-  increment,
 } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 
@@ -104,11 +102,11 @@ export default function DashboardPage() {
     return () => stop();
   }, []);
 
-  // trending by repost count (top 5)
+  // trending by recency (top 5)
   useEffect(() => {
     const tQ = query(
       collection(db, "posts"),
-      orderBy("reposts", "desc"),
+      orderBy("createdAt", "desc"),
       fsLimit(5)
     );
     const stop = onSnapshot(tQ, (snap) => {
@@ -119,20 +117,30 @@ export default function DashboardPage() {
 
   /* ---------- PostCard handlers ---------- */
   async function handleToggleLike(post, liked) {
-    if (!uid || !post?.id) return;
-    const likeRef = doc(db, "posts", post.id, "likes", uid);
-    const snap = await getDoc(likeRef);
-    if (liked) {
-      if (!snap.exists()) {
-        await setDoc(likeRef, { uid, createdAt: serverTimestamp() });
-        // bump denormalized counter so Trending/metrics stay correct
-        await updateDoc(doc(db, "posts", post.id), { likes: increment(1) }).catch(() => {});
+    // verify auth at the moment of click
+    const curUid = auth.currentUser?.uid || null;
+    if (!curUid) {
+      console.warn("Like blocked: no auth user");
+      throw new Error("Not signed in");
+    }
+    if (!post?.id) return;
+
+    const likeRef = doc(db, "posts", post.id, "likes", curUid);
+    try {
+      const snap = await getDoc(likeRef);
+      console.log("[like] path:", likeRef.path, "auth:", curUid, "liked:", liked, "exists:", snap.exists());
+      if (liked) {
+        if (!snap.exists()) {
+          await setDoc(likeRef, { uid: curUid, createdAt: serverTimestamp() });
+        }
+      } else {
+        if (snap.exists()) {
+          await deleteDoc(likeRef);
+        }
       }
-    } else {
-      if (snap.exists()) {
-        await deleteDoc(likeRef);
-        await updateDoc(doc(db, "posts", post.id), { likes: increment(-1) }).catch(() => {});
-      }
+    } catch (e) {
+      console.error("[like] failed", { path: likeRef.path, auth: curUid, postId: post.id }, e);
+      throw e; // lets PostCard revert optimistic state
     }
   }
 
@@ -141,15 +149,9 @@ export default function DashboardPage() {
     const rRef = doc(db, "posts", post.id, "reposts", uid);
     const rSnap = await getDoc(rRef);
     if (next) {
-      if (!rSnap.exists()) {
-        await setDoc(rRef, { uid, createdAt: serverTimestamp() });
-        await updateDoc(doc(db, "posts", post.id), { reposts: increment(1) }).catch(() => {});
-      }
+      if (!rSnap.exists()) await setDoc(rRef, { uid, createdAt: serverTimestamp() });
     } else {
-      if (rSnap.exists()) {
-        await deleteDoc(rRef);
-        await updateDoc(doc(db, "posts", post.id), { reposts: increment(-1) }).catch(() => {});
-      }
+      if (rSnap.exists()) await deleteDoc(rRef);
     }
   }
 
@@ -253,8 +255,8 @@ export default function DashboardPage() {
         uid,
         text: text || null,
         media: [],
-        likes: 0,
-        reposts: 0,
+        likes: 0,     // optional field; UI uses subcollection counts
+        reposts: 0,   // optional field; UI uses subcollection counts
         createdAt: serverTimestamp(),
         author,
       });
