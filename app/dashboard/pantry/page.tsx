@@ -15,7 +15,7 @@ type PantryItem = {
   uid: string;
   name: string;
   qty: number;
-  expiresAt?: string; // ISO date
+  expiresAt?: string; 
   photoURL?: string;
 };
 
