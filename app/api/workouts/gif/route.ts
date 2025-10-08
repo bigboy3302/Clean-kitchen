@@ -1,4 +1,4 @@
-// app/api/workouts/gif/route.ts
+
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 const HOST = process.env.RAPIDAPI_HOST || "exercisedb.p.rapidapi.com";
 const KEY  = process.env.RAPIDAPI_KEY;
 
-// Normalize arbitrary URL strings to http/https
+
 function normalizeUrl(srcRaw: string): URL | null {
   try {
     let src = (srcRaw || "").trim();
@@ -42,14 +42,13 @@ async function stream(upstream: Response) {
 export async function GET(req: Request) {
   try {
     const u = new URL(req.url);
-    // accept either ?id=1234 or ?exerciseId=1234
+   
     const id = (u.searchParams.get("id") || u.searchParams.get("exerciseId") || "").trim();
-    const res = (u.searchParams.get("res") || "360").trim(); // 180/360/720/1080
-    const src = u.searchParams.get("src"); // explicit fallback
+    const res = (u.searchParams.get("res") || "360").trim(); 
+    const src = u.searchParams.get("src"); 
 
-    // ---------- Preferred: by exercise id ----------
+    
     if (id) {
-      // 1) RapidAPI image endpoint (doesn't expose your key to client)
       if (KEY) {
         try {
           const rapidUrl = `https://${HOST}/image?exerciseId=${encodeURIComponent(id)}&resolution=${encodeURIComponent(res)}`;
@@ -66,15 +65,9 @@ export async function GET(req: Request) {
             cache: "no-store",
           });
           if (upstream.ok) return stream(upstream);
-          // fall through to legacy CDN if RapidAPI returns non-ok
-          // (lots of free-plan throttling)
         } catch (e) {
-          // fall through to legacy CDN
-          // console.error("RapidAPI image fetch failed", e);
         }
       }
-
-      // 2) Legacy CloudFront pattern (works for numeric IDs like 0037)
       try {
         const legacy = `https://d205bpvrqc9yn1.cloudfront.net/exerciseGif/${encodeURIComponent(id)}.gif`;
         const upstream = await fetch(legacy, {
@@ -89,7 +82,7 @@ export async function GET(req: Request) {
         });
         if (upstream.ok) return stream(upstream);
       } catch (e) {
-        // console.error("CloudFront fallback failed", e);
+        // console.error("CloudFront fallback failed")
       }
 
       return NextResponse.json(
@@ -98,7 +91,7 @@ export async function GET(req: Request) {
       );
     }
 
-    // ---------- Explicit src fallback ----------
+
     if (src) {
       const url = normalizeUrl(src);
       if (!url) return NextResponse.json({ error: "bad-src" }, { status: 400 });

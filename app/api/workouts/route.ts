@@ -1,4 +1,4 @@
-// app/api/workouts/route.ts
+
 import { NextResponse } from "next/server";
 
 const HOST = process.env.RAPIDAPI_HOST || "exercisedb.p.rapidapi.com";
@@ -20,7 +20,7 @@ type Exercise = {
   bodyPart: string;
   target: string;
   equipment: string;
-  gifUrl: string; // may be "" when upstream doesn’t provide one
+  gifUrl: string; 
 };
 
 function sanitize(raw: RawExercise): Exercise {
