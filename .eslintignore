@@ -1,0 +1,7 @@
+.next
+node_modules
+.firebase
+dist
+build
+coverage
+functions/**

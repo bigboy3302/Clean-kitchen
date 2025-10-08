@@ -11,10 +11,11 @@
     "esModuleInterop": true,
     "resolveJsonModule": true
   },
+  "include": ["src/**/*"],
   "exclude": [
     "node_modules",
-    ".next",
-    "functions",
-    "functions/**/*"
+    "lib",
+    "**/*.spec.ts",
+    "**/*.test.ts"
   ]
 }
