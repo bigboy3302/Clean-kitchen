@@ -1,16 +1,16 @@
 "use client";
 
-import * as React from "react";
-
 type Props = {
   src?: string | null;
   alt?: string;
-  size?: number;          // px
-  name?: string | null;   // used for fallback initial
+  /** Avatar size in px (default 38) */
+  size?: number;
+  /** Fallback initial */
+  name?: string | null;
   className?: string;
 };
 
-export default function Avatar({ src, alt = "avatar", size = 70, name, className }: Props) {
+export default function Avatar({ src, alt = "avatar", size = 100, name, className }: Props) {
   const initial = (name || alt || "U").trim().slice(0, 1).toUpperCase() || "U";
   return (
     <>
@@ -32,8 +32,8 @@ export default function Avatar({ src, alt = "avatar", size = 70, name, className
           line-height: 0;
         }
         .ui-avatar img {
-          width: 150%;
-          height: 150%;
+          width: 100%;
+          height: 100%;
           object-fit: cover;
           display: block;
         }
@@ -45,7 +45,7 @@ export default function Avatar({ src, alt = "avatar", size = 70, name, className
           background: var(--bg2, #0f172a);
           color: var(--text, #e5e7eb);
           font-weight: 800;
-          font-size: 12px;
+          font-size: 13px;
           user-select: none;
         }
       `}</style>

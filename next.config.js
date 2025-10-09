@@ -25,27 +25,28 @@ const injectedEnv = fwcfg
       NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: fwcfg.messagingSenderId,
       NEXT_PUBLIC_FIREBASE_APP_ID: fwcfg.appId,
 
-      // Keep any optional ones you already rely on (leave as-is or set in console)
-      NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY: process.env.NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY || "",
-      NEXT_PUBLIC_APPCHECK_DEBUG_TOKEN: process.env.NEXT_PUBLIC_APPCHECK_DEBUG_TOKEN || "",
+      // Keep any optional ones you already rely on
+      NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY:
+        process.env.NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY || "",
+      NEXT_PUBLIC_APPCHECK_DEBUG_TOKEN:
+        process.env.NEXT_PUBLIC_APPCHECK_DEBUG_TOKEN || "",
     }
   : {};
 
-// Your existing config
 const nextConfig = {
   reactStrictMode: true,
 
-  // Helps trim bundle size for @zxing/browser
   experimental: {
+    // Helps trim bundle size for @zxing/browser
     optimizePackageImports: ["@zxing/browser"],
   },
 
   // Make the env available to the app during build/SSG/SSR
   env: injectedEnv,
 
-  images: {
-    remotePatterns: [
-      // Firebase Storage (legacy domain)
+ images: {
+  remotePatterns: [
+    { protocol: "https", hostname: "d205bpvrqc9yn1.cloudfront.net", pathname: "/**" },
       {
         protocol: "https",
         hostname: "firebasestorage.googleapis.com",
@@ -63,7 +64,6 @@ const nextConfig = {
         hostname: "lh3.googleusercontent.com",
         pathname: "/**",
       },
-
       // TheMealDB images (used by your recipes route)
       {
         protocol: "https",
@@ -75,18 +75,22 @@ const nextConfig = {
         hostname: "themealdb.com",
         pathname: "/images/media/meals/**",
       },
-
       // OpenFoodFacts product images (for barcodes)
       {
         protocol: "https",
         hostname: "images.openfoodfacts.org",
         pathname: "/**",
       },
-
       // Optional common hosts
       {
         protocol: "https",
         hostname: "images.unsplash.com",
+        pathname: "/**",
+      },
+      // ExerciseDB GIF CDN
+      {
+        protocol: "https",
+        hostname: "d205bpvrqc9yn1.cloudfront.net",
         pathname: "/**",
       },
     ],

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { onAuthStateChanged } from "firebase/auth";
@@ -64,6 +64,34 @@ export default function DashboardPage() {
   // feed + trending
   const [recentPosts, setRecentPosts] = useState([]);
   const [trending, setTrending] = useState([]);
+  const [trendingReposts, setTrendingReposts] = useState({});
+  const trendingSorted = useMemo(() => {
+    const withIndex = trending.map((post, idx) => ({ post, idx }));
+    return withIndex
+      .map(({ post, idx }) => ({
+        post,
+        idx,
+        count: trendingReposts[post.id] ?? post.reposts ?? 0,
+      }))
+      .sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        const aTime =
+          typeof a.post.createdAt === "object" && a.post.createdAt?.seconds
+            ? a.post.createdAt.seconds
+            : typeof a.post.createdAt === "number"
+            ? a.post.createdAt
+            : 0;
+        const bTime =
+          typeof b.post.createdAt === "object" && b.post.createdAt?.seconds
+            ? b.post.createdAt.seconds
+            : typeof b.post.createdAt === "number"
+            ? b.post.createdAt
+            : 0;
+        if (bTime !== aTime) return bTime - aTime;
+        return a.idx - b.idx;
+      })
+      .map(({ post }) => post);
+  }, [trending, trendingReposts]);
 
   // composer
   const [openComposer, setOpenComposer] = useState(false);
@@ -101,6 +129,36 @@ export default function DashboardPage() {
     });
     return () => stop();
   }, []);
+
+  useEffect(() => {
+    const ids = trending.map((p) => p.id).filter(Boolean);
+    if (ids.length === 0) {
+      setTrendingReposts({});
+      return;
+    }
+
+    setTrendingReposts((prev) => {
+      const next = {};
+      ids.forEach((id) => {
+        next[id] = prev[id] ?? 0;
+      });
+      return next;
+    });
+
+    const unsubs = ids.map((id) =>
+      onSnapshot(collection(db, "posts", id, "reposts"), (snap) => {
+        setTrendingReposts((prev) => {
+          const count = snap.size;
+          if (prev[id] === count) return prev;
+          return { ...prev, [id]: count };
+        });
+      })
+    );
+
+    return () => {
+      unsubs.forEach((fn) => fn());
+    };
+  }, [trending]);
 
   // trending by recency (top 5)
   useEffect(() => {
@@ -354,8 +412,9 @@ export default function DashboardPage() {
               <p className="muted">No trending posts yet.</p>
             ) : (
               <ul className="trend">
-                {trending.map((p, i) => {
+                {trendingSorted.map((p, i) => {
                   const thumb = Array.isArray(p.media) && p.media[0]?.url ? p.media[0] : null;
+                  const repostCount = trendingReposts[p.id] ?? p.reposts ?? 0;
                   return (
                     <li key={p.id} className="tr">
                       <span className="rank">{i + 1}</span>
@@ -373,7 +432,9 @@ export default function DashboardPage() {
                         )}
                         <div className="trBody">
                           <div className="trTitle">{(p.text || p.description || p.title || "Untitled").slice(0, 80)}</div>
-                          <div className="trMeta">{p.reposts || 0} reposts</div>
+                          <div className="trMeta">
+                            {repostCount} {repostCount === 1 ? "repost" : "reposts"}
+                          </div>
                         </div>
                       </Link>
                     </li>

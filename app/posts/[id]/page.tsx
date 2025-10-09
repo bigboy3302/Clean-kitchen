@@ -1,4 +1,3 @@
-// app/posts/[id]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -22,14 +21,11 @@ import {
 } from "firebase/firestore";
 import { ref as sref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { auth, db, storage } from "@/lib/firebase";
+import Avatar from "@/components/ui/Avatar";
 
 /* ---------- types ---------- */
-type Author =
-  | { username?: string | null; displayName?: string | null; avatarURL?: string | null }
-  | null;
-
+type Author = { username?: string | null; displayName?: string | null; avatarURL?: string | null } | null;
 type MediaItem = { type: "image"; url: string };
-
 type Post = {
   id: string;
   uid: string;
@@ -40,7 +36,6 @@ type Post = {
   createdAt?: any;
   author?: Author;
 };
-
 type CommentDoc = {
   id: string;
   uid: string;
@@ -52,7 +47,6 @@ type CommentDoc = {
   repostCount?: number;
   popScore?: number;
 };
-
 type ReplyDoc = {
   id: string;
   uid: string;
@@ -77,7 +71,6 @@ async function getMyAuthor(uid: string) {
   } catch {}
   return { displayName: null, username: null, avatarURL: null };
 }
-
 function tsToDate(ts: any): Date | undefined {
   if (!ts) return;
   if (typeof ts?.toDate === "function") return ts.toDate();
@@ -102,7 +95,7 @@ export default function PostThreadPage() {
   const [sort, setSort] = useState<"top" | "latest">("top");
   const [remoteTopOK, setRemoteTopOK] = useState(true);
 
-  // comment composer state
+  // comment composer
   const [cText, setCText] = useState("");
   const [cFiles, setCFiles] = useState<File[]>([]);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -134,7 +127,7 @@ export default function PostThreadPage() {
     })();
   }, [id, router]);
 
-  /* subscribe comments (Top/Latest with index fallback) */
+  /* subscribe comments (Top/Latest) */
   useEffect(() => {
     if (!id) return;
     let stop = () => {};
@@ -170,7 +163,7 @@ export default function PostThreadPage() {
     return () => stop();
   }, [id, sort, remoteTopOK]);
 
-  /* subscribe replies for the currently open comment */
+  /* subscribe replies for open comment */
   useEffect(() => {
     if (!id || !open) return;
     const stop = onSnapshot(
@@ -224,7 +217,7 @@ export default function PostThreadPage() {
     try {
       const author = await getMyAuthor(me.uid);
 
-      // 1) create the comment doc (uid must be me.uid)
+      // 1) create the comment doc
       const cref = await addDoc(collection(db, "posts", String(id), "comments"), {
         uid: me.uid,
         text: t || null,
@@ -236,20 +229,17 @@ export default function PostThreadPage() {
         author,
       });
 
-      // 2) wait until rules can see it (avoid race between Firestore & Storage)
+      // 2) ensure rules see it (avoid race)
       let ok = false;
       for (let i = 0; i < 3; i++) {
         const snap = await getDoc(cref);
         const u = snap.data()?.uid;
-        if (snap.exists() && u === me.uid) {
-          ok = true;
-          break;
-        }
+        if (snap.exists() && u === me.uid) { ok = true; break; }
         await new Promise((r) => setTimeout(r, 120 * (i + 1)));
       }
       if (!ok) throw new Error("Comment not visible to rules yet. Please try again.");
 
-      // 3) upload images/GIFs with contentType; one retry on 401
+      // 3) upload images/GIFs
       const uploaded: MediaItem[] = [];
       for (const file of cFiles) {
         const safe = `${Date.now()}-${file.name}`.replace(/\s+/g, "_");
@@ -279,7 +269,7 @@ export default function PostThreadPage() {
         uploaded.push({ type: "image", url });
       }
 
-      // 4) attach media array
+      // 4) patch media list
       if (uploaded.length) await updateDoc(cref, { media: uploaded });
 
       // reset UI
@@ -290,7 +280,7 @@ export default function PostThreadPage() {
       const msg = String(e?.message || e);
       alert(
         /unauthorized|permission/i.test(msg)
-          ? "Upload blocked by rules. Ensure you’re signed in and retry."
+          ? "Upload blocked by rules. Make sure you’re signed in. If it persists, relax the Storage rule to allow any signed-in user to attach images to existing comments."
           : msg
       );
     } finally {
@@ -359,11 +349,11 @@ export default function PostThreadPage() {
         {/* post header */}
         <header className="head">
           <div className="who">
-            {post.author?.avatarURL ? (
-              <img className="avatar" src={post.author.avatarURL} alt="" />
-            ) : (
-              <div className="avatar ph">{(authorName?.[0] || "U").toUpperCase()}</div>
-            )}
+            <Avatar
+              src={post.author?.avatarURL || undefined}
+              name={authorName}
+              size={38}
+            />
             <div className="names">
               <div className="name">{authorName}</div>
               {created ? (
@@ -494,9 +484,6 @@ export default function PostThreadPage() {
         .thread{ background:var(--card); border:1px solid var(--border); border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.25); padding:14px; }
         .head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
         .who{ display:flex; gap:10px; align-items:center; min-width:0; }
-        /* avatar fixed to 32px */
-        .avatar{ width:32px; height:32px; border-radius:999px; border:1px solid var(--border); object-fit:cover; background:#000; }
-        .avatar.ph{ display:grid; place-items:center; background:#0f172a; color:#fff; font-weight:900; }
         .names{ display:grid; line-height:1.1 }
         .name{ font-weight:900 }
         .time{ font-size:12px; color:var(--muted) }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 /* ---------- types ---------- */
 export type IngredientObj = { name: string; measure?: string | null };
@@ -88,6 +88,46 @@ export default function RecipeCard({
   function dec() { setServings((s) => Math.max(1, s - 1)); }
   function inc() { setServings((s) => Math.min(99, s + 1)); }
 
+  useEffect(() => {
+    if (!open) return;
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    const isMobile = window.matchMedia("(max-width: 640px)").matches;
+    if (!isMobile) return;
+    const bodyStyle = document.body.style;
+    const htmlStyle = document.documentElement.style;
+
+    const prev = {
+      bodyOverflow: bodyStyle.overflow,
+      bodyTouch: bodyStyle.touchAction,
+      bodyOverscroll: bodyStyle.overscrollBehavior,
+      bodyPosition: bodyStyle.position,
+      bodyWidth: bodyStyle.width,
+      htmlOverflow: htmlStyle.overflow,
+      htmlOverscroll: htmlStyle.overscrollBehavior,
+      htmlTouch: htmlStyle.touchAction,
+    };
+
+    bodyStyle.overflow = "hidden";
+    bodyStyle.touchAction = "none";
+    bodyStyle.overscrollBehavior = "contain";
+    bodyStyle.position = "relative";
+    bodyStyle.width = "100%";
+    htmlStyle.overflow = "hidden";
+    htmlStyle.overscrollBehavior = "contain";
+    htmlStyle.touchAction = "none";
+
+    return () => {
+      bodyStyle.overflow = prev.bodyOverflow;
+      bodyStyle.touchAction = prev.bodyTouch;
+      bodyStyle.overscrollBehavior = prev.bodyOverscroll;
+      bodyStyle.position = prev.bodyPosition;
+      bodyStyle.width = prev.bodyWidth;
+      htmlStyle.overflow = prev.htmlOverflow;
+      htmlStyle.overscrollBehavior = prev.htmlOverscroll;
+      htmlStyle.touchAction = prev.htmlTouch;
+    };
+  }, [open]);
+
   return (
     <div className={`rk-card ${open ? "open" : ""} ${panelPlacement}`}>
       {/* LEFT: cover */}
@@ -113,6 +153,12 @@ export default function RecipeCard({
           {description ? <p className="d">{description}</p> : null}
         </div>
       </div>
+
+      {open && (
+        <button className="closeMobile" onClick={onClose} type="button" aria-label="Close recipe details">
+          <span aria-hidden>X</span>
+        </button>
+      )}
 
       {/* RIGHT: slide panel */}
       {open && (
@@ -304,6 +350,288 @@ export default function RecipeCard({
           display:grid; place-items:center;
         }
         .chev { display:inline-block; font-size:16px; }
+
+        .closeMobile {
+          display:none;
+        }
+
+        @media (max-width: 820px) {
+          .rk-card {
+            height:auto;
+            flex-direction:column;
+            gap:16px;
+          }
+          .photo {
+            width:100%;
+            flex:none;
+            height:360px;
+            max-width:none;
+          }
+          .panel {
+            width:100%;
+            height:auto;
+            min-height:0;
+          }
+          .panel.push,
+          .panel.overlay-right,
+          .panel.overlay-left {
+            position:relative;
+            left:auto;
+            top:auto;
+            margin-left:0;
+          }
+          .content {
+            max-height:none;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .rk-card {
+            position:relative;
+            padding:22px 20px 28px;
+            border-radius:28px;
+            background:
+              linear-gradient(160deg, rgba(255,255,255,.82) 0%, rgba(245,244,255,.7) 40%, rgba(223,229,255,.6) 100%)
+              var(--card-bg);
+            border:1px solid color-mix(in oklab, var(--border) 68%, transparent);
+            box-shadow:0 26px 46px rgba(15,23,42,.18);
+            overflow:hidden;
+          }
+          .rk-card::before {
+            content:"";
+            position:absolute;
+            inset:-34% 36% auto -32%;
+            height:150px;
+            background:radial-gradient(130px 130px at center, rgba(96,165,250,.45), transparent 70%);
+            opacity:.82;
+            pointer-events:none;
+            filter:blur(0.5px);
+          }
+          .rk-card::after {
+            content:"";
+            position:absolute;
+            inset:auto -30% -55% 38%;
+            height:190px;
+            background:radial-gradient(150px 150px at center, rgba(244,114,182,.38), transparent 74%);
+            pointer-events:none;
+            opacity:.88;
+            filter:blur(0.5px);
+          }
+          .photo {
+            width:100%;
+            height:240px;
+            border-radius:24px;
+            box-shadow:0 22px 38px rgba(15,23,42,.28);
+            overflow:hidden;
+            z-index:1;
+          }
+          .photo::after {
+            content:"";
+            position:absolute;
+            inset:0;
+            background:linear-gradient(180deg, rgba(15,23,42,0) 42%, rgba(15,23,42,.78) 100%);
+            z-index:0;
+          }
+          .chips {
+            top:auto;
+            bottom:22px;
+            right:22px;
+            left:auto;
+            flex-direction:column;
+            gap:12px;
+            z-index:2;
+          }
+          .pill {
+            width:62px;
+            height:62px;
+            background:linear-gradient(135deg, rgba(236,72,153,.92), rgba(59,130,246,.92));
+            color:#fff;
+            box-shadow:0 14px 32px rgba(236,72,153,.3);
+          }
+          .pill span {
+            font-size:10px;
+            letter-spacing:.18em;
+          }
+          .details {
+            z-index:1;
+            padding:20px;
+            background:linear-gradient(180deg, rgba(15,23,42,.05) 0%, rgba(15,23,42,.72) 100%);
+            border-radius:0 0 24px 24px;
+          }
+          .details .t {
+            font-size:22px;
+            letter-spacing:-.01em;
+          }
+          .details .d {
+            opacity:.9;
+            font-size:14px;
+          }
+
+          .rk-card.open {
+            position:fixed;
+            inset:0;
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            padding:32px 18px 40px;
+            background:radial-gradient(circle at top, rgba(96,165,250,.38), transparent 68%) rgba(7,12,22,.94);
+            backdrop-filter:blur(18px);
+            overflow:hidden;
+            height:100vh;
+            z-index:3500;
+          }
+          .rk-card.open::before,
+          .rk-card.open::after {
+            opacity:0;
+          }
+          .rk-card.open .photo {
+            width:clamp(280px, 88vw, 420px);
+            height:min(320px, 45vh);
+            border-radius:28px;
+            box-shadow:0 34px 68px rgba(0,0,0,.36);
+            transform:translateY(4px);
+            transition:transform .4s ease;
+          }
+          .rk-card.open .chips {
+            padding:16px;
+          }
+          .rk-card.open .pill {
+            width:66px;
+            height:66px;
+            font-size:24px;
+            box-shadow:0 18px 40px rgba(236,72,153,.34);
+          }
+          .rk-card.open .details {
+            min-height:132px;
+            padding:22px 24px;
+            border-radius:0 0 28px 28px;
+            background:linear-gradient(180deg, rgba(15,23,42,.12) 0%, rgba(15,23,42,.82) 100%);
+          }
+          .rk-card.open .panel {
+            margin-top:24px;
+            width:clamp(300px, 92vw, 460px);
+            background:transparent;
+            border-radius:34px;
+            border:0;
+            box-shadow:none;
+            padding:0;
+            flex:1 1 auto;
+            min-height:0;
+            max-height:calc(100vh - 200px);
+            display:flex;
+            flex-direction:column;
+            overflow:hidden;
+          }
+          .rk-card.open .tabs {
+            margin:0 24px 18px;
+            border-radius:24px;
+            overflow:hidden;
+            background:linear-gradient(90deg, rgba(255,255,255,.88), rgba(240,249,255,.82));
+            border:1px solid rgba(148,163,184,.28);
+            padding:6px;
+            gap:6px;
+            flex:0 0 auto;
+          }
+          .rk-card.open .tab {
+            font-size:12px;
+            letter-spacing:.22em;
+            border-radius:16px;
+            background:transparent;
+            color:#475569;
+            border:0;
+            padding:12px 0;
+          }
+          .rk-card.open .tab.active {
+            color:#0f172a;
+            background:rgba(226,232,240,.92);
+            box-shadow:0 1px 8px rgba(148,163,184,.18) inset;
+          }
+          .rk-card.open .content {
+            flex:1 1 0;
+            min-height:0;
+            padding:32px 28px 38px;
+            background:linear-gradient(185deg, rgba(248,250,252,.97) 0%, rgba(226,232,240,.92) 70%, rgba(241,245,249,.99) 100%);
+            border-radius:30px;
+            box-shadow:0 32px 72px rgba(15,23,42,.32);
+            display:flex;
+            flex-direction:column;
+            gap:22px;
+            overflow-y:auto;
+          }
+          .rk-card.open .content::-webkit-scrollbar {
+            width:6px;
+          }
+          .rk-card.open .content::-webkit-scrollbar-thumb {
+            background:rgba(148,163,184,.45);
+            border-radius:999px;
+          }
+          .rk-card.open .servingsRow {
+            display:flex;
+            flex-wrap:wrap;
+            gap:20px;
+            justify-content:space-between;
+            align-items:center;
+            width:100%;
+            min-height:64px;
+          }
+          .rk-card.open .col {
+            margin:0;
+            padding:0;
+            background:transparent;
+            border-radius:0;
+            box-shadow:none;
+            width:100%;
+          }
+          .rk-card.open .step {
+            padding:0 0 10px;
+            margin:0;
+            font-size:13px;
+            letter-spacing:.24em;
+            color:#0f172a;
+            opacity:.72;
+          }
+          .rk-card.open .text {
+            font-size:14px;
+            border-left:0;
+            border-radius:0;
+            padding:0;
+            background:transparent;
+            color:#1e293b;
+            box-shadow:none;
+            word-break:break-word;
+            white-space:pre-wrap;
+          }
+          .rk-card.open .ul,
+          .rk-card.open .ol {
+            padding-left:20px;
+          }
+          .toggle {
+            display:none;
+          }
+          .closeMobile {
+            display:grid;
+            place-items:center;
+            position:fixed;
+            top:20px;
+            right:20px;
+            width:50px;
+            height:50px;
+            border-radius:999px;
+            border:1px solid rgba(248,250,252,.55);
+            background:linear-gradient(135deg, rgba(244,63,94,.95), rgba(249,115,22,.95));
+            color:#fff;
+            font-size:28px;
+            line-height:1;
+            box-shadow:0 22px 38px rgba(244,63,94,.36);
+            cursor:pointer;
+            z-index:3600;
+            transition:transform .18s ease, box-shadow .18s ease;
+          }
+          .closeMobile:hover {
+            transform:translateY(-2px);
+            box-shadow:0 26px 42px rgba(244,63,94,.42);
+          }
+        }
       `}</style>
     </div>
   );

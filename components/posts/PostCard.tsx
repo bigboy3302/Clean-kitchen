@@ -127,7 +127,7 @@ export default function PostCard({
         <header className="pc-head">
           <div className="pc-left">
             <Link href={profileHref} aria-label={`${displayName} profile`} className="avatar-wrap">
-              <Avatar src={author?.avatarURL || undefined} name={displayName} size={28} />
+              <Avatar src={author?.avatarURL || undefined} name={displayName} size={68} />
             </Link>
             <div className="pc-meta">
               <div className="pc-name"><Link href={profileHref} className="pc-link">{displayName}</Link></div>
@@ -150,8 +150,7 @@ export default function PostCard({
                   </>
                 ) : (
                   <>
-                    <button className="mi" role="menuitem" onClick={() => onReport?.(post)}>Report</button>
-                    <button className="mi" role="menuitem">Hide</button>
+                    <button className="mi" role="menuitem" onClick={() => onReport?.(post)}></button>
                   </>
                 )}
               </div>
@@ -206,17 +205,13 @@ export default function PostCard({
             </button>
             <span className="miniCount">{reposts}</span>
           </div>
-
-          <button className={`icon ${saved ? "active" : ""}`} onClick={() => setSaved(s=>!s)} aria-label="Save">
-            <svg width="22" height="22" viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 011 1v17l-7-4-7 4V4a1 1 0 011-1z" fill={saved?"currentColor":"none"} stroke="currentColor" strokeWidth="1.5"/></svg>
-          </button>
         </div>
       </article>
 
       <style jsx>{`
         .pc{ position:relative; background:var(--card-bg); border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:var(--shadow) }
         .pc-head{ display:flex; align-items:center; justify-content:space-between; padding:8px 10px }
-        .pc-left{ display:flex; align-items:center; gap:8px }
+        .pc-left{ display:flex; align-items:center; gap:10px }
         .avatar-wrap{ display:block; line-height:0 }
 
         .pc-meta{ display:flex; flex-direction:column; line-height:1.05 }
@@ -233,7 +228,6 @@ export default function PostCard({
         .mi.danger{ color:#e11d48 }
         .sep{ height:1px; background: var(--border); border:0; margin:6px }
 
-        /* Media a little shorter */
         .pc-media{ position:relative; }
         .rail{ display:flex; gap:6px; overflow:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; padding:0 6px 8px }
         .cell{

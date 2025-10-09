@@ -115,10 +115,26 @@ export const isoWeekKey = weekIdFromDate;
    Weekly planner (Firestore)
    ========================= */
 
+export type WorkoutExerciseMeta = {
+  id?: string;
+  name?: string;
+  bodyPart?: string;
+  target?: string;
+  equipment?: string;
+  equipmentList?: string[];
+  imageUrl?: string | null;
+  imageThumbnailUrl?: string | null;
+  primaryMuscles?: string[];
+  secondaryMuscles?: string[];
+  descriptionHtml?: string;
+};
+
 export type WorkoutItem = {
   id: string;
   name: string;
   done: boolean;
+  exerciseId?: string;
+  exercise?: WorkoutExerciseMeta | null;
 };
 
 export type DayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
@@ -171,6 +187,48 @@ function weekDocRef(uid: string, weekId: string) {
   return doc(db, "users", uid, "planner", weekId);
 }
 
+function sanitizeWorkoutItem(raw: any): WorkoutItem {
+  const exerciseMeta = raw?.exercise && typeof raw.exercise === "object"
+    ? {
+        id: raw.exercise.id ? String(raw.exercise.id) : raw.exerciseId ? String(raw.exerciseId) : undefined,
+        name: raw.exercise.name ? String(raw.exercise.name) : undefined,
+        bodyPart: raw.exercise.bodyPart ? String(raw.exercise.bodyPart) : undefined,
+        target: raw.exercise.target ? String(raw.exercise.target) : undefined,
+        equipment: raw.exercise.equipment ? String(raw.exercise.equipment) : undefined,
+        equipmentList: Array.isArray(raw.exercise.equipmentList)
+          ? raw.exercise.equipmentList.map((m: any) => String(m)).filter(Boolean)
+          : undefined,
+        imageUrl:
+          raw.exercise.imageUrl === null || typeof raw.exercise.imageUrl === "string"
+            ? raw.exercise.imageUrl
+            : undefined,
+        imageThumbnailUrl:
+          raw.exercise.imageThumbnailUrl === null ||
+          typeof raw.exercise.imageThumbnailUrl === "string"
+            ? raw.exercise.imageThumbnailUrl
+            : undefined,
+        primaryMuscles: Array.isArray(raw.exercise.primaryMuscles)
+          ? raw.exercise.primaryMuscles.map((m: any) => String(m)).filter(Boolean)
+          : undefined,
+        secondaryMuscles: Array.isArray(raw.exercise.secondaryMuscles)
+          ? raw.exercise.secondaryMuscles.map((m: any) => String(m)).filter(Boolean)
+          : undefined,
+        descriptionHtml:
+          typeof raw.exercise.descriptionHtml === "string" ? raw.exercise.descriptionHtml : undefined,
+      }
+    : raw?.exerciseId
+    ? undefined
+    : undefined;
+
+  return {
+    id: String(raw.id),
+    name: String(raw.name ?? ""),
+    done: !!raw.done,
+    exerciseId: raw.exerciseId ? String(raw.exerciseId) : undefined,
+    exercise: exerciseMeta,
+  };
+}
+
 export async function getWeekPlan(weekId?: string): Promise<WeekPlan> {
   const { uid } = await requireSignedIn();
   const wk = weekId ?? weekIdFromDate();
@@ -198,7 +256,7 @@ export async function getWeekPlan(weekId?: string): Promise<WeekPlan> {
             items: Array.isArray(d.items)
               ? d.items
                   .filter((x: any) => x && typeof x.id === "string" && typeof x.name === "string")
-                  .map((x: any) => ({ id: String(x.id), name: String(x.name), done: !!x.done }))
+                  .map((x: any) => sanitizeWorkoutItem(x))
               : [],
           };
         }
@@ -258,8 +316,33 @@ export async function toggleDone(
   if (!d || !Array.isArray(d.items)) return;
 
   const items: WorkoutItem[] = d.items.map((x: any) =>
-    x && x.id === id ? { id: String(x.id), name: String(x.name), done } : x
+    x && x.id === id
+      ? { ...sanitizeWorkoutItem(x), done }
+      : sanitizeWorkoutItem(x)
   );
+
+  days[day] = { date: d.date, items };
+  await setDoc(ref, { days, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+export async function removeDayItem(
+  weekId: string,
+  day: DayKey,
+  id: string
+): Promise<void> {
+  const { uid } = await requireSignedIn();
+  const ref = weekDocRef(uid, weekId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+
+  const data = snap.data() as any;
+  const days = { ...(data.days || {}) };
+  const d = days[day];
+  if (!d || !Array.isArray(d.items)) return;
+
+  const items: WorkoutItem[] = d.items
+    .filter((x: any) => x && String(x.id) !== String(id))
+    .map((x: any) => sanitizeWorkoutItem(x));
 
   days[day] = { date: d.date, items };
   await setDoc(ref, { days, updatedAt: serverTimestamp() }, { merge: true });
