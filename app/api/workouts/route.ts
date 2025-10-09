@@ -16,15 +16,47 @@ type LegacyExerciseShape = {
   equipmentList: string[];
 };
 
+export const dynamic = "force-dynamic";
+
+// ExerciseDB canonical bodyPart values
+const VALID_BODY_PARTS = new Set([
+  "back",
+  "cardio",
+  "chest",
+  "lower arms",
+  "lower legs",
+  "neck",
+  "shoulders",
+  "upper arms",
+  "upper legs",
+  "waist",
+]);
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const bodyPart = searchParams.get("bodyPart");
+
+    // Inputs coming from your UI
+    let bodyPart = searchParams.get("bodyPart");
+    let target = searchParams.get("target");
     const query = searchParams.get("q");
     const limit = Math.max(1, Math.min(40, Number(searchParams.get("limit") || 12)));
     const offset = Math.max(0, Number(searchParams.get("offset") || 0));
 
-    const list = await fetchExercises({ search: query, bodyPart, limit, offset });
+    // TOLERANCE: If bodyPart is provided but isn't a valid bodyPart,
+    // treat it as a "target" (e.g., ?bodyPart=abductors => target=abductors).
+    if (!target && bodyPart && !VALID_BODY_PARTS.has(bodyPart.toLowerCase())) {
+      target = bodyPart;
+      bodyPart = null;
+    }
+
+    const list = await fetchExercises({
+      search: query,
+      target,
+      bodyPart,
+      limit,
+      offset,
+    });
 
     const shaped: LegacyExerciseShape[] = list.map((item) => ({
       id: String(item.id),
@@ -35,7 +67,7 @@ export async function GET(req: Request) {
       gifUrl: item.gifUrl || "",
       imageUrl: item.gifUrl || null,
       imageThumbnailUrl: item.gifUrl || null,
-      descriptionHtml: "", // ExerciseDB doesn't provide descriptions
+      descriptionHtml: "",
       primaryMuscles: item.target ? [item.target] : [],
       secondaryMuscles: [],
       equipmentList: item.equipment ? [item.equipment] : ["Bodyweight"],

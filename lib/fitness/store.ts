@@ -1,36 +1,35 @@
-"use client";
+export type DayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
-import { onAuthStateChanged, type User } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
-import {
-  doc,
-  getDoc,
-  setDoc,
-  serverTimestamp,
-} from "firebase/firestore";
+export type WorkoutItem = {
+  id: string;
+  name: string;
+  done: boolean;
+  exercise?: {
+    id?: string | number;
+    name?: string;
+    bodyPart?: string;
+    target?: string;
+    equipment?: string;
+    imageUrl?: string | null;
+    imageThumbnailUrl?: string | null;
+    gifUrl?: string | null;
+    descriptionHtml?: string;
+    primaryMuscles?: (string | number)[];
+    secondaryMuscles?: (string | number)[];
+    equipmentList?: (string | number)[];
+  };
+};
 
-/* =========================
-   Auth helpers (client)
-   ========================= */
+export type DayPlan = {
+  date: string;         // YYYY-MM-DD
+  items: WorkoutItem[]; // always array
+};
 
-export async function requireSignedIn(): Promise<{ uid: string }> {
-  const existing = auth.currentUser;
-  if (existing) return { uid: existing.uid };
-
-  // Wait once for auth state to resolve
-  const u = await new Promise<User | null>((resolve) => {
-    const stop = onAuthStateChanged(auth, (user) => {
-      stop();
-      resolve(user);
-    });
-  });
-  if (!u) throw new Error("Not signed in");
-  return { uid: u.uid };
-}
-
-/* =========================
-   User metrics (profile)
-   ========================= */
+export type WeekPlan = {
+  weekId: string;          // e.g. "2025-W41"
+  startIsoDate: string;    // Monday YYYY-MM-DD
+  days: Record<DayKey, DayPlan>;
+};
 
 export type Metrics = {
   sex?: "male" | "female";
@@ -38,498 +37,168 @@ export type Metrics = {
   heightCm?: number;
   weightKg?: number;
   activity?: "sedentary" | "light" | "moderate" | "active" | "veryActive";
-  goal?: "bulk" | "cut" | "maintain";
-  updatedAt?: any;
+  goal?: "cut" | "maintain" | "bulk";
 };
 
-export async function getMetrics(): Promise<Metrics | null> {
-  const { uid } = await requireSignedIn();
-  const ref = doc(db, "users", uid);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return null;
-
-  const d = snap.data() as any;
-
-  // Support possible older names (height/weight) if they existed
-  const heightCm = (d.heightCm ?? d.height) as number | undefined;
-  const weightKg = (d.weightKg ?? d.weight) as number | undefined;
-
-  const m: Metrics = {
-    sex: d.sex ?? "male",
-    age: d.age ?? 24,
-    heightCm,
-    weightKg,
-    activity: d.activity ?? "moderate",
-    goal: d.goal ?? "maintain",
-    updatedAt: d.updatedAt,
-  };
-  return m;
-}
-
-export async function saveMetrics(payload: Metrics): Promise<void> {
-  const { uid } = await requireSignedIn();
-  const ref = doc(db, "users", uid);
-  await setDoc(
-    ref,
-    {
-      ...payload,
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true }
-  );
-}
-
-/* =========================
-   Week id helpers (ISO week)
-   ========================= */
-
-function toISOWeek(date = new Date()): { year: number; week: number; dates: string[] } {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  // Thursday in current week decides the year.
-  d.setUTCDate(d.getUTCDate() + 4 - ((d.getUTCDay() || 7)));
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const week = Math.ceil((((d as any) - (yearStart as any)) / 86400000 + 1) / 7);
-
-  // Build Mon..Sun yyyy-mm-dd for that ISO week
-  const dates: string[] = [];
-  const dayOne = new Date(d);
-  dayOne.setUTCDate(d.getUTCDate() - ((d.getUTCDay() || 7) - 1)); // Monday of the week
-  for (let i = 0; i < 7; i++) {
-    const dt = new Date(dayOne);
-    dt.setUTCDate(dayOne.getUTCDate() + i);
-    dates.push(dt.toISOString().slice(0, 10));
-  }
-
-  return { year: d.getUTCFullYear(), week, dates };
-}
-
-export function weekIdFromDate(date = new Date()): string {
-  const { year, week } = toISOWeek(date);
-  return `${year}-W${String(week).padStart(2, "0")}`;
-}
-
-// Alias used elsewhere
-export const isoWeekKey = weekIdFromDate;
-
-/* =========================
-   Weekly planner (Firestore)
-   ========================= */
-
-export type WorkoutExerciseMeta = {
-  id?: string;
-  name?: string;
-  bodyPart?: string;
-  target?: string;
-  equipment?: string;
-  equipmentList?: string[];
-  imageUrl?: string | null;
-  imageThumbnailUrl?: string | null;
-  primaryMuscles?: string[];
-  secondaryMuscles?: string[];
-  descriptionHtml?: string;
-};
-
-export type WorkoutItem = {
+export type SuggestedMeal = {
   id: string;
-  name: string;
-  done: boolean;
-  exerciseId?: string;
-  exercise?: WorkoutExerciseMeta | null;
+  title: string;
+  image?: string | null;
 };
 
-export type DayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
-const dayKeys: DayKey[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+const LS_PREFIX = "ck:v1:";
+const key = (suffix: string) => `${LS_PREFIX}${suffix}`;
 
-export type WeekPlan = {
-  weekId: string;
-  uid: string;
-  days: Record<
-    DayKey,
-    {
-      date: string;       // yyyy-mm-dd
-      items: WorkoutItem[];
-    }
-  >;
-  updatedAt?: any;
-};
-
-function emptyWeek(weekId: string, uid: string): WeekPlan {
-  // Generate accurate dates for the ISO week
-  const [yearStr, wStr] = weekId.split("-W");
-  const year = parseInt(yearStr, 10);
-  const week = parseInt(wStr, 10);
-
-  // Find Monday of ISO week 1: Jan 4 is always in week 1
-  const jan4 = new Date(Date.UTC(year, 0, 4));
-  const dayOfWeek = jan4.getUTCDay() || 7; // 1..7
-  const mondayOfW1 = new Date(jan4);
-  mondayOfW1.setUTCDate(jan4.getUTCDate() - (dayOfWeek - 1));
-
-  const monday = new Date(mondayOfW1);
-  monday.setUTCDate(mondayOfW1.getUTCDate() + (week - 1) * 7);
-
-  const dates: string[] = [];
-  for (let i = 0; i < 7; i++) {
-    const dt = new Date(monday);
-    dt.setUTCDate(monday.getUTCDate() + i);
-    dates.push(dt.toISOString().slice(0, 10));
-  }
-
-  const days = dayKeys.reduce((acc, n, i) => {
-    acc[n] = { date: dates[i], items: [] as WorkoutItem[] };
-    return acc;
-  }, {} as WeekPlan["days"]);
-
-  return { weekId, uid, days };
+function safeParse<T>(json: string | null): T | null {
+  if (!json) return null;
+  try { return JSON.parse(json) as T; } catch { return null; }
 }
 
-function weekDocRef(uid: string, weekId: string) {
-  return doc(db, "users", uid, "planner", weekId);
-}
-
-function sanitizeWorkoutItem(raw: any): WorkoutItem {
-  const exerciseMeta = raw?.exercise && typeof raw.exercise === "object"
-    ? {
-        id: raw.exercise.id ? String(raw.exercise.id) : raw.exerciseId ? String(raw.exerciseId) : undefined,
-        name: raw.exercise.name ? String(raw.exercise.name) : undefined,
-        bodyPart: raw.exercise.bodyPart ? String(raw.exercise.bodyPart) : undefined,
-        target: raw.exercise.target ? String(raw.exercise.target) : undefined,
-        equipment: raw.exercise.equipment ? String(raw.exercise.equipment) : undefined,
-        equipmentList: Array.isArray(raw.exercise.equipmentList)
-          ? raw.exercise.equipmentList.map((m: any) => String(m)).filter(Boolean)
-          : undefined,
-        imageUrl:
-          raw.exercise.imageUrl === null || typeof raw.exercise.imageUrl === "string"
-            ? raw.exercise.imageUrl
-            : undefined,
-        imageThumbnailUrl:
-          raw.exercise.imageThumbnailUrl === null ||
-          typeof raw.exercise.imageThumbnailUrl === "string"
-            ? raw.exercise.imageThumbnailUrl
-            : undefined,
-        primaryMuscles: Array.isArray(raw.exercise.primaryMuscles)
-          ? raw.exercise.primaryMuscles.map((m: any) => String(m)).filter(Boolean)
-          : undefined,
-        secondaryMuscles: Array.isArray(raw.exercise.secondaryMuscles)
-          ? raw.exercise.secondaryMuscles.map((m: any) => String(m)).filter(Boolean)
-          : undefined,
-        descriptionHtml:
-          typeof raw.exercise.descriptionHtml === "string" ? raw.exercise.descriptionHtml : undefined,
-      }
-    : raw?.exerciseId
-    ? undefined
-    : undefined;
-
-  return {
-    id: String(raw.id),
-    name: String(raw.name ?? ""),
-    done: !!raw.done,
-    exerciseId: raw.exerciseId ? String(raw.exerciseId) : undefined,
-    exercise: exerciseMeta,
-  };
-}
-
-export async function getWeekPlan(weekId?: string): Promise<WeekPlan> {
-  const { uid } = await requireSignedIn();
-  const wk = weekId ?? weekIdFromDate();
-  const ref = weekDocRef(uid, wk);
-  const snap = await getDoc(ref);
-  if (snap.exists()) {
-    const data = snap.data() as any;
-
-    // Base shape
-    const coerce = emptyWeek(wk, uid);
-    const out: WeekPlan = {
-      weekId: wk,
-      uid,
-      days: coerce.days,
-      updatedAt: data.updatedAt,
-    };
-
-    // Merge stored days/items if present
-    if (data?.days && typeof data.days === "object") {
-      (Object.keys(coerce.days) as DayKey[]).forEach((k) => {
-        const d = data.days[k];
-        if (d && typeof d === "object") {
-          out.days[k] = {
-            date: typeof d.date === "string" ? d.date : coerce.days[k].date,
-            items: Array.isArray(d.items)
-              ? d.items
-                  .filter((x: any) => x && typeof x.id === "string" && typeof x.name === "string")
-                  .map((x: any) => sanitizeWorkoutItem(x))
-              : [],
-          };
-        }
-      });
-    }
-
-    return out;
-  }
-
-  // Create a fresh week if missing
-  const init = emptyWeek(wk, uid);
-  await setDoc(ref, { ...init, updatedAt: serverTimestamp() }, { merge: true });
-  return init;
-}
-
-export async function upsertDayItem(
-  weekId: string,
-  day: DayKey,
-  item: WorkoutItem
-): Promise<void> {
-  const { uid } = await requireSignedIn();
-  const ref = weekDocRef(uid, weekId);
-  const snap = await getDoc(ref);
-  const base = snap.exists() ? (snap.data() as any) : emptyWeek(weekId, uid);
-
-  const days = { ...(base.days || {}) };
-  const dayData = days[day] || { date: emptyWeek(weekId, uid).days[day].date, items: [] as WorkoutItem[] };
-
-  // Upsert by id
-  const idx = (dayData.items as WorkoutItem[]).findIndex((x) => x.id === item.id);
-  if (idx >= 0) dayData.items[idx] = item;
-  else dayData.items.push(item);
-
-  days[day] = dayData;
-
-  await setDoc(
-    ref,
-    { weekId, uid, days, updatedAt: serverTimestamp() },
-    { merge: true }
-  );
-}
-
-export async function toggleDone(
-  weekId: string,
-  day: DayKey,
-  id: string,
-  done: boolean
-): Promise<void> {
-  const { uid } = await requireSignedIn();
-  const ref = weekDocRef(uid, weekId);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return;
-
-  const data = snap.data() as any;
-  const days = { ...(data.days || {}) };
-  const d = days[day];
-  if (!d || !Array.isArray(d.items)) return;
-
-  const items: WorkoutItem[] = d.items.map((x: any) =>
-    x && x.id === id
-      ? { ...sanitizeWorkoutItem(x), done }
-      : sanitizeWorkoutItem(x)
-  );
-
-  days[day] = { date: d.date, items };
-  await setDoc(ref, { days, updatedAt: serverTimestamp() }, { merge: true });
-}
-
-export async function removeDayItem(
-  weekId: string,
-  day: DayKey,
-  id: string
-): Promise<void> {
-  const { uid } = await requireSignedIn();
-  const ref = weekDocRef(uid, weekId);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return;
-
-  const data = snap.data() as any;
-  const days = { ...(data.days || {}) };
-  const d = days[day];
-  if (!d || !Array.isArray(d.items)) return;
-
-  const items: WorkoutItem[] = d.items
-    .filter((x: any) => x && String(x.id) !== String(id))
-    .map((x: any) => sanitizeWorkoutItem(x));
-
-  days[day] = { date: d.date, items };
-  await setDoc(ref, { days, updatedAt: serverTimestamp() }, { merge: true });
-}
-
-/* =========================
-   Meal suggestions (API)
-   ========================= */
-
-export type SuggestedMeal = { id: string; title: string; image?: string | null };
-
-function shuffle<T>(arr: T[]): T[] {
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-async function fetchMealsByIngredients(terms: string[], limit = 8) {
-  const qs = new URLSearchParams({
-    ingredients: terms.join(","),
-    limit: String(limit),
-    mode: "union",
-  });
-  const res = await fetch(`/api/recipes?${qs.toString()}`, { cache: "no-store" });
-  if (!res.ok) return [];
-  const data = await res.json();
-  const list = (data?.recipes || []) as { id: string; title: string; image: string | null }[];
-  return list.map((r) => ({ id: r.id, title: r.title, image: r.image })) as SuggestedMeal[];
-}
-
-/** Single flat list (compat) */
-export async function suggestMeals(
-  goal: "bulk" | "cut" | "maintain",
-  limit = 6
-): Promise<SuggestedMeal[]> {
-  const seeds =
-    goal === "bulk"
-      ? ["chicken", "beef", "pasta", "rice", "potato"]
-      : goal === "cut"
-      ? ["chicken", "fish", "egg white", "yogurt", "salad"]
-      : ["chicken", "rice", "egg", "vegetable", "yogurt"];
-
-  const list = await fetchMealsByIngredients(seeds, Math.max(6, limit * 2));
-  return shuffle(list).slice(0, limit);
-}
-
-/** Different meals per day (3 per day by default) */
-export async function suggestMealsForWeek(
-  goal: "bulk" | "cut" | "maintain",
-  perDay = 3
-): Promise<Record<DayKey, SuggestedMeal[]>> {
-  // Slightly different seed themes per day
-  const seedMap: Record<DayKey, string[]> =
-    goal === "bulk"
-      ? {
-          mon: ["chicken", "rice", "pasta"],
-          tue: ["beef", "potato", "pasta"],
-          wed: ["pork", "rice", "egg"],
-          thu: ["salmon", "rice", "avocado"],
-          fri: ["chicken", "bagel", "yogurt"],
-          sat: ["beef", "pasta", "cheese"],
-          sun: ["turkey", "rice", "oats"],
-        }
-      : goal === "cut"
-      ? {
-          mon: ["chicken", "salad", "yogurt"],
-          tue: ["fish", "zucchini", "rice cake"],
-          wed: ["egg white", "spinach", "tomato"],
-          thu: ["turkey", "cucumber", "wrap"],
-          fri: ["white fish", "greens", "berries"],
-          sat: ["chicken", "cauliflower", "yogurt"],
-          sun: ["shrimp", "salad", "egg white"],
-        }
-      : {
-          mon: ["chicken", "rice", "veggies"],
-          tue: ["beef", "quinoa", "pepper"],
-          wed: ["eggs", "oats", "banana"],
-          thu: ["salmon", "potato", "greens"],
-          fri: ["turkey", "rice", "beans"],
-          sat: ["tuna", "pasta", "olive"],
-          sun: ["tofu", "stir fry", "rice"],
-        };
-
-  const out: Record<DayKey, SuggestedMeal[]> = {
-    mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [],
-  };
-
-  await Promise.all(
-    dayKeys.map(async (k) => {
-      const pool = await fetchMealsByIngredients(seedMap[k], 16);
-      const chosen = shuffle(pool).slice(0, perDay);
-      out[k] = chosen;
-    })
-  );
-
-  return out;
-}
-
-/* =========================
-   NEW: Per-user “today” meals
-   ========================= */
-
-// Create a UTC date key (YYYY-MM-DD)
-function todayKeyUTC(d = new Date()): string {
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
+function fmtDate(d = new Date()): string {
+  const y = d.getFullYear();
+  const m = `${d.getMonth() + 1}`.padStart(2, "0");
+  const day = `${d.getDate()}`.padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
-/**
- * Returns today's meals for the signed-in user.
- * If a list has already been saved today, it returns the same list (stable for the day).
- * Otherwise it pulls new suggestions (from `/api/recipes`), saves them, and returns them.
- */
-export async function getOrCreateDailyMeals(
-  uid?: string, // optional to allow calling with pre-known uid
-  goal: "bulk" | "cut" | "maintain" = "maintain",
-  count = 4
-): Promise<SuggestedMeal[]> {
-  const userId = uid || (await requireSignedIn()).uid;
-  const key = todayKeyUTC();
-  const ref = doc(db, "users", userId, "dailyMeals", key);
-  const snap = await getDoc(ref);
-
-  if (snap.exists()) {
-    const data = snap.data() as { meals?: SuggestedMeal[] };
-    if (Array.isArray(data.meals) && data.meals.length) {
-      return data.meals.slice(0, count);
-    }
-  }
-
-  // Fetch fresh, persist, and return
-  const recs = await suggestMeals(goal, Math.max(10, count + 2));
-  const chosen = recs.slice(0, count);
-  await setDoc(ref, { uid: userId, goal, meals: chosen, createdAt: serverTimestamp() }, { merge: true });
-  return chosen;
+function getMonday(d = new Date()): Date {
+  const x = new Date(d);
+  const day = x.getDay(); // 0..6
+  const diff = (day === 0 ? -6 : 1) - day;
+  x.setDate(x.getDate() + diff);
+  x.setHours(0, 0, 0, 0);
+  return x;
 }
 
-/* =========================
-   Workout templates per goal
-   ========================= */
+function addDays(base: Date, n: number): Date {
+  const d = new Date(base);
+  d.setDate(d.getDate() + n);
+  return d;
+}
 
-export type WorkoutTemplateItem = WorkoutItem & { note?: string };
-export type WeekWorkoutTemplate = Record<DayKey, WorkoutTemplateItem[]>;
+function isoWeekId(d: Date): string {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
+}
 
-/** Goal-based weekly template, editable by the user */
-export function suggestWorkoutsForWeek(
-  goal: "bulk" | "cut" | "maintain"
-): WeekWorkoutTemplate {
-  const id = () => crypto.randomUUID();
+export function currentDayKey(date = new Date()): DayKey {
+  const js = date.getDay();
+  return (["sun", "mon", "tue", "wed", "thu", "fri", "sat"][js] as DayKey) || "mon";
+}
 
-  if (goal === "bulk") {
-    return {
-      mon: [{ id: id(), name: "Upper Push (Chest/Shoulders/Triceps)", done: false }],
-      tue: [{ id: id(), name: "Lower (Quads/Glutes)", done: false }],
-      wed: [{ id: id(), name: "Upper Pull (Back/Biceps)", done: false }],
-      thu: [{ id: id(), name: "Accessory + Arms", done: false }],
-      fri: [{ id: id(), name: "Lower (Hamstrings/Glutes)", done: false }],
-      sat: [{ id: id(), name: "Optional Pump/Conditioning", done: false }],
-      sun: [{ id: id(), name: "Rest / Mobility", done: false }],
-    };
-  }
+const DAY_KEYS: DayKey[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 
-  if (goal === "cut") {
-    return {
-      mon: [{ id: id(), name: "Full Body Strength (Heavy)", done: false }],
-      tue: [{ id: id(), name: "Cardio (Zone 2, 30–40m)", done: false }],
-      wed: [{ id: id(), name: "Full Body Hypertrophy", done: false }],
-      thu: [{ id: id(), name: "Intervals (10×1m hard/1m easy)", done: false }],
-      fri: [{ id: id(), name: "Upper/Lower Split (alt. weekly)", done: false }],
-      sat: [{ id: id(), name: "Steps 10k + Core", done: false }],
-      sun: [{ id: id(), name: "Rest / Mobility", done: false }],
-    };
-  }
+export async function getMetrics() {
+  return safeParse<Metrics>(localStorage.getItem(key("metrics")));
+}
+export async function saveMetrics(m: Metrics) {
+  const clean: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(m)) if (v !== undefined) clean[k] = v;
+  localStorage.setItem(key("metrics"), JSON.stringify(clean));
+}
 
-  // maintain
-  return {
-    mon: [{ id: id(), name: "Full Body A", done: false }],
-    tue: [{ id: id(), name: "Light Cardio / Walk", done: false }],
-    wed: [{ id: id(), name: "Full Body B", done: false }],
-    thu: [{ id: id(), name: "Mobility + Core", done: false }],
-    fri: [{ id: id(), name: "Optional Upper Focus", done: false }],
-    sat: [{ id: id(), name: "Optional Lower Focus", done: false }],
-    sun: [{ id: id(), name: "Rest", done: false }],
+// ---------- Weeks ----------
+function newEmptyWeekPlan(forDate = new Date()): WeekPlan {
+  const monday = getMonday(forDate);
+  const weekId = isoWeekId(forDate);
+  const startIso = fmtDate(monday);
+  const days: Record<DayKey, DayPlan> = {
+    mon: { date: fmtDate(addDays(monday, 0)), items: [] },
+    tue: { date: fmtDate(addDays(monday, 1)), items: [] },
+    wed: { date: fmtDate(addDays(monday, 2)), items: [] },
+    thu: { date: fmtDate(addDays(monday, 3)), items: [] },
+    fri: { date: fmtDate(addDays(monday, 4)), items: [] },
+    sat: { date: fmtDate(addDays(monday, 5)), items: [] },
+    sun: { date: fmtDate(addDays(monday, 6)), items: [] },
   };
+  return { weekId, startIsoDate: startIso, days };
+}
+const planKey = (weekId: string) => key(`plan:${weekId}`);
+
+export async function getWeekPlan(targetWeekId?: string): Promise<WeekPlan> {
+  const weekId = targetWeekId || isoWeekId(new Date());
+  const cached = safeParse<WeekPlan>(localStorage.getItem(planKey(weekId)));
+  if (cached?.days) {
+    // ensure structure
+    let mutated = false;
+    for (const d of DAY_KEYS) {
+      if (!cached.days[d]) {
+        cached.days[d] = { date: fmtDate(addDays(new Date(cached.startIsoDate), DAY_KEYS.indexOf(d))), items: [] };
+        mutated = true;
+      } else if (!Array.isArray(cached.days[d].items)) {
+        cached.days[d].items = [];
+        mutated = true;
+      }
+    }
+    if (mutated) localStorage.setItem(planKey(weekId), JSON.stringify(cached));
+    return cached;
+  }
+  const fresh = newEmptyWeekPlan(new Date());
+  localStorage.setItem(planKey(fresh.weekId), JSON.stringify(fresh));
+  return fresh;
+}
+
+export async function upsertDayItem(weekId: string, day: DayKey, item: WorkoutItem): Promise<void> {
+  const plan = await getWeekPlan(weekId);
+  const dayPlan = plan.days[day] || { date: fmtDate(new Date()), items: [] };
+  if (!Array.isArray(dayPlan.items)) dayPlan.items = [];
+  const idx = dayPlan.items.findIndex((x) => x.id === item.id);
+  if (idx >= 0) dayPlan.items[idx] = { ...dayPlan.items[idx], ...item };
+  else dayPlan.items.push(item);
+  plan.days[day] = dayPlan;
+  localStorage.setItem(planKey(plan.weekId), JSON.stringify(plan));
+}
+
+export async function toggleDone(weekId: string, day: DayKey, id: string, done: boolean): Promise<void> {
+  const plan = await getWeekPlan(weekId);
+  const dp = plan.days[day];
+  if (!dp?.items) return;
+  const idx = dp.items.findIndex((x) => x.id === id);
+  if (idx >= 0) {
+    dp.items[idx] = { ...dp.items[idx], done: !!done };
+    localStorage.setItem(planKey(plan.weekId), JSON.stringify(plan));
+  }
+}
+
+export async function removeDayItem(weekId: string, day: DayKey, id: string): Promise<void> {
+  const plan = await getWeekPlan(weekId);
+  const dp = plan.days[day];
+  if (!dp?.items) return;
+  dp.items = dp.items.filter((x) => x.id !== id);
+  plan.days[day] = dp;
+  localStorage.setItem(planKey(plan.weekId), JSON.stringify(plan));
+}
+
+// ---------- Meals ----------
+const FALLBACK_MEALS: SuggestedMeal[] = [
+  { id: "52772", title: "Teriyaki Chicken Casserole", image: "https://www.themealdb.com/images/media/meals/wvpsxx1468256321.jpg" },
+  { id: "52804", title: "Poutine", image: "https://www.themealdb.com/images/media/meals/uuyrrx1487327597.jpg" },
+  { id: "52977", title: "Corba", image: "https://www.themealdb.com/images/media/meals/58oia61564916529.jpg" },
+];
+
+function mealsKey(dateIso: string) { return key(`meals:${dateIso}`); }
+function todayIso() { return fmtDate(new Date()); }
+
+export async function getOrCreateDailyMeals(dateIso?: string, _goal: "cut" | "maintain" | "bulk" = "maintain", count = 3) {
+  const day = dateIso || todayIso();
+  const cached = safeParse<SuggestedMeal[]>(localStorage.getItem(mealsKey(day)));
+  if (Array.isArray(cached) && cached.length >= count) return cached.slice(0, count);
+
+  try {
+    const res = await fetch(`/api/recipes/suggest?count=${count}`, { cache: "no-store" });
+    if (res.ok) {
+      const list = (await res.json()) as SuggestedMeal[];
+      if (Array.isArray(list) && list.length) {
+        localStorage.setItem(mealsKey(day), JSON.stringify(list));
+        return list.slice(0, count);
+      }
+    }
+  } catch { /* ignore */ }
+
+  localStorage.setItem(mealsKey(day), JSON.stringify(FALLBACK_MEALS));
+  return FALLBACK_MEALS.slice(0, count);
 }

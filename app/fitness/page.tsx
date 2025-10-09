@@ -82,7 +82,6 @@ export default function FitnessPage() {
         </div>
         <div className="actionsRow">
           <Button onClick={() => setEditing(v => !v)}>{editing ? "Close" : "Edit my data"}</Button>
-          <Link className="btn ghost" href="/fitness/day">Today’s planner →</Link>
         </div>
       </div>
 

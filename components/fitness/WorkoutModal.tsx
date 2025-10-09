@@ -1,60 +1,84 @@
+// components/fitness/WorkoutModal.tsx
 "use client";
 
+import type { Goal } from "@/lib/fitness/calc";
 import type { Exercise } from "@/lib/workouts/types";
 
 type Props = {
   exercise: Exercise;
-  onAdd?: () => void;
+  goal?: Goal;             // <-- accept goal (optional)
   onClose: () => void;
 };
 
-function cap(s: string) { return s ? s[0].toUpperCase() + s.slice(1) : s; }
+export default function WorkoutModal({ exercise, goal, onClose }: Props) {
+  function cap(s: string) {
+    return s.length ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+  }
 
-export default function WorkoutModal({ exercise, onAdd, onClose }: Props) {
-  const src = exercise.gifUrl || exercise.imageThumbnailUrl || exercise.imageUrl || "/placeholder.png";
+  // prefer direct gif first; fall back to images; last to placeholder
+  const mediaSrc =
+    exercise.gifUrl ||
+    exercise.imageThumbnailUrl ||
+    exercise.imageUrl ||
+    "/placeholder.png";
 
   return (
     <div className="ov" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="box" onClick={(e)=>e.stopPropagation()}>
-        <div className="bh">
-          <div className="bt">{cap(exercise.name)}</div>
-          <button className="x" onClick={onClose}>✕</button>
-        </div>
-        <div className="body">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="hero" src={src} alt={exercise.name} loading="eager"
-               onError={(e)=>{(e.currentTarget as HTMLImageElement).src="/placeholder.png"}} />
-          <div className="chips">
-            <span className="chip">{cap(exercise.bodyPart)}</span>
-            {exercise.target ? <span className="chip alt">{cap(exercise.target)}</span> : null}
-            {exercise.equipment ? <span className="chip ghost">{cap(exercise.equipment)}</span> : null}
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="head">
+          <div className="titleWrap">
+            <h3 className="title">{cap(exercise.name)}</h3>
+            {goal ? <span className={`goal ${goal}`}>{goal.toUpperCase()}</span> : null}
           </div>
-          <div className="actions">
-            {onAdd ? <button className="btn primary" onClick={onAdd}>Add to today</button> : null}
-            <button className="btn" onClick={onClose}>Close</button>
-          </div>
+          <button className="close" onClick={onClose} aria-label="Close">✕</button>
         </div>
+
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className="hero" src={mediaSrc} alt={exercise.name} />
+
+        <div className="meta">
+          <span className="chip">{cap(exercise.bodyPart)}</span>
+          {exercise.primaryMuscles.slice(0, 2).map((m) => (
+            <span key={m} className="chip alt">{cap(m)}</span>
+          ))}
+          <span className="chip ghost">{cap(exercise.equipment)}</span>
+        </div>
+
+        {exercise.descriptionHtml ? (
+          <div
+            className="prose"
+            dangerouslySetInnerHTML={{
+              __html: exercise.descriptionHtml.replace(/<[^>]+>/g, (tag) =>
+                /^(<br\s*\/?>|<p>|<\/p>|<ul>|<\/ul>|<ol>|<\/ol>|<li>|<\/li>)$/i.test(tag) ? tag : ""
+              ),
+            }}
+          />
+        ) : (
+          <p className="muted">No description available.</p>
+        )}
       </div>
 
       <style jsx>{`
-        .ov{position:fixed;inset:0;background:rgba(2,6,23,.6);display:grid;place-items:center;padding:12px;z-index:3000}
-        .box{width:100%;max-width:720px;background:var(--card-bg);border-radius:16px;border:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column}
-        .bh{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding:10px 12px}
-        .bt{font-weight:900}
-        .x{border:none;background:transparent;color:var(--text);border-radius:8px;padding:4px 8px;cursor:pointer}
-        .body{padding:12px;display:flex;flex-direction:column;gap:12px}
-        .hero{width:100%;max-height:70vh;object-fit:contain;background:#000;border-radius:12px;border:1px solid var(--border)}
-        .chips{display:flex;gap:8px;flex-wrap:wrap}
-        .chip{font-size:12px;background:color-mix(in oklab,var(--primary) 14%,var(--bg2));border:1px solid color-mix(in oklab,var(--primary) 35%,var(--border));border-radius:999px;padding:4px 10px;color:color-mix(in oklab,var(--primary) 45%,var(--text));font-weight:700}
-        .chip.alt{background:color-mix(in oklab,var(--primary) 10%,transparent);border-color:color-mix(in oklab,var(--primary) 25%,var(--border));}
+        .ov{position:fixed;inset:0;background:rgba(2,6,23,.55);display:grid;place-items:center;padding:16px;z-index:3000}
+        .sheet{width:100%;max-width:760px;background:var(--card-bg);border:1px solid var(--border);border-radius:18px;box-shadow:0 24px 64px rgba(15,23,42,.35);overflow:hidden;display:flex;flex-direction:column;gap:12px}
+        .head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border)}
+        .titleWrap{display:flex;align-items:center;gap:8px}
+        .title{margin:0;font-size:18px;font-weight:900;color:var(--text)}
+        .goal{border-radius:999px;padding:2px 8px;font-size:11px;font-weight:800}
+        .goal.bulk{background:color-mix(in oklab,var(--primary) 28%,var(--bg2));}
+        .goal.cut{background:color-mix(in oklab,#ef4444 28%,var(--bg2));}
+        .goal.maintain{background:color-mix(in oklab,#10b981 28%,var(--bg2));}
+        .close{border:0;background:var(--primary);color:var(--primary-contrast);border-radius:10px;padding:6px 10px;font-weight:800;cursor:pointer}
+        .hero{width:100%;max-height:420px;object-fit:cover;background:#0b1120}
+        .meta{display:flex;gap:6px;flex-wrap:wrap;padding:0 12px}
+        .chip{font-size:11px;background:color-mix(in oklab,var(--primary) 14%,var(--bg2));border:1px solid color-mix(in oklab,var(--primary) 35%,var(--border));border-radius:999px;padding:3px 10px;color:color-mix(in oklab,var(--primary) 45%,var(--text));font-weight:600;text-transform:capitalize}
+        .chip.alt{background:color-mix(in oklab,var(--primary) 10%,transparent);border-color:color-mix(in oklab,var(--primary) 25%,var(--border));color:var(--text)}
         .chip.ghost{background:color-mix(in oklab,var(--bg2) 80%,transparent);border-color:var(--border);color:var(--muted)}
-        .actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
-        .btn{border:1px solid var(--border);border-radius:10px;padding:8px 14px;cursor:pointer;font-weight:800;background:transparent;color:var(--text)}
-        .btn.primary{background:var(--primary);border-color:var(--primary);color:var(--primary-contrast)}
+        .prose{padding:0 12px 12px}
+        .muted{color:var(--muted);padding:0 12px 12px;margin:0}
         @media (max-width:560px){
-          .box{max-width:100%;height:100%;border-radius:0}
-          .body{padding:10px}
-          .hero{max-height:60vh}
+          .sheet{max-width:100%;border-radius:14px}
+          .hero{max-height:280px}
         }
       `}</style>
     </div>

@@ -1,61 +1,81 @@
+// app/api/recipes/enrich/route.ts
 import { NextResponse } from "next/server";
 
-/** Normalize a MealDB recipe to your app’s shape */
-function toRecipe(meal: any) {
-  const ingredients: { name: string; amount?: string | number; unit?: string }[] = [];
-  for (let i = 1; i <= 20; i++) {
-    const name = (meal[`strIngredient${i}`] || "").trim();
-    const measure = (meal[`strMeasure${i}`] || "").trim();
-    if (!name) continue;
-    ingredients.push({ name, amount: measure || undefined });
-  }
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-  const instructions = (meal.strInstructions || "").trim();
-  const instructionsHtml = instructions
-    ? "<p>" +
-      instructions
-        .split(/\r?\n+/)
-        .map((s: string) => s.trim())
-        .filter(Boolean)
-        .join("</p><p>") +
-      "</p>"
-    : "";
-
-  return {
-    id: String(meal.idMeal),
-    title: meal.strMeal || "Recipe",
-    image: meal.strMealThumb || null,
-    url: meal.strSource || null,
-    servings: null,
-    readyInMinutes: null,
-    calories: null,
-    instructionsHtml,
-    ingredients,
-  };
+function toHtmlFromAnalyzed(analyzed: any[]): string {
+  if (!Array.isArray(analyzed) || analyzed.length === 0) return "";
+  const steps = analyzed[0]?.steps || [];
+  if (!Array.isArray(steps) || steps.length === 0) return "";
+  const list = steps
+    .map((s: any) => `<li>${(s?.step || "").toString()}</li>`)
+    .join("");
+  return `<ol>${list}</ol>`;
 }
 
-/** GET /api/recipes/enrich?id=<MealDB id> */
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
-
   try {
-    const upstream = await fetch(
-      `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${encodeURIComponent(id)}`,
-      { next: { revalidate: 0 } }
-    );
+    const { searchParams } = new URL(req.url);
+    const id = (searchParams.get("id") || "").trim();
+    if (!id) return NextResponse.json({ error: "missing-id" }, { status: 400 });
 
-    if (!upstream.ok) {
-      return NextResponse.json({ error: "Upstream error" }, { status: 502 });
+    const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY!;
+    const HOST =
+      process.env.RAPIDAPI_RECIPES_HOST ||
+      "spoonacular-recipe-food-nutrition-v1.p.rapidapi.com";
+    if (!RAPIDAPI_KEY) {
+      return NextResponse.json({ error: "missing-rapidapi-key" }, { status: 500 });
     }
 
-    const data = (await upstream.json()) as { meals: any[] | null };
-    const meal = Array.isArray(data.meals) ? data.meals[0] : null;
-    if (!meal) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // Spoonacular: /recipes/{id}/information
+    const url = `https://${HOST}/recipes/${encodeURIComponent(id)}/information`;
 
-    return NextResponse.json(toRecipe(meal));
+    const upstream = await fetch(url, {
+      headers: {
+        "x-rapidapi-key": RAPIDAPI_KEY,
+        "x-rapidapi-host": HOST,
+        Accept: "application/json",
+      },
+      cache: "no-store",
+    });
+
+    if (!upstream.ok) {
+      const txt = await upstream.text().catch(() => "");
+      return NextResponse.json(
+        { error: txt || `upstream-${upstream.status}` },
+        { status: upstream.status }
+      );
+    }
+
+    const data = await upstream.json();
+
+    const ingredients =
+      (data?.extendedIngredients || []).map((ing: any) => ({
+        name: ing?.originalName || ing?.name || "",
+        amount: ing?.amount ?? null,
+        unit: ing?.unit || "",
+      })) || [];
+
+    const instructionsHtml =
+      (data?.instructions && data.instructions.trim())
+        ? `<div>${data.instructions}</div>`
+        : toHtmlFromAnalyzed(data?.analyzedInstructions || []);
+
+    const shaped = {
+      id: String(data?.id ?? id),
+      title: data?.title || "Recipe",
+      image: data?.image || null,
+      url: data?.sourceUrl || data?.spoonacularSourceUrl || null,
+      servings: data?.servings ?? null,
+      readyInMinutes: data?.readyInMinutes ?? null,
+      calories: (data?.nutrition?.nutrients || []).find((n: any) => n?.name === "Calories")?.amount ?? null,
+      ingredients,
+      instructionsHtml: instructionsHtml || null,
+    };
+
+    return NextResponse.json(shaped);
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Failed" }, { status: 500 });
+    return NextResponse.json({ error: e?.message || "server-error" }, { status: 500 });
   }
 }

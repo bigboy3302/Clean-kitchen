@@ -1,14 +1,23 @@
+// app/layout.tsx
 import "@/styles/globals.css";
 import type { ReactNode } from "react";
+import type { Metadata, Viewport } from "next";
 import ThemeScript from "@/components/theme/ThemeScript";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import FabNav from "@/components/nav/FabNav";
 import EnsureUserDoc from "@/components/auth/EnsureUserDoc";
 import BottomNav from "@/components/nav/BottomNav";
-export const metadata = {
+
+export const metadata: Metadata = {
   title: "Clean Kitchen",
   description: "Plan, cook, and enjoy.",
-  viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0f172a", 
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
