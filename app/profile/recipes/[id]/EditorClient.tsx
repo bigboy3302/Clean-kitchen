@@ -302,7 +302,7 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
           <div className="steps">
             {steps.map((s, i) => (
               <div key={i} className="stepRow">
-                <div className="num">{i+1})</div>
+                <div className="num">({i+1})</div>
                 <input className="stepInput" placeholder="Write step…" value={s} onChange={(e)=>setStepText(i, e.currentTarget.value)} />
                 <button className="minus" onClick={()=>removeStep(i)} aria-label="Remove">−</button>
               </div>

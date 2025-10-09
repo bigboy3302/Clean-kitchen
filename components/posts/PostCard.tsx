@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot, query } from "firebase/firestore";
+import Avatar from "@/components/ui/Avatar";
 
 type Author = { username?: string|null; displayName?: string|null; avatarURL?: string|null };
 type MediaItem = { type:"image"|"video"; url:string; w?:number; h?:number; duration?:number };
@@ -82,29 +83,15 @@ export default function PostCard({
   }, [post?.id, meUid]);
 
   function ensureCanLike(): boolean {
-    if (!meUid) {
-      alert("Please sign in to like posts.");
-      return false;
-    }
+    if (!meUid) { alert("Please sign in to like posts."); return false; }
     return true;
   }
-
   async function optimisticLike(next: boolean) {
-    // optimistic flip
-    const prevLiked = liked;
-    const prevCount = likes;
+    const prevLiked = liked, prevCount = likes;
     setLiked(next);
     setLikes(n => (next ? n + 1 : Math.max(0, n - 1)));
-    try {
-      await onToggleLike?.(post, next);
-    } catch (e) {
-      // revert if backend rejects
-      setLiked(prevLiked);
-      setLikes(prevCount);
-      console.error("[PostCard] like failed; reverted", e);
-    }
+    try { await onToggleLike?.(post, next); } catch { setLiked(prevLiked); setLikes(prevCount); }
   }
-
   function onDoubleTap() {
     if (!ensureCanLike()) return;
     if (!liked) {
@@ -113,30 +100,21 @@ export default function PostCard({
       optimisticLike(true);
     }
   }
-
   function toggleLike() {
     if (!ensureCanLike()) return;
     optimisticLike(!liked);
   }
-
   async function handleAddMediaChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
     if (files.length) await onAddMedia?.(post, files);
     if (fileInputRef.current) fileInputRef.current.value = "";
     setMenuOpen(false);
   }
-
   async function toggleRepost() {
     const next = !hasReposted;
-    setHasReposted(next);
-    setReposts(n => (next ? n + 1 : Math.max(0, n - 1)));
-    try {
-      await onToggleRepost?.(post, next);
-    } catch (e) {
-      setHasReposted(!next);
-      setReposts(n => (!next ? n + 1 : Math.max(0, n - 1)));
-      console.error("[PostCard] repost failed; reverted", e);
-    }
+    setHasReposted(next); setReposts(n => (next ? n + 1 : Math.max(0, n - 1)));
+    try { await onToggleRepost?.(post, next); }
+    catch { setHasReposted(!next); setReposts(n => (!next ? n + 1 : Math.max(0, n - 1))); }
   }
 
   const displayName = author?.displayName || author?.username || "User";
@@ -148,8 +126,8 @@ export default function PostCard({
       <article className="pc">
         <header className="pc-head">
           <div className="pc-left">
-            <Link href={profileHref} className="pc-avatar" aria-label={`${displayName} profile`}>
-              {author?.avatarURL ? <img src={author.avatarURL} alt="" /> : <span className="ph">{displayName.slice(0,1).toUpperCase()}</span>}
+            <Link href={profileHref} aria-label={`${displayName} profile`} className="avatar-wrap">
+              <Avatar src={author?.avatarURL || undefined} name={displayName} size={28} />
             </Link>
             <div className="pc-meta">
               <div className="pc-name"><Link href={profileHref} className="pc-link">{displayName}</Link></div>
@@ -159,7 +137,7 @@ export default function PostCard({
 
           <div className="pc-menu" ref={menuRef}>
             <button className="menu-btn" aria-haspopup="menu" aria-expanded={menuOpen} aria-label="Post options" onClick={() => setMenuOpen(o => !o)}>
-              <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
             </button>
             {menuOpen && (
               <div className="menu" role="menu">
@@ -182,11 +160,10 @@ export default function PostCard({
           </div>
         </header>
 
-        {/* media */}
         {hasMedia ? (
           <div className={`pc-media ${media.length > 1 ? "multi" : ""}`} onDoubleClick={onDoubleTap}>
             <div ref={likeBurstRef} className="burst" aria-hidden>
-              <svg viewBox="0 0 24 24" width="72" height="72"><path d="M12.1 8.64l-.1.1-.11-.11C10.14 6.8 7.1 6.8 5.35 8.56c-1.76 1.75-1.76 4.6 0 6.36l6.07 6.07c.32.32.85.32 1.18 0l6.06-6.07c1.76-1.76 1.76-4.6 0-6.36-1.76-1.76-4.8-1.76-6.56 0z" fill="currentColor"/></svg>
+              <svg viewBox="0 0 24 24" width="64" height="64"><path d="M12.1 8.64l-.1.1-.11-.11C10.14 6.8 7.1 6.8 5.35 8.56c-1.76 1.75-1.76 4.6 0 6.36l6.07 6.07c.32.32.85.32 1.18 0l6.06-6.07c1.76-1.76 1.76-4.6 0-6.36-1.76-1.76-4.8-1.76-6.56 0z" fill="currentColor"/></svg>
             </div>
             <div className="rail" tabIndex={0} aria-label="Post media">
               {media.map((m,i)=>(
@@ -206,7 +183,7 @@ export default function PostCard({
         <div className="pc-actions">
           <div className="left">
             <button className={`icon ${liked ? "active" : ""}`} onClick={toggleLike} aria-pressed={liked} aria-label="Like">
-              <svg width="24" height="24" viewBox="0 0 24 24">
+              <svg width="22" height="22" viewBox="0 0 24 24">
                 {liked
                   ? <path d="M12.1 8.64l-.1.1-.11-.11C10.14 6.8 7.1 6.8 5.35 8.56c-1.76 1.75-1.76 4.6 0 6.36l6.07 6.07c.32.32.85.32 1.18 0l6.06-6.07c1.76-1.76 1.76-4.6 0-6.36-1.76-1.76-4.8-1.76-6.56 0z" fill="currentColor"/>
                   : <path d="M12.1 8.64l-.1.1-.11-.11C10.14 6.8 7.1 6.8 5.35 8.56c-1.76 1.75-1.76 4.6 0 6.36l6.07 6.07c.32.32.85.32 1.18 0l6.06-6.07c1.76-1.76 1.76-4.6 0-6.36-1.76-1.76-4.8-1.76-6.56 0z" stroke="currentColor" strokeWidth="1.5" fill="none"/>}
@@ -215,13 +192,13 @@ export default function PostCard({
             <span className="miniCount">{likes}</span>
 
             <Link href={threadHref} className="icon" aria-label="Open thread">
-              <svg width="24" height="24" viewBox="0 0 24 24">
+              <svg width="22" height="22" viewBox="0 0 24 24">
                 <path d="M21 12a8.5 8.5 0 01-8.5 8.5H6l-3 3 .5-4.8A8.5 8.5 0 1121 12z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </Link>
 
             <button className="icon" aria-label="Repost" onClick={toggleRepost} disabled={!meUid} title={hasReposted ? "Undo repost" : "Repost"}>
-              <svg width="24" height="24" viewBox="0 0 24 24">
+              <svg width="22" height="22" viewBox="0 0 24 24">
                 <path d="M7 7h8a4 4 0 014 4v1" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
                 <path d="M9 17H7a4 4 0 01-4-4v-1" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
                 <path d="M14 4l3 3-3 3M10 20l-3-3 3-3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -231,42 +208,42 @@ export default function PostCard({
           </div>
 
           <button className={`icon ${saved ? "active" : ""}`} onClick={() => setSaved(s=>!s)} aria-label="Save">
-            <svg width="24" height="24" viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 011 1v17l-7-4-7 4V4a1 1 0 011-1z" fill={saved?"currentColor":"none"} stroke="currentColor" strokeWidth="1.5"/></svg>
+            <svg width="22" height="22" viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 011 1v17l-7-4-7 4V4a1 1 0 011-1z" fill={saved?"currentColor":"none"} stroke="currentColor" strokeWidth="1.5"/></svg>
           </button>
         </div>
       </article>
 
       <style jsx>{`
         .pc{ position:relative; background:var(--card-bg); border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:var(--shadow) }
-        .pc-head{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px }
-        .pc-left{ display:flex; align-items:center; gap:10px }
-        .pc-avatar{ width:40px; height:40px; border-radius:999px; overflow:hidden; display:block; border:1px solid var(--border); background:#000 }
-        .pc-avatar img{ width:100%; height:100%; object-fit:cover; display:block }
-        .ph{ width:40px; height:40px; border-radius:999px; display:grid; place-items:center; background:var(--bg2); color:var(--text); font-weight:800; border:1px solid var(--border) }
-        .pc-meta{ display:flex; flex-direction:column; line-height:1.1 }
-        .pc-name{ font-weight:700 }
+        .pc-head{ display:flex; align-items:center; justify-content:space-between; padding:8px 10px }
+        .pc-left{ display:flex; align-items:center; gap:8px }
+        .avatar-wrap{ display:block; line-height:0 }
+
+        .pc-meta{ display:flex; flex-direction:column; line-height:1.05 }
+        .pc-name{ font-weight:700; font-size:14px }
         .pc-link{ color: var(--text); text-decoration:none }
         .pc-link:hover{ text-decoration:underline }
-        .pc-time{ font-size:12px; color: var(--muted); margin-top:2px }
+        .pc-time{ font-size:11px; color: var(--muted); margin-top:1px }
 
         .pc-menu{ position:relative; z-index:50 }
-        .menu-btn{ background:transparent; border:0; color:var(--muted); cursor:pointer; border-radius:8px; width:32px; height:32px; display:grid; place-items:center }
-        .menu{ position:absolute; top:calc(100% + 8px); right:0; min-width:200px; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); padding:6px; z-index:70 }
+        .menu-btn{ background:transparent; border:0; color:var(--muted); cursor:pointer; border-radius:8px; width:28px; height:28px; display:grid; place-items:center }
+        .menu{ position:absolute; top:calc(100% + 8px); right:0; min-width:180px; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); padding:6px; z-index:70 }
         .mi{ width:100%; text-align:left; background:transparent; border:0; color: var(--text); padding:8px 10px; border-radius:8px; cursor:pointer }
         .mi:hover{ background: rgba(2,6,23,.06) } :root[data-theme="dark"] .mi:hover{ background: rgba(255,255,255,.08) }
         .mi.danger{ color:#e11d48 }
         .sep{ height:1px; background: var(--border); border:0; margin:6px }
 
+        /* Media a little shorter */
         .pc-media{ position:relative; }
         .rail{ display:flex; gap:6px; overflow:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; padding:0 6px 8px }
         .cell{
-          position:relative; flex: 0 0 84%;
+          position:relative; flex: 0 0 80%;
           scroll-snap-align:center; border-radius:12px; overflow:hidden;
           border:1px solid var(--border); background:#000;
-          aspect-ratio: 4/5; max-height: 420px;
+          aspect-ratio: 4/5; max-height: 260px;
         }
         @media (min-width: 720px){
-          .cell{ flex: 0 0 62%; aspect-ratio: 4/3; max-height: 360px; }
+          .cell{ flex: 0 0 60%; aspect-ratio: 4/3; max-height: 280px; }
         }
         .pc-media img, .pc-media video{ width:100%; height:100%; object-fit:cover; display:block }
 
@@ -274,14 +251,14 @@ export default function PostCard({
         .burst.go{ animation: pop .45s ease forwards }
         @keyframes pop{ 0%{opacity:0; transform:scale(.6)} 70%{opacity:.9; transform:scale(1)} 100%{opacity:0; transform:scale(1.1)} }
 
-        .pc-info{ padding: 8px 12px 0 }
-        .caption{ margin:6px 0 0; color: var(--text); text-align:left; white-space:pre-wrap }
-        .timestamp{ background: transparent; border: 0; color: var(--muted); font-size: 12px; margin: 6px 0 0; padding: 0; display:block; text-align:left }
+        .pc-info{ padding: 6px 10px 0 }
+        .caption{ margin:4px 0 0; color: var(--text); text-align:left; white-space:pre-wrap; font-size:14px }
+        .timestamp{ background: transparent; border: 0; color: var(--muted); font-size: 11px; margin: 4px 0 0; padding: 0; display:block; text-align:left }
 
-        .pc-actions{ display:flex; align-items:center; justify-content:space-between; padding: 6px 8px 10px }
-        .pc-actions .left{ display:flex; gap:6px; align-items:center }
-        .miniCount{ font-size:12px; color: var(--muted); padding-right:6px }
-        .icon{ width:36px; height:36px; display:grid; place-items:center; border-radius:999px; background: transparent; border: 0; color: var(--text); cursor: pointer; transition: background .12s ease, opacity .12s ease, transform .06s ease; }
+        .pc-actions{ display:flex; align-items:center; justify-content:space-between; padding: 4px 6px 8px }
+        .pc-actions .left{ display:flex; gap:4px; align-items:center }
+        .miniCount{ font-size:11px; color: var(--muted); padding-right:4px }
+        .icon{ width:32px; height:32px; display:grid; place-items:center; border-radius:999px; background: transparent; border: 0; color: var(--text); cursor: pointer; transition: background .12s ease, opacity .12s ease, transform .06s ease; }
         .icon:hover{ background: rgba(2,6,23,.06) }
         :root[data-theme="dark"] .icon:hover{ background: rgba(255,255,255,.08) }
         .icon:active{ transform: translateY(1px) }

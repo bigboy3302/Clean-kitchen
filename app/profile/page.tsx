@@ -575,7 +575,7 @@ export default function ProfilePage() {
         .col { display: flex; flex-direction: column; gap: 10px; }
         .actions { display: flex; gap: 10px; justify-content:flex-end; margin-top: 8px; }
 
-        .avatar { width: 96px; height: 96px; border-radius: 999px; object-fit: cover; border: 1px solid var(--border); }
+        .avatar { width: 72px; height: 72px; border-radius: 999px; object-fit: cover; border: 1px solid var(--border); }
 
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
         @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } .row{flex-direction:column; align-items:flex-start;} }
