@@ -4,7 +4,8 @@
 - 📦 Uzturēt virtuves krājumus  
 - 🍳 Saņemt receptes no esošajiem produktiem  
 - ⏰ Sekot līdzi derīguma termiņiem  
-- 👥 Kopīgot receptes ar citiem  
+- 🏋️‍♂️ Sekot līdzi trniņu grafikiem
+- 👀 Izveido savā stilā tīmekļa vietni
 
 ---
 
