@@ -35,6 +35,11 @@ npm -v
 ---3️⃣ Instalē atkarības
 npm install
 
+---Ielādēt
+npm i @zxing/browser
+npm i @zxing/browser @zxing/library
+npm i react-zxing @zxing/library
+//lai varētu atrast barcode un pievienot, ja mestradā scenners tad main web ir down no ka tiek ņemti produkta dati
 
 
 ---4️⃣ Izveido .env.local failu
