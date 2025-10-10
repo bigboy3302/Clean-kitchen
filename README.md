@@ -88,7 +88,7 @@ styles/               → globals.css (Tailwind)
 
 
 
-
+////////šis tiks darīts nakam nedeļ 13.10.2025
 ---🔥 Firebase Deploy (tiešsaistes versija)
 
 
