@@ -1,4 +1,4 @@
-/* app/pantry/page.tsx */
+﻿/* app/pantry/page.tsx */
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -375,10 +375,10 @@ export default function PantryPage() {
       {/* ADD PRODUCT */}
       <section className="card addCard">
         <div className="addHead">
-          <div className="addIcon" aria-hidden>➕</div>
+          <div className="addIcon" aria-hidden>ā˛•</div>
           <div>
             <div className="addTitle">Add product</div>
-            <div className="addSub">Scan a barcode or type manually. We’ll merge duplicates automatically.</div>
+            <div className="addSub">Scan a barcode or type manually. Weā€™ll merge duplicates automatically.</div>
           </div>
         </div>
 
@@ -407,7 +407,7 @@ export default function PantryPage() {
             <label className="label">Scan with camera</label>
             <div className="scanner"><BarcodeScanner key={scannerKey} autoStart={scannerAutoStart} onDetected={handleDetected} /></div>
             <div className="rowHint">
-              {nutriBusy ? <span className="muted small">Looking up nutrition…</span> : <span className="muted small">Tip: hold steady 20–30cm away</span>}
+              {nutriBusy ? <span className="muted small">Looking up nutritionā€¦</span> : <span className="muted small">Tip: hold steady 20ā€“30cm away</span>}
               {nutriErr ? <span className="error small">{nutriErr}</span> : null}
             </div>
           </div>
@@ -418,46 +418,54 @@ export default function PantryPage() {
             <div className="nutTitle">Nutrition (from barcode)</div>
             <div className="nutGrid">
               <div><span className="muted">Name</span> <strong>{normalizeProductName(nutrition?.name || "")}</strong></div>
-              <div><span className="muted">kcal / 100g</span> <strong>{nutrition?.kcalPer100g ?? "—"}</strong></div>
-              <div><span className="muted">kcal / serving</span> <strong>{nutrition?.kcalPerServing ?? "—"}</strong></div>
-              <div><span className="muted">Serving size</span> <strong>{nutrition?.servingSize ?? "—"}</strong></div>
+              <div><span className="muted">kcal / 100g</span> <strong>{nutrition?.kcalPer100g ?? "ā€”"}</strong></div>
+              <div><span className="muted">kcal / serving</span> <strong>{nutrition?.kcalPerServing ?? "ā€”"}</strong></div>
+              <div><span className="muted">Serving size</span> <strong>{nutrition?.servingSize ?? "ā€”"}</strong></div>
             </div>
           </div>
         )}
 
         {err && <p className="error">{err}</p>}
         <div className="actions">
-          <Button onClick={addOrMergeItem} disabled={busy} type="button">{busy ? "Saving…" : "Add / Merge"}</Button>
+          <Button onClick={addOrMergeItem} disabled={busy} type="button">{busy ? "Savingā€¦" : "Add / Merge"}</Button>
           <Button variant="secondary" onClick={()=>setScannerAutoStart((v)=>!v)}>{scannerAutoStart ? "Stop camera" : "Use camera"}</Button>
         </div>
       </section>
 
       {/* ACTIVE + FRIDGE */}
       <section className="list">
-        <div className={`twoCol ${fridgeOpen ? "focus" : ""}`}>
+        <div className="twoCol">
           <aside className="leftCol">
             <Fridge
               items={fridgeItems}
               isOpen={fridgeOpen}
-              onToggleOpen={(v) => { setFridgeOpen(v); if (v) setTrashOpen(false); }}
+              onToggleOpen={(v) => setFridgeOpen(v)}
               minimal
             />
           </aside>
-          <div className="rightCol">
+          <div className={`rightCol ${fridgeOpen ? "" : "isClosed"}`}>
             <div className="sectionHead"><h2 className="secTitle">Active</h2></div>
-            {active.length === 0 ? (
-              <div className="empty"><div className="emoji">🧺</div><p className="emptyTitle">Your pantry is squeaky clean</p><p className="muted">Add a few items to get started.</p></div>
+            {fridgeOpen ? (
+              active.length === 0 ? (
+                <div className="empty"><div className="emoji">🍽️</div><p className="emptyTitle">Your pantry is squeaky clean</p><p className="muted">Add a few items to get started.</p></div>
+              ) : (
+                <div className="gridCards">
+                  {active.map((it) => (
+                    <PantryCard
+                      key={it.id}
+                      item={it as unknown as PantryCardItem}
+                      onDelete={() => removeItem(it.id)}
+                      onSave={(patch) => saveItem(it.id, patch)}
+                      onConsume={(payload) => logConsumptionForItem(it, payload)}
+                    />
+                  ))}
+                </div>
+              )
             ) : (
-              <div className="gridCards">
-                {active.map((it) => (
-                  <PantryCard
-                    key={it.id}
-                    item={it as unknown as PantryCardItem}
-                    onDelete={() => removeItem(it.id)}
-                    onSave={(patch) => saveItem(it.id, patch)}
-                    onConsume={(payload) => logConsumptionForItem(it, payload)}
-                  />
-                ))}
+              <div className="closedMessage">
+                <div className="emoji">🔒</div>
+                <p className="emptyTitle">Fridge door is closed</p>
+                <p className="muted">Open the fridge to see active items.</p>
               </div>
             )}
           </div>
@@ -466,29 +474,36 @@ export default function PantryPage() {
 
       {/* EXPIRED + TRASHCAN */}
       <section className="list" style={{ marginTop: 20 }}>
-        <div className={`twoCol ${trashOpen ? "focus" : ""}`}>
+        <div className="twoCol">
           <aside className="leftCol">
             <TrashCan
               items={trashItems as any}
               isOpen={trashOpen}
-              onToggleOpen={(v) => { setTrashOpen(v); if (v) setFridgeOpen(false); }}
-              
+              onToggleOpen={(v) => setTrashOpen(v)}
             />
           </aside>
-          <div className="rightCol">
+          <div className={`rightCol ${trashOpen ? "" : "isClosed"}`}>
             <div className="sectionHead"><h2 className="secTitle">Expired</h2></div>
-            {expired.length === 0 ? (
-              <div className="empty ok"><div className="emoji">🎉</div><p className="emptyTitle">Nothing expired</p><p className="muted">Keep it fresh!</p></div>
+            {trashOpen ? (
+              expired.length === 0 ? (
+                <div className="empty ok"><div className="emoji">🥳</div><p className="emptyTitle">Nothing expired</p><p className="muted">Keep it fresh!</p></div>
+              ) : (
+                <div className="gridCards">
+                  {expired.map((it) => (
+                    <PantryCard
+                      key={it.id}
+                      item={{ ...it, name: it.name } as unknown as PantryCardItem}
+                      onDelete={() => removeItem(it.id)}
+                      onSave={(patch) => saveItem(it.id, patch)}
+                    />
+                  ))}
+                </div>
+              )
             ) : (
-              <div className="gridCards">
-                {expired.map((it) => (
-                  <PantryCard
-                    key={it.id}
-                    item={{ ...it, name: it.name } as unknown as PantryCardItem}
-                    onDelete={() => removeItem(it.id)}
-                    onSave={(patch) => saveItem(it.id, patch)}
-                  />
-                ))}
+              <div className="closedMessage">
+                <div className="emoji">🗑️</div>
+                <p className="emptyTitle">Trash lid is closed</p>
+                <p className="muted">Open the bin to review expired items.</p>
               </div>
             )}
           </div>
@@ -511,12 +526,7 @@ export default function PantryPage() {
         .leftCol{ position: relative; }
         @media (min-width: 900px){ .leftCol{ position: sticky; top: 8px; height: fit-content; } }
         .rightCol{ min-width:0; }
-
-        /* Focus mode (mobile sheet effect) */
-        .twoCol.focus { grid-template-columns: 1fr; position: relative; }
-        .twoCol.focus .leftCol { position: fixed; left: 50%; transform: translate(-50%, 0); bottom: 16px; width: min(560px, 94vw); z-index: 8; }
-        .twoCol.focus::after { content: ""; position: fixed; inset: 0; background: rgba(2,6,23,.55); backdrop-filter: blur(2px); z-index: 6; }
-        .twoCol.focus .leftCol > * { box-shadow: 0 24px 64px rgba(2,6,23,.28), 0 4px 12px rgba(2,6,23,.10); }
+        .rightCol.isClosed { display:flex; flex-direction:column; gap:14px; }
 
         /* ---------- STATS ---------- */
         .stats { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin: 10px 0 18px; }
@@ -581,6 +591,7 @@ export default function PantryPage() {
         .empty.ok { background: color-mix(in oklab, #10b981 10%, var(--bg)); border-color: color-mix(in oklab, #10b981 35%, var(--border)); }
         .emoji { font-size: 28px; }
         .emptyTitle { margin: 6px 0 2px; font-weight: 900; color: var(--text); }
+        .closedMessage { text-align:center; border:1px dashed var(--border); border-radius:16px; padding: 24px 14px; background: color-mix(in oklab, var(--bg) 92%, transparent); display:grid; gap:6px; justify-items:center; }
       `}</style>
     </main>
   );

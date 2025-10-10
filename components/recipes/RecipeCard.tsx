@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -188,7 +188,7 @@ export default function RecipeCard({
             <div className="servingsRow">
               <label>Servings</label>
               <div className="svCtrls">
-                <button type="button" className="svBtn" onClick={dec} aria-label="Decrease servings">−</button>
+                <button type="button" className="svBtn" onClick={dec} aria-label="Decrease servings">-</button>
                 <input
                   className="svInput"
                   type="number"
@@ -202,6 +202,63 @@ export default function RecipeCard({
                 <button type="button" className="svBtn" onClick={inc} aria-label="Increase servings">+</button>
               </div>
 
+              <div className="actionCluster">
+                <button
+                  type="button"
+                  aria-pressed={isFavorite}
+                  title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                  className={`favBtn ${isFavorite ? "on" : ""}`}
+                  onClick={(e) => { e.stopPropagation(); onToggleFavorite?.(); }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 21s-6-4.35-8.4-8.11C1.43 10.12 2.68 6.5 6 6.5c2 0 3.09 1.36 3.78 2.44.18.28.26.4.22.4s.04-.12.22-.4C10.91 7.86 12 6.5 14 6.5c3.32 0 4.57 3.62 2.4 6.39C18 16.65 12 21 12 21z" fill="currentColor" />
+                  </svg>
+                  <span>{isFavorite ? "Saved" : "Favorite"}</span>
+                </button>
+
+                {editHref ? (
+                  <a
+                    href={editHref}
+                    className="editBtn"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12.78 5.22l6 6L8.5 21.5H2.5v-6z" fill="currentColor" />
+                      <path d="M17.81 3.31a2.25 2.25 0 0 1 3.18 3.18l-1.3 1.3-3.18-3.18 1.3-1.3z" fill="currentColor" />
+                    </svg>
+                    <span>Edit recipe</span>
+                  </a>
+                ) : null}
+              </div>
+            </div>
+
+  <div className="actionCluster">
+    <button
+      type="button"
+      aria-pressed={isFavorite}
+      title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+      className={`favBtn ${isFavorite ? "on" : ""}`}
+      onClick={(e) => { e.stopPropagation(); onToggleFavorite?.(); }}
+    >
+      {isFavorite ? "? Favorite" : "? Favorite"}
+    </button>
+
+    {editHref ? (
+      <a
+        href={editHref}
+        className="editBtn"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden>
+          <path d="M12.78 5.22l6 6L8.5 21.5H2.5v-6z" fill="currentColor" />
+          <path d="M17.81 3.31a2.25 2.25 0 0 1 3.18 3.18l-1.3 1.3-3.18-3.18 1.3-1.3z" fill="currentColor" />
+        </svg>
+        <span>Edit recipe</span>
+      </a>
+    ) : null}
+  </div>
+</div>
+
               <button
                 type="button"
                 aria-pressed={isFavorite}
@@ -209,7 +266,7 @@ export default function RecipeCard({
                 className={`favBtn ${isFavorite ? "on" : ""}`}
                 onClick={(e) => { e.stopPropagation(); onToggleFavorite?.(); }}
               >
-                {isFavorite ? "★ Favorite" : "☆ Favorite"}
+                {isFavorite ? " Favorite" : " Favorite"}
               </button>
 
               {editHref ? (
@@ -233,7 +290,7 @@ export default function RecipeCard({
                       {scaled.map((it, i) => (
                         <li key={i}>
                           <strong>{it.name}</strong>
-                          {it.measure ? ` — ${it.measure}` : ""}
+                          {it.measure ? `  ${it.measure}` : ""}
                         </li>
                       ))}
                     </ul>
@@ -260,7 +317,7 @@ export default function RecipeCard({
 
           {/* Close bubble */}
           <button className="toggle" onClick={onClose} type="button" aria-label="Close details">
-            <span className="chev">›</span>
+            <span className="chev"></span>
           </button>
         </aside>
       )}
@@ -306,7 +363,7 @@ export default function RecipeCard({
 
         .content { padding:10px 0; height:calc(100% - 60px); overflow:auto; }
 
-        .servingsRow { display:flex; align-items:center; gap:10px; justify-content:space-between; padding:0 20px 8px 20px; }
+        .servingsRow { display:flex; align-items:center; gap:16px; padding:0 20px 8px 20px; }
         .servingsRow label { font-weight:800; color:#36354e; }
 
         .svCtrls { display:flex; align-items:center; gap:6px; }
@@ -314,27 +371,40 @@ export default function RecipeCard({
           background:#ed2460; color:#fff; font-weight:800; line-height:1; }
         .svInput { width:52px; text-align:center; border:1px solid #e5e7eb; border-radius:8px; padding:6px 8px; background:#fff; }
 
+        .actionCluster{ margin-left:auto; display:flex; align-items:center; gap:12px; }
+
         .favBtn {
-          margin-left:auto;
-          border:1px solid var(--border); border-radius:999px; padding:6px 10px;
+          display:inline-flex;
+          align-items:center;
+          gap:8px;
+          border:1px solid var(--border); border-radius:999px; padding:6px 12px;
           background:var(--bg2); color:var(--text); font-weight:700; cursor:pointer;
           transition:.2s transform, .2s background, .2s border-color;
         }
+        .favBtn svg { width:16px; height:16px; }
+        .favBtn span { display:inline-block; }
         .favBtn:hover{ transform: translateY(-1px); }
         .favBtn.on{ background:#fde68a; border-color:#f59e0b; }
 
         .editBtn{
-          margin-left:8px;
-          border:1px solid var(--border);
-          border-radius:999px;
-          padding:6px 10px;
-          background:var(--bg2);
+          display:inline-flex;
+          align-items:center;
+          gap:8px;
+          border:1px solid color-mix(in oklab, var(--primary) 35%, var(--border));
+          border-radius:12px;
+          padding:8px 14px;
+          background:linear-gradient(180deg, color-mix(in oklab, var(--primary) 12%, var(--bg2) 88%), var(--bg2));
           color:var(--text);
           font-weight:700;
           text-decoration:none;
-          transition:.2s transform, .2s background, .2s border-color;
+          transition:.15s transform, .2s background, .2s border-color, .15s box-shadow;
         }
-        .editBtn:hover{ transform: translateY(-1px); }
+        .editBtn svg { width:16px; height:16px; }
+        .editBtn:hover{
+          transform: translateY(-1px);
+          box-shadow:0 12px 24px rgba(37, 99, 235, .15);
+          border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
+        }
 
         .col { padding:0 20px 8px 20px; text-align:left; }
         .step{ font-weight:800; font-size:14px; color:#36354e; margin:10px 0 6px; }
@@ -574,6 +644,13 @@ export default function RecipeCard({
             width:100%;
             min-height:64px;
           }
+          .rk-card.open .actionCluster{
+            margin-left:auto;
+            gap:16px;
+          }
+          .rk-card.open .editBtn{
+            padding:10px 18px;
+          }
           .rk-card.open .col {
             margin:0;
             padding:0;
@@ -636,3 +713,7 @@ export default function RecipeCard({
     </div>
   );
 }
+
+
+
+

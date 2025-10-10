@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 
 type TSLike = any;
 
@@ -18,9 +18,17 @@ type Props = {
   items: FridgeItem[];
   isOpen: boolean;
   onToggleOpen: (open: boolean) => void;
-  /** optional prop because page.tsx passes it */
   minimal?: boolean;
 };
+
+type StatusTone = "neutral" | "warn" | "danger" | "good";
+
+type DisplayItem = FridgeItem & {
+  expiresOn: Date | null;
+  status: { label: string; tone: StatusTone };
+};
+
+const DAY_MS = 86_400_000;
 
 function toDate(v: any): Date | null {
   if (!v) return null;
@@ -32,212 +40,294 @@ function toDate(v: any): Date | null {
   return null;
 }
 
+function describeExpiry(date: Date | null): { label: string; tone: StatusTone } {
+  if (!date) return { label: "No expiry date", tone: "neutral" };
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.floor((date.getTime() - today.getTime()) / DAY_MS);
+
+  if (diffDays < 0) {
+    const days = Math.abs(diffDays);
+    return { label: `Expired ${days === 1 ? "1 day" : `${days} days`} ago`, tone: "danger" };
+  }
+  if (diffDays === 0) return { label: "Expires today", tone: "warn" };
+  if (diffDays <= 3) {
+    return { label: `Expires in ${diffDays === 1 ? "1 day" : `${diffDays} days`}`, tone: "warn" };
+  }
+  const daysLeft = diffDays === 1 ? "1 day" : `${diffDays} days`;
+  return { label: `Fresh for ${daysLeft}`, tone: "good" };
+}
+
+function formatDate(date: Date | null): string {
+  if (!date) return "No expiry";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
 export default function Fridge({ items, isOpen, onToggleOpen }: Props) {
-  const count = items.length;
-  const label = count === 1 ? "1 item" : `${count} items`;
+  const annotated = useMemo<DisplayItem[]>(() => {
+    const withDates = items.map((item) => {
+      const expiresOn = toDate(item.expiresAt);
+      return {
+        ...item,
+        expiresOn,
+        status: describeExpiry(expiresOn),
+      };
+    });
+    const safeTime = (d: Date | null) => (d ? d.getTime() : Number.POSITIVE_INFINITY);
+    return withDates.sort((a, b) => safeTime(a.expiresOn) - safeTime(b.expiresOn));
+  }, [items]);
+
+  const count = annotated.length;
+  const label = count === 0 ? "Nothing stored" : `${count} ${count === 1 ? "item" : "items"}`;
+  const preview = annotated.slice(0, 2);
+  const soon = annotated.filter((it) => it.status.tone === "warn").length;
+  const overdue = annotated.filter((it) => it.status.tone === "danger").length;
 
   return (
-    <div className={`fridgeWrap ${isOpen ? "open" : "closed"}`}>
-      <div className="fridge" aria-label="Fridge">
-        <div className="badge">FRIDGE</div>
-
-        <div className="shell">
-          <div className="glass" />
-          <div className="handle" />
-        </div>
-
-        <div className="footer">
-          <span className="pill">{label}</span>
-          <button
-            type="button"
-            className="linkBtn"
-            onClick={() => onToggleOpen(!isOpen)}
-          >
-            {isOpen ? "Open" : "Close"}
-          </button>
+    <div className={`fridgeUnit ${isOpen ? "open" : "closed"}`}>
+      <div className="objectWrap" aria-hidden>
+        <div className="shadow" />
+        <div className={`fridgeObject ${isOpen ? "swing" : ""}`}>
+          <span className="badge">F</span>
+          <div className="door top">
+            <div className="shine" />
+            <div className={`handle ${isOpen ? "pulled" : ""}`} />
+          </div>
+          <div className="door bottom">
+            <div className="shine" />
+            <div className={`handle ${isOpen ? "pulled" : ""}`} />
+          </div>
+          <div className="hinge" />
+          <div className={`gap ${isOpen ? "visible" : ""}`}>
+            <div className="glow" />
+          </div>
         </div>
       </div>
 
-      {/* Only render tray when OPEN so products never show while closed */}
-      {isOpen && items.length === 0 && (
-  <div className="tray">
-    <div className="empty">
-      <span className="emoji">🧊</span>
-      <div className="tTitle">Your fridge is empty</div>
-      <div className="muted">Add some items to see them here.</div>
-    </div>
-  </div>
-)}
+      <div className="info">
+        <header>
+          <div>
+            <p className="eyebrow">Fridge</p>
+            <h3>{label}</h3>
+          </div>
+          <button
+            type="button"
+            className="action"
+            onClick={() => onToggleOpen(!isOpen)}
+            aria-expanded={isOpen}
+          >
+            {isOpen ? "Close door" : "Open door"}
+          </button>
+        </header>
+
+        <div className="chips">
+          <span className="chip neutral">Total {count}</span>
+          <span className={`chip ${soon > 0 ? "warn" : "good"}`}>Soon {soon}</span>
+          <span className={`chip ${overdue > 0 ? "danger" : "good"}`}>Expired {overdue}</span>
+        </div>
+
+        {isOpen ? (
+          <div className="preview">
+            {preview.length === 0 ? (
+              <p className="muted">Nothing inside yet. Add an item to keep track of it.</p>
+            ) : (
+              preview.map((item) => (
+                <div key={item.id} className="previewRow">
+                  <span className="name">{item.name}</span>
+                  <span className={`badgeTone ${item.status.tone}`}>{item.status.label}</span>
+                </div>
+              ))
+            )}
+            {count > preview.length && (
+              <span className="muted more">+{count - preview.length} more inside</span>
+            )}
+          </div>
+        ) : (
+          <p className="muted shutNote">Door closed – open to peek at the shelves.</p>
+        )}
+      </div>
 
       <style jsx>{`
-        .fridgeWrap {
-          display: grid;
-          gap: 10px;
-        }
-
-        .fridge {
+        .fridgeUnit {
           position: relative;
-          width: 100%;
-          border-radius: 22px;
-          overflow: hidden;
-          background: linear-gradient(180deg, #f5f7fb, #dbe3ef);
-          border: 1px solid rgba(15, 23, 42, 0.08);
-          box-shadow: 0 24px 48px rgba(15, 23, 42, 0.12),
-            inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+          border: 1px solid var(--border);
+          background: linear-gradient(180deg, color-mix(in oklab, var(--bg2) 94%, transparent), var(--bg));
+          border-radius: 24px;
+          padding: 18px 20px;
+          box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
           display: grid;
-          grid-template-rows: 1fr auto;
-          height: 220px;
-          transition: height 220ms ease, box-shadow 220ms ease,
-            transform 220ms ease;
+          gap: 18px;
         }
-        .fridgeWrap.open .fridge {
-          height: 280px;
+        .objectWrap {
+          display: grid;
+          place-items: center;
+          position: relative;
+          padding-top: 6px;
         }
-        .fridgeWrap.closed .fridge {
-          height: 220px;
+        .shadow {
+          width: 70%;
+          height: 14px;
+          border-radius: 999px;
+          background: radial-gradient(circle, rgba(15, 23, 42, 0.25), transparent 70%);
+          filter: blur(6px);
+          transform: translateY(116px);
         }
-
+        .fridgeObject {
+          position: relative;
+          width: min(180px, 55vw);
+          height: min(250px, 70vw);
+          border-radius: 22px;
+          background: linear-gradient(135deg, #eef2ff, #e0e7ff 45%, #c7d2fe 85%);
+          border: 2px solid rgba(15, 23, 42, 0.1);
+          box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6), 0 22px 40px rgba(15, 23, 42, 0.14);
+          display: grid;
+          grid-template-rows: 1fr 1fr;
+          overflow: hidden;
+          transition: transform 0.35s ease;
+        }
+        .fridgeObject.swing {
+          transform: rotateY(-6deg);
+        }
         .badge {
           position: absolute;
-          top: 10px;
-          left: 14px;
-          font-size: 11px;
-          font-weight: 900;
-          letter-spacing: 0.12em;
-          color: rgba(15, 23, 42, 0.35);
-          text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+          top: 12px;
+          left: 16px;
+          width: 28px;
+          height: 28px;
+          border-radius: 10px;
+          background: rgba(15, 23, 42, 0.1);
+          color: #0f172a;
+          font-weight: 700;
+          font-size: 14px;
+          display: grid;
+          place-items: center;
+          letter-spacing: 0.08em;
         }
-
-        .shell {
+        .door {
           position: relative;
-          inset: 0;
+          background: linear-gradient(110deg, rgba(255, 255, 255, 0.9), rgba(209, 213, 219, 0.65));
         }
-        .glass {
+        .fridgeObject.swing .door.top {
+          transform: perspective(800px) rotateY(-18deg);
+          transform-origin: right center;
+          transition: transform 0.35s ease;
+        }
+        .fridgeObject.swing .door.bottom {
+          transform: perspective(800px) rotateY(-12deg);
+          transform-origin: right center;
+          transition: transform 0.35s ease 40ms;
+        }
+        .door.top {
+          border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+        }
+        .door.bottom {
+          border-top: 1px solid rgba(255, 255, 255, 0.35);
+        }
+        .shine {
           position: absolute;
-          left: 14px;
-          right: 14px;
-          top: 16px;
-          bottom: 54px;
+          top: 12px;
+          left: 12px;
+          right: 24px;
+          bottom: 12px;
           border-radius: 16px;
-          background: radial-gradient(
-              120% 60% at -10% -20%,
-              rgba(255, 255, 255, 0.9),
-              rgba(255, 255, 255, 0.35) 40%,
-              rgba(255, 255, 255, 0) 65%
-            ),
-            linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(170, 182, 200, 0.45));
-          border: 1px solid rgba(255, 255, 255, 0.85);
-          box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.05),
-            inset 0 -6px 10px rgba(15, 23, 42, 0.08);
-          backdrop-filter: blur(1.5px);
+          background: linear-gradient(150deg, rgba(255, 255, 255, 0.78), transparent 65%);
+          pointer-events: none;
+        }
+        .door.bottom .shine {
+          top: 18px;
         }
         .handle {
           position: absolute;
-          right: 24px;
-          top: 44px;
-          width: 10px;
-          height: 78px;
-          border-radius: 8px;
-          background: linear-gradient(180deg, #f6f9ff, #cfd9ea);
-          box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06),
-            0 10px 18px rgba(15, 23, 42, 0.18);
+          right: 18px;
+          top: 24px;
+          width: 12px;
+          height: 60px;
+          border-radius: 10px;
+          background: linear-gradient(180deg, #f5f7fb, #c7d0de);
+          box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06), 0 6px 12px rgba(15, 23, 42, 0.18);
+          transition: transform 0.2s ease;
+        }
+        .door.bottom .handle {
+          top: auto;
+          bottom: 24px;
+        }
+        .handle.pulled {
+          transform: translateX(-8px);
+        }
+        .hinge {
+          position: absolute;
+          left: -10px;
+          top: 40px;
+          width: 6px;
+          height: calc(100% - 80px);
+          border-radius: 6px;
+          background: linear-gradient(180deg, rgba(15, 23, 42, 0.05), rgba(15, 23, 42, 0.2));
+          box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+        }
+        .gap {
+          position: absolute;
+          top: 0;
+          right: -2px;
+          bottom: 0;
+          width: 8px;
+          opacity: 0;
+          transition: opacity 0.2s ease;
+        }
+        .gap.visible {
+          opacity: 1;
+        }
+        .glow {
+          position: absolute;
+          inset: 12px 0;
+          border-radius: 10px;
+          background: radial-gradient(90% 120% at 0% 50%, rgba(255, 255, 255, 0.8), transparent 70%);
         }
 
-        .footer {
+        .info {
+          display: grid;
+          gap: 14px;
+        }
+        header {
           display: flex;
-          align-items: center;
+          align-items: flex-start;
           justify-content: space-between;
-          padding: 10px 12px 12px;
-          background: linear-gradient(
-            180deg,
-            rgba(255, 255, 255, 0.75),
-            rgba(255, 255, 255, 0.4)
-          );
-          border-top: 1px solid rgba(15, 23, 42, 0.06);
+          gap: 12px;
         }
-        .pill {
-          display: inline-flex;
-          align-items: center;
-          height: 28px;
-          padding: 0 10px;
-          font-weight: 900;
-          font-size: 12px;
-          color: #0f172a;
+        .eyebrow {
+          margin: 0;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--muted);
+        }
+        h3 {
+          margin: 6px 0 0;
+          font-size: 20px;
+          font-weight: 800;
+          color: var(--text);
+        }
+        .action {
+          border: 0;
           border-radius: 999px;
-          background: rgba(255, 255, 255, 0.8);
-          border: 1px solid rgba(15, 23, 42, 0.08);
-          box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
-        }
-        .linkBtn {
-          appearance: none;
-          border: none;
-          background: transparent;
-          color: #4f7fff;
-          font-weight: 900;
+          background: color-mix(in oklab, var(--primary) 18%, #ffffff 20%);
+          color: var(--text);
+          font-weight: 700;
+          padding: 10px 18px;
           cursor: pointer;
-          text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+          box-shadow: 0 10px 24px rgba(37, 99, 235, 0.18);
+          transition: transform 0.12s ease, box-shadow 0.18s ease;
         }
-
-        .tray {
-          border: 1px solid rgba(15, 23, 42, 0.08);
-          background: #fff;
-          border-radius: 18px;
-          padding: 12px;
-          box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
-          animation: trayIn 180ms ease-out both;
+        .action:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 16px 34px rgba(37, 99, 235, 0.24);
         }
-        @keyframes trayIn {
-          from {
-            opacity: 0;
-            transform: translateY(-6px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        .empty {
-          text-align: center;
-          padding: 20px 10px;
-        }
-        .emoji {
-          font-size: 26px;
-        }
-        .tTitle {
-          font-weight: 900;
-          margin-top: 6px;
-        }
-        .muted {
-          color: #64748b;
-          font-size: 13px;
-        }
-
-        .grid {
-          list-style: none;
-          margin: 0;
-          padding: 0;
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 10px;
-        }
- 
-        .top {
-          display: grid;
-          grid-template-columns: 1fr;
-          align-items: center;
-        }
-        .name {
-          margin: 0;
-          font-size: 16px;
-          font-weight: 900;
-          letter-spacing: -0.01em;
-          color: #0f172a;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-        .meta {
+        .chips {
           display: flex;
           flex-wrap: wrap;
           gap: 8px;
@@ -245,14 +335,102 @@ export default function Fridge({ items, isOpen, onToggleOpen }: Props) {
         .chip {
           display: inline-flex;
           align-items: center;
-          height: 26px;
-          padding: 0 10px;
           border-radius: 999px;
-          border: 1px solid rgba(15, 23, 42, 0.08);
-          background: #f8fafc;
+          padding: 6px 12px;
           font-size: 12px;
-          font-weight: 800;
-          color: #0f172a;
+          font-weight: 600;
+          border: 1px solid rgba(15, 23, 42, 0.08);
+          background: var(--bg2);
+        }
+        .chip.warn {
+          color: #92400e;
+          border-color: color-mix(in oklab, #fbbf24 40%, transparent);
+          background: color-mix(in oklab, #f97316 12%, #fff7ed 88%);
+        }
+        .chip.danger {
+          color: #7f1d1d;
+          border-color: color-mix(in oklab, #ef4444 40%, transparent);
+          background: color-mix(in oklab, #ef4444 12%, #fef2f2 88%);
+        }
+        .chip.good {
+          color: #047857;
+          border-color: color-mix(in oklab, #34d399 40%, transparent);
+          background: color-mix(in oklab, #22c55e 12%, #ecfdf5 88%);
+        }
+        .preview {
+          display: grid;
+          gap: 10px;
+        }
+        .previewRow {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          padding: 8px 12px;
+          background: var(--bg);
+        }
+        .name {
+          font-weight: 700;
+          color: var(--text);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .badgeTone {
+          border-radius: 999px;
+          padding: 4px 10px;
+          font-size: 11px;
+          font-weight: 700;
+          border: 1px solid transparent;
+        }
+        .badgeTone.neutral {
+          background: var(--bg2);
+          color: var(--muted);
+          border-color: var(--border);
+        }
+        .badgeTone.warn {
+          background: color-mix(in oklab, #fbbf24 25%, var(--bg));
+          border-color: color-mix(in oklab, #f59e0b 40%, transparent);
+          color: #92400e;
+        }
+        .badgeTone.danger {
+          background: color-mix(in oklab, #f87171 25%, var(--bg));
+          border-color: color-mix(in oklab, #ef4444 40%, transparent);
+          color: #7f1d1d;
+        }
+        .badgeTone.good {
+          background: color-mix(in oklab, #34d399 20%, var(--bg));
+          border-color: color-mix(in oklab, #059669 40%, transparent);
+          color: #065f46;
+        }
+        .shutNote {
+          padding: 10px 12px;
+          border-radius: 12px;
+          border: 1px dashed var(--border);
+          background: color-mix(in oklab, var(--bg2) 90%, var(--bg));
+        }
+        .muted {
+          color: var(--muted);
+          font-size: 13px;
+          margin: 0;
+        }
+        .more {
+          font-weight: 600;
+        }
+
+        @media (max-width: 640px) {
+          .fridgeUnit {
+            padding: 16px;
+          }
+          .fridgeObject {
+            width: min(160px, 65vw);
+            height: min(220px, 80vw);
+          }
+          .action {
+            padding: 9px 16px;
+          }
         }
       `}</style>
     </div>

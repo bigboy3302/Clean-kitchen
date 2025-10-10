@@ -1,4 +1,4 @@
-
+﻿
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -165,11 +165,11 @@ export default function ProfilePage() {
       setCheckingUname(true);
       try {
         if (userDoc?.username === v) {
-          setUnameMsg("Current username ✔");
+          setUnameMsg("This is your current username.");
           return;
         }
         const snap = await getDoc(doc(db, "usernames", v));
-        setUnameMsg(snap.exists() ? "Taken ✖" : "Available ✔");
+        setUnameMsg(snap.exists() ? "That username is taken." : "Username is available.");
       } catch {
         setUnameMsg(null);
       } finally {
@@ -383,234 +383,574 @@ export default function ProfilePage() {
   if (!authReady || !me) return null;
 
   return (
-    <main className="wrap">
-      <div className="headerRow">
-        <h1 className="title">My profile</h1>
-        <div className="right">
-          <Button variant="secondary" onClick={doLogout}>
-            Log out
-          </Button>
-        </div>
-      </div>
-
-      {msg && <p className="ok">{msg}</p>}
-      {err && <p className="bad">{err}</p>}
+    <main className="profilePage">
+      {msg && <p className="notice ok">{msg}</p>}
+      {err && <p className="notice bad">{err}</p>}
 
       {loadingDoc ? (
-        <div className="p">Loading…</div>
+        <div className="loading">Loading...</div>
       ) : userDoc ? (
-        <>
-         
-          <Card className="section">
-            <h2 className="h2">Avatar</h2>
-            <div className="row aic">
-             
-              <img src={userDoc.photoURL || "/default-avatar.png"} alt="avatar" className="avatar" />
-              <div className="col">
-                <input ref={fileRef} type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-                <div className="actions">
-                  <Button variant="secondary" onClick={() => fileRef.current?.click()}>
-                    Choose
-                  </Button>
-                  <Button onClick={uploadAvatar} disabled={!file || busyUpload}>
-                    {busyUpload ? "Uploading…" : "Save"}
-                  </Button>
-                  <Button variant="secondary" onClick={removeAvatar} disabled={busyUpload}>
-                    Remove
-                  </Button>
-                </div>
-                {file ? <div className="muted small">Selected: {file.name}</div> : null}
-              </div>
-            </div>
-          </Card>
+        (() => {
+          const heroName =
+            fullName(firstName, lastName) ||
+            fullName(userDoc.firstName, userDoc.lastName) ||
+            userDoc.username ||
+            userDoc.email ||
+            "Your profile";
 
-    
-          <Card className="section">
-            <h2 className="h2">Details</h2>
-            <div className="grid">
-              <Input label="First name" value={firstName} onChange={(e: any) => setFirstName(e.target.value)} />
-              <Input label="Last name" value={lastName} onChange={(e: any) => setLastName(e.target.value)} />
-              <div className="field">
-                <label className="lab">Username</label>
-                <input className="inp" value={username} onChange={(e) => setUsername(e.currentTarget.value)} placeholder="yourname" />
-                <div className="muted small">{checkingUname ? "Checking…" : unameMsg ?? "3–20 chars: a–z, 0–9, . _ -"}</div>
-              </div>
-              <Input label="UID" value={userDoc.uid} readOnly />
-            </div>
-            <div className="actions">
-              <Button onClick={saveProfile} disabled={busySave}>
-                {busySave ? "Saving…" : "Save changes"}
-              </Button>
-            </div>
-          </Card>
+          return (
+            <>
+              <section className="profileHero">
+                <div className="heroCard">
+                  <div className="avatarColumn">
+                    <div className="avatarWrap">
+                      <img
+                        src={userDoc.photoURL || "/default-avatar.png"}
+                        alt="Profile avatar"
+                      />
+                      <button
+                        type="button"
+                        className="avatarTrigger"
+                        onClick={() => fileRef.current?.click()}
+                      >
+                        Change photo
+                      </button>
+                    </div>
+                    <div className="avatarActions">
+                      <Button variant="secondary" onClick={() => fileRef.current?.click()}>
+                        Choose
+                      </Button>
+                      <Button onClick={uploadAvatar} disabled={!file || busyUpload}>
+                        {busyUpload ? "Uploading..." : "Save"}
+                      </Button>
+                      <Button variant="secondary" onClick={removeAvatar} disabled={busyUpload}>
+                        Remove
+                      </Button>
+                    </div>
+                    <p className="avatarHint muted">
+                      {file ? `Selected: ${file.name}` : "PNG or JPG, up to 2MB."}
+                    </p>
+                  </div>
 
-      
-          <Card className="section">
-            <h2 className="h2">Account</h2>
-            <div className="grid">
-              <Input label="Current email" value={userDoc.email} readOnly />
-              <div className="field">
-                <label className="lab">New email</label>
-                <input className="inp" value={newEmail} onChange={(e) => setNewEmail(e.currentTarget.value)} />
-              </div>
-              <div className="field">
-                <label className="lab">Current password (for re-auth)</label>
-                <input className="inp" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.currentTarget.value)} />
-              </div>
-              <div className="field">
-                <label className="lab">Providers</label>
-                <div className="muted">{providers.join(", ") || "—"}</div>
-              </div>
-            </div>
-            <div className="actions">
-              <Button variant="secondary" onClick={sendVerify}>
-                Send verification
-              </Button>
-              <Button variant="secondary" onClick={sendReset}>
-                Send password reset
-              </Button>
-              <Button onClick={updateEmail} disabled={busyEmail}>
-                {busyEmail ? "Updating…" : "Update email"}
-              </Button>
-            </div>
-          </Card>
-
-       
-          <Card className="section">
-            <h2 className="h2">Preferences</h2>
-
-            <ThemePicker />
-
-            <div className="grid">
-              <div className="field">
-                <label className="lab">Units</label>
-                <div className="chips">
-                  {(["metric", "imperial"] as const).map((u) => (
-                    <button
-                      key={u}
-                      type="button"
-                      className={`chip ${units === u ? "on" : ""}`}
-                      onClick={() => setUnits(u)}
-                    >
-                      {u}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="field">
-                <label className="lab">Email notifications</label>
-                <label className="switch">
-                  <input
-                    type="checkbox"
-                    checked={emailNotifications}
-                    onChange={(e) => setEmailNotifications(e.currentTarget.checked)}
-                  />
-                  <span />
-                </label>
-              </div>
-            </div>
-
-            <div className="actions">
-              <Button onClick={saveProfile} disabled={busySave}>
-                {busySave ? "Saving…" : "Save preferences"}
-              </Button>
-            </div>
-          </Card>
-
-          <Card className="section danger">
-            <h2 className="h2">Danger zone</h2>
-            <p className="muted small">
-              Deleting your account removes your profile and signs you out. (Username reservation is kept to prevent impersonation.)
-            </p>
-            <div className="actions">
-              <Button variant="secondary" onClick={() => setShowDelete(true)}>
-                Delete my account…
-              </Button>
-            </div>
-          </Card>
-
-          {showDelete ? (
-            <div className="ov" role="dialog" aria-modal="true" onClick={() => setShowDelete(false)}>
-              <div className="box" onClick={(e) => e.stopPropagation()}>
-                <div className="bh">
-                  <div className="bt">Confirm delete</div>
-                  <button className="x" onClick={() => setShowDelete(false)}>
-                    ✕
-                  </button>
-                </div>
-                <div className="body">
-                  <p>
-                    Type <strong>DELETE</strong> to confirm. You may need to re-login if your session is old.
-                  </p>
-                  <input className="inp" value={confirmText} onChange={(e) => setConfirmText(e.currentTarget.value)} placeholder="DELETE" />
-                  <div className="actions">
-                    <Button variant="secondary" onClick={() => setShowDelete(false)}>
-                      Cancel
-                    </Button>
-                    <Button onClick={doDeleteAccount} disabled={busyDelete || confirmText !== "DELETE"}>
-                      {busyDelete ? "Deleting…" : "Delete account"}
-                    </Button>
+                  <div className="heroInfo">
+                    <span className="eyebrow">Account</span>
+                    <h1>{heroName}</h1>
+                    <p>Manage your identity, security, and preferences across Clean Kitchen.</p>
+                    <div className="heroMeta">
+                      <span>{userDoc.email}</span>
+                      {userDoc.username ? <span>@{userDoc.username}</span> : null}
+                    </div>
+                    <div className="heroButtons">
+                      <Button onClick={doLogout}>Log out</Button>
+                    </div>
                   </div>
                 </div>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  style={{ display: "none" }}
+                />
+              </section>
+
+              <div className="profileGrid">
+                <Card className="profileCard">
+                  <h2 className="cardTitle">Personal details</h2>
+                  <br/>
+                  <p className="cardSubtitle">Update how your name and username appear to others.</p>
+                  <br/>
+                  <div className="grid2">
+                    <Input label="First name" value={firstName} onChange={(e: any) => setFirstName(e.target.value)} />
+                    <Input label="Last name" value={lastName} onChange={(e: any) => setLastName(e.target.value)} />
+                    <div className="field">
+                      <label className="lab">Username</label>
+                      <input
+                        className="inp"
+                        value={username}
+                        onChange={(e) => setUsername(e.currentTarget.value)}
+                        placeholder="yourname"
+                      />
+                      <div className="muted small">
+                        {checkingUname ? "Checking..." : unameMsg ?? "3-20 chars: a-z, 0-9, . _ -"}
+                      </div>
+                    </div>
+                    <Input label="UID" value={userDoc.uid} readOnly />
+                  </div>
+                  <div className="actionsRow">
+                    <Button onClick={saveProfile} disabled={busySave}>
+                      {busySave ? "Saving..." : "Save details"}
+                    </Button>
+                  </div>
+                </Card>
+
+                <Card className="profileCard">
+                  <h2 className="cardTitle">Account & security</h2>
+                  <br/>
+                  <p className="cardSubtitle">Maintain your email address and review sign-in providers.</p>
+                  <br/>
+                  <div className="grid2">
+                    <Input label="Current email" value={userDoc.email} readOnly />
+                    <div className="field">
+                      <label className="lab">New email</label>
+                      <input className="inp" value={newEmail} onChange={(e) => setNewEmail(e.currentTarget.value)} />
+                    </div>
+                    <div className="field">
+                      <label className="lab">Current password (for re-auth)</label>
+                      <input
+                        className="inp"
+                        type="password"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.currentTarget.value)}
+                      />
+                    </div>
+                    <div className="field">
+                      <label className="lab">Providers</label>
+                      <div className="providerRow">
+                        {providers.length
+                          ? providers.map((p) => (
+                              <span key={p} className="providerPill">
+                                {p}
+                              </span>
+                            ))
+                          : <span className="muted">-</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <br/>
+                  <div className="actionsRow">
+                    <Button variant="secondary" onClick={sendVerify}>
+                      Send verification
+                    </Button>
+                    <Button variant="secondary" onClick={sendReset}>
+                      Send password reset
+                    </Button>
+                    <Button onClick={updateEmail} disabled={busyEmail}>
+                      {busyEmail ? "Updating..." : "Update email"}
+                    </Button>
+                  </div>
+                </Card>
+
+                <Card className="profileCard span2">
+                  <h2 className="cardTitle">Preferences</h2>
+                  <br/>
+                  <p className="cardSubtitle">Choose how Clean Kitchen should look and notify you.</p>
+                  <div className="themeBlock">
+                    <ThemePicker />
+                  </div>
+                  <div className="grid2">
+                    <div className="field">
+                      <label className="lab">Units</label>
+                      <div className="chips">
+                        {(["metric", "imperial"] as const).map((u) => (
+                          <button
+                            key={u}
+                            type="button"
+                            className={`chip ${units === u ? "on" : ""}`}
+                            onClick={() => setUnits(u)}
+                          >
+                            {u}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="field">
+                      <label className="lab">Email notifications</label>
+                      <label className="switch">
+                        <input
+                          type="checkbox"
+                          checked={emailNotifications}
+                          onChange={(e) => setEmailNotifications(e.currentTarget.checked)}
+                        />
+                        <span />
+                      </label>
+                    </div>
+                  </div>
+                  <div className="actionsRow">
+                    <Button onClick={saveProfile} disabled={busySave}>
+                      {busySave ? "Saving..." : "Save preferences"}
+                    </Button>
+                  </div>
+                </Card>
+
+                <Card className="profileCard dangerCard span2">
+                  <h2 className="cardTitle">Danger zone</h2>
+                  <br />
+                  <p className="cardSubtitle">
+                    Deleting your account removes your profile and signs you out. Usernames are retained to prevent impersonation.
+                  </p>
+                  <div className="actionsRow">
+                    <Button variant="secondary" onClick={() => setShowDelete(true)}>
+                      Delete my account...
+                    </Button>
+                  </div>
+                </Card>
               </div>
-            </div>
-          ) : null}
-        </>
+
+              {showDelete ? (
+                <div className="ov" role="dialog" aria-modal="true" onClick={() => setShowDelete(false)}>
+                  <div className="box" onClick={(e) => e.stopPropagation()}>
+                    <div className="bh">
+                      <div className="bt">Confirm delete</div>
+                      <button className="x" onClick={() => setShowDelete(false)}>
+                        &times;
+                      </button>
+                    </div>
+                    <div className="body">
+                      <p>
+                        Type <strong>DELETE</strong> to confirm. You may need to re-login if your session is old.
+                      </p>
+                      <input
+                        className="inp"
+                        value={confirmText}
+                        onChange={(e) => setConfirmText(e.currentTarget.value)}
+                        placeholder="DELETE"
+                      />
+                      <div className="actionsRow">
+                        <Button variant="secondary" onClick={() => setShowDelete(false)}>
+                          Cancel
+                        </Button>
+                        <Button onClick={doDeleteAccount} disabled={busyDelete || confirmText !== "DELETE"}>
+                          {busyDelete ? "Deleting..." : "Delete account"}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          );
+        })()
       ) : (
-        <div className="p">Profile not found.</div>
+        <div className="emptyState">Profile not found.</div>
       )}
 
-
       <style jsx>{`
-        .wrap { max-width: 960px; margin: 0 auto; padding: 24px; }
-        .headerRow { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-        .title { font-size: 28px; font-weight: 800; margin: 0 0 12px; }
-
-        .section { margin-bottom: 18px; }
-        .h2 { font-size: 18px; font-weight: 700; margin: 0 0 10px; }
-
-        .row { display: flex; gap: 16px; }
-        .aic{ align-items: center; }
-        .col { display: flex; flex-direction: column; gap: 10px; }
-        .actions { display: flex; gap: 10px; justify-content:flex-end; margin-top: 8px; }
-
-        .avatar { width: 72px; height: 72px; border-radius: 999px; object-fit: cover; border: 1px solid var(--border); }
-
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
-        @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } .row{flex-direction:column; align-items:flex-start;} }
-
-        .ok { background: color-mix(in oklab, #10b981 15%, transparent); color: #065f46; border: 1px solid color-mix(in oklab, #10b981 35%, transparent); border-radius: 8px; padding: 8px 10px; font-size: 13px; margin: 8px 0; }
-        .bad { background: color-mix(in oklab, #ef4444 15%, transparent); color: #7f1d1d; border: 1px solid color-mix(in oklab, #ef4444 35%, transparent); border-radius: 8px; padding: 8px 10px; font-size: 13px; margin: 8px 0; }
-
-        .muted { color: var(--muted); }
-        .small { font-size:12px; }
-
-        .field{ display:flex; flex-direction:column; gap:6px; }
-        .lab{ font-size:.9rem; color:var(--text); font-weight:600; }
-        .inp{ border:1px solid var(--border); background:var(--bg2); color:var(--text); border-radius:12px; padding:10px 12px; }
-
-        .chips{display:flex;gap:8px;flex-wrap:wrap}
-        .chip{border:1px solid var(--border);background:var(--bg2);color:var(--text);border-radius:999px;padding:6px 10px;cursor:pointer}
-        .chip.on{background:var(--primary);color:var(--primary-contrast);border-color:transparent}
-
-        .switch{position:relative;width:48px;height:28px;display:inline-block}
-        .switch input{display:none}
-        .switch span{position:absolute;inset:0;background:var(--border);border-radius:999px;transition:.2s}
-        .switch span:after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;background:var(--bg2);border:1px solid var(--border);border-radius:999px;transition:.2s}
-        .switch input:checked + span{background:var(--primary)}
-        .switch input:checked + span:after{transform:translateX(20px)}
-
-        .danger{border:1px solid color-mix(in oklab, #ef4444 35%, var(--border));background:var(--card-bg)}
-
-        /* Overlay */
-        .ov{position:fixed;inset:0;background:rgba(2,6,23,.55);display:grid;place-items:center;padding:16px;z-index:2200}
-        .box{width:100%;max-width:520px;background:var(--card-bg);border-radius:16px;border:1px solid var(--border);overflow:hidden}
-        .bh{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding:10px 12px}
-        .bt{font-weight:800}
-        .x{border:none;background:var(--primary);color:var(--primary-contrast);border-radius:10px;padding:4px 10px;cursor:pointer}
-        .body{padding:12px}
+        .profilePage {
+          max-width: 1100px;
+          margin: 0 auto;
+          padding: 24px 0 120px;
+          display: grid;
+          gap: 24px;
+        }
+        .notice {
+          border-radius: 12px;
+          padding: 10px 14px;
+          font-size: 13px;
+        }
+        .ok {
+          background: color-mix(in oklab, #10b981 18%, transparent);
+          color: #065f46;
+          border: 1px solid color-mix(in oklab, #10b981 35%, transparent);
+        }
+        .bad {
+          background: color-mix(in oklab, #ef4444 18%, transparent);
+          color: #7f1d1d;
+          border: 1px solid color-mix(in oklab, #ef4444 35%, transparent);
+        }
+        .loading, .emptyState {
+          text-align: center;
+          padding: 48px 16px;
+          border: 1px dashed var(--border);
+          border-radius: 18px;
+        }
+        .profileHero {
+          position: relative;
+        }
+        .heroCard {
+          border-radius: 26px;
+          border: 1px solid var(--border);
+          background: linear-gradient(135deg, color-mix(in oklab, var(--bg2) 80%, transparent), var(--bg));
+          box-shadow: 0 20px 50px rgba(15, 23, 42, 0.12);
+          padding: 24px;
+          display: grid;
+          grid-template-columns: minmax(0, 240px) 1fr;
+          gap: 24px;
+        }
+        .avatarColumn {
+          display: grid;
+          gap: 12px;
+          align-content: start;
+        }
+        .avatarWrap {
+          position: relative;
+          width: 140px;
+          height: 140px;
+          border-radius: 32px;
+          overflow: hidden;
+          box-shadow: 0 14px 36px rgba(15, 23, 42, 0.22);
+        }
+        .avatarWrap img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        .avatarTrigger {
+          position: absolute;
+          inset: auto 0 0 0;
+          border: none;
+          background: rgba(15, 23, 42, 0.65);
+          color: #fff;
+          font-size: 12px;
+          font-weight: 600;
+          padding: 6px 0;
+          cursor: pointer;
+        }
+        .avatarActions {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .avatarHint {
+          font-size: 12px;
+        }
+        .heroInfo {
+          display: grid;
+          gap: 14px;
+          align-content: start;
+        }
+        .eyebrow {
+          font-size: 12px;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+          color: var(--muted);
+        }
+        .heroInfo h1 {
+          margin: 0;
+          font-size: clamp(28px, 4vw, 36px);
+          letter-spacing: -0.02em;
+        }
+        .heroInfo p {
+          margin: 0;
+          color: var(--muted);
+          font-size: 14px;
+          max-width: 420px;
+        }
+        .heroMeta {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+          font-size: 13px;
+          color: var(--muted);
+        }
+        .heroMeta span {
+          border: 1px solid var(--border);
+          padding: 6px 10px;
+          border-radius: 999px;
+          background: var(--bg2);
+        }
+        .heroButtons {
+          display: flex;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .profileGrid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 18px;
+        }
+        .profileCard {
+          display: grid;
+          gap: 16px;
+        }
+        .span2 {
+          grid-column: span 2;
+        }
+        .cardTitle {
+          margin: 0;
+          font-size: 20px;
+          font-weight: 700;
+        }
+        .cardSubtitle {
+          margin: -8px 0 0;
+          color: var(--muted);
+          font-size: 13px;
+        }
+        .grid2 {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 14px 16px;
+        }
+        .field {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .lab {
+          font-size: 0.9rem;
+          color: var(--text);
+          font-weight: 600;
+        }
+        .inp {
+          border: 1px solid var(--border);
+          background: var(--bg2);
+          color: var(--text);
+          border-radius: 12px;
+          padding: 10px 12px;
+        }
+        .small {
+          font-size: 12px;
+        }
+        .muted {
+          color: var(--muted);
+        }
+        .chips {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .chip {
+          border: 1px solid var(--border);
+          background: var(--bg2);
+          color: var(--text);
+          border-radius: 999px;
+          padding: 6px 12px;
+          cursor: pointer;
+          font-weight: 600;
+        }
+        .chip.on {
+          background: var(--primary);
+          color: var(--primary-contrast);
+          border-color: transparent;
+        }
+        .switch {
+          position: relative;
+          width: 52px;
+          height: 28px;
+          display: inline-block;
+        }
+        .switch input {
+          display: none;
+        }
+        .switch span {
+          position: absolute;
+          inset: 0;
+          background: var(--border);
+          border-radius: 999px;
+          transition: 0.2s;
+        }
+        .switch span:after {
+          content: "";
+          position: absolute;
+          top: 3px;
+          left: 3px;
+          width: 22px;
+          height: 22px;
+          background: var(--bg2);
+          border: 1px solid var(--border);
+          border-radius: 999px;
+          transition: 0.2s;
+        }
+        .switch input:checked + span {
+          background: var(--primary);
+        }
+        .switch input:checked + span:after {
+          transform: translateX(22px);
+        }
+        .actionsRow {
+          display: flex;
+          justify-content: flex-end;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .themeBlock {
+          padding: 12px 0;
+          border-bottom: 1px dashed var(--border);
+        }
+        .providerRow {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .providerPill {
+          padding: 4px 10px;
+          border-radius: 999px;
+          border: 1px solid var(--border);
+          font-size: 12px;
+        }
+        .dangerCard {
+          border: 1px solid color-mix(in oklab, #ef4444 35%, var(--border));
+          background: color-mix(in oklab, #ef4444 4%, var(--card-bg));
+        }
+        .ov {
+          position: fixed;
+          inset: 0;
+          background: rgba(2, 6, 23, 0.55);
+          display: grid;
+          place-items: center;
+          padding: 16px;
+          z-index: 2200;
+        }
+        .box {
+          width: 100%;
+          max-width: 520px;
+          background: var(--card-bg);
+          border-radius: 18px;
+          border: 1px solid var(--border);
+          overflow: hidden;
+          box-shadow: 0 40px 60px rgba(15, 23, 42, 0.35);
+        }
+        .bh {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          border-bottom: 1px solid var(--border);
+          padding: 12px 16px;
+        }
+        .bt {
+          font-weight: 800;
+        }
+        .x {
+          border: none;
+          background: transparent;
+          color: var(--muted);
+          font-size: 20px;
+          cursor: pointer;
+        }
+        .body {
+          padding: 16px;
+          display: grid;
+          gap: 12px;
+        }
+        @media (max-width: 900px) {
+          .heroCard {
+            grid-template-columns: 1fr;
+            text-align: center;
+          }
+          .avatarColumn {
+            justify-items: center;
+          }
+          .heroInfo {
+            text-align: center;
+          }
+          .heroButtons {
+            justify-content: center;
+          }
+        }
+        @media (max-width: 768px) {
+          .profilePage {
+            padding: 16px 0 96px;
+          }
+          .profileGrid {
+            grid-template-columns: 1fr;
+          }
+          .span2 {
+            grid-column: span 1;
+          }
+          .grid2 {
+            grid-template-columns: 1fr;
+          }
+          .actionsRow {
+            justify-content: flex-start;
+          }
+        }
       `}</style>
     </main>
   );
 }
+
+
+
+
+
+

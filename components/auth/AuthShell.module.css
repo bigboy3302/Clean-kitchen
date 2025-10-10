@@ -7,6 +7,7 @@
     radial-gradient(900px 400px at 10% -10%, rgba(15,23,42,.06), transparent 60%),
     radial-gradient(900px 400px at 110% 110%, rgba(15,23,42,.06), transparent 60%),
     var(--bg);
+  overflow: hidden;
 }
 
 .card {
@@ -29,4 +30,8 @@
   border-top: 1px dashed var(--border);
   color: var(--muted);
   font-size: 14px;
+}
+
+@media (max-width: 640px) {
+  .wrap { padding: 18px 16px; }
 }

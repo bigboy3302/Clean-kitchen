@@ -34,6 +34,26 @@ export default function RegisterPage() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const bodyStyle = document.body.style;
+    const htmlStyle = document.documentElement.style;
+    const prevBodyOverflow = bodyStyle.overflow;
+    const prevBodyPadding = bodyStyle.paddingBottom;
+    const prevHtmlOverflow = htmlStyle.overflow;
+
+    bodyStyle.overflow = "hidden";
+    bodyStyle.paddingBottom = "0";
+    htmlStyle.overflow = "hidden";
+
+    return () => {
+      bodyStyle.overflow = prevBodyOverflow;
+      bodyStyle.paddingBottom = prevBodyPadding;
+      htmlStyle.overflow = prevHtmlOverflow;
+    };
+  }, []);
+
+  useEffect(() => {
     if (cooldown <= 0 && timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;

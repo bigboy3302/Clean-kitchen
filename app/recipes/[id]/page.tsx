@@ -241,22 +241,6 @@ export default function RecipePublicPage() {
               </ol>
             )}
           </section>
-
-          <section className="gallery">
-            <h2 className="h2">Gallery</h2>
-            {gallery.length === 0 ? (
-              <p className="muted">No gallery photos.</p>
-            ) : (
-              <div className="gGrid">
-                {gallery.map((g) => (
-                  <figure key={g.id} className="gItem">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={g.url} alt="" />
-                  </figure>
-                ))}
-              </div>
-            )}
-          </section>
         </article>
       </section>
 

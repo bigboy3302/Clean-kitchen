@@ -5,6 +5,7 @@ import type { Metadata, Viewport } from "next";
 import ThemeScript from "@/components/theme/ThemeScript";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import FabNav from "@/components/nav/FabNav";
+import ExpiryBell from "@/components/nav/ExpiryBell";
 import EnsureUserDoc from "@/components/auth/EnsureUserDoc";
 import BottomNav from "@/components/nav/BottomNav";
 
@@ -17,7 +18,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#0f172a", 
+  themeColor: "#0f172a",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -29,8 +30,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <EnsureUserDoc />
           <header className="ck-navbar">
             <div className="ck-navbar-inner">
-              <div aria-hidden />
+              {/* Put nav first (left) */}
               <FabNav />
+              {/* Put bell second (right) */}
+              <ExpiryBell className="ck-bell-right" />
             </div>
           </header>
 

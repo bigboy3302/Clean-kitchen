@@ -331,3 +331,6 @@ img, video { max-width: 100%; height: auto; }
   /* tiny emphasis on active icon */
   filter: saturate(1.2);
 }
+.ck-navbar-inner .ck-bell-right {
+  justify-self: end;
+}
