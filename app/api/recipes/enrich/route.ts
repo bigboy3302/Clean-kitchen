@@ -1,4 +1,4 @@
-// app/api/recipes/enrich/route.ts
+
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -28,7 +28,6 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "missing-rapidapi-key" }, { status: 500 });
     }
 
-    // Spoonacular: /recipes/{id}/information
     const url = `https://${HOST}/recipes/${encodeURIComponent(id)}/information`;
 
     const upstream = await fetch(url, {
