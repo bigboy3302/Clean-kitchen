@@ -1,5 +1,4 @@
-﻿/* app/pantry/page.tsx */
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FirebaseError } from "firebase/app";
@@ -20,10 +19,8 @@ import Fridge from "@/components/pantry/Fridge";
 import TrashCan from "@/components/pantry/TrashCan";
 import HealthCoach from "@/components/pantry/HealthCoach";
 
-/* ---------- TS helpers ---------- */
 type TSLike = Timestamp | { seconds: number; nanoseconds: number } | Date | null | undefined;
 
-/* ---------- utilities ---------- */
 const looksLikeBarcode = (s: string) => /^\d{6,}$/.test(s);
 const capFirst = (s: string) => s.replace(/^\p{L}/u, (m) => m.toUpperCase());
 const todayStr = () => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`; };
@@ -60,8 +57,6 @@ function normalizeProductName(raw: string): string {
     capFirst(s.split(" ").find(Boolean) || original)
   );
 }
-
-/* ---------- page-level item type ---------- */
 type PantryItemPage = {
   id: string;
   uid?: string;
@@ -74,7 +69,6 @@ type PantryItemPage = {
   nutrition?: NutritionInfo | null;
 };
 
-/* ---------- consumption log type ---------- */
 type ConsumptionLog = {
   id: string;
   uid: string;
@@ -91,28 +85,23 @@ type ConsumptionLog = {
 export default function PantryPage() {
   const router = useRouter();
 
-  // add-form
   const [name, setName] = useState("");
   const [qty, setQty] = useState<number>(1);
   const [date, setDate] = useState<string>("");
   const [barcode, setBarcode] = useState<string>("");
 
-  // scanner
   const [scannerKey, setScannerKey] = useState(0);
   const [scannerAutoStart, setScannerAutoStart] = useState(false);
 
-  // nutrition (for add form)
   const [nutrition, setNutrition] = useState<NutritionInfo | null>(null);
   const [nutriBusy, setNutriBusy] = useState(false);
   const [nutriErr, setNutriErr] = useState<string | null>(null);
 
-  // state
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [items, setItems] = useState<PantryItemPage[]>([]);
   const stopRef = useRef<null | (() => void)>(null);
 
-  // consumption logs
   const [logs, setLogs] = useState<ConsumptionLog[]>([]);
 
   const minDate = todayStr();
@@ -121,13 +110,11 @@ export default function PantryPage() {
   const [fridgeOpen, setFridgeOpen] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
 
-  /* auth + live items + live logs */
   useEffect(() => {
     const stopAuth = onAuthStateChanged(auth, (u) => {
       if (stopRef.current) { stopRef.current(); stopRef.current = null; }
       if (!u) { router.replace("/auth/login"); setItems([]); setLogs([]); return; }
 
-      // pantry items
       const qy = query(
         collection(db, "pantryItems"),
         where("uid", "==", u.uid),
@@ -154,7 +141,6 @@ export default function PantryPage() {
     return () => { if (stopRef.current) stopRef.current(); stopAuth(); };
   }, [router]);
 
-  /* nutrition lookup (barcode) for add form */
   useEffect(() => {
     const id = setTimeout(async () => {
       if (!barcode) { setNutrition(null); setNutriErr(null); return; }
@@ -178,7 +164,6 @@ export default function PantryPage() {
     setScannerAutoStart(false);
   }
 
-  /* add / merge */
   const isPast = (s: string) => !!s && s < minDate;
 
   async function addOrMergeItem() {
@@ -199,7 +184,6 @@ export default function PantryPage() {
 
       const nameKey = cleanedName.toLowerCase();
 
-      // match by barcode first
       let existingId: string | null = null;
       if (barcode) {
         const s1 = await getDocs(query(
@@ -210,7 +194,7 @@ export default function PantryPage() {
         ));
         if (!s1.empty) existingId = s1.docs[0].id;
       }
-      // else by nameKey
+
       if (!existingId) {
         const s2 = await getDocs(query(
           collection(db, "pantryItems"),
@@ -243,7 +227,6 @@ export default function PantryPage() {
         });
       }
 
-      // reset + quick fridge pop
       setName(""); setQty(1); setDate(""); setBarcode(""); setNutrition(null); setNutriErr(null);
       setScannerAutoStart(false); setScannerKey((k) => k + 1);
       setFridgeOpen(true); setTimeout(()=>setFridgeOpen(false), 1200);
@@ -279,7 +262,6 @@ export default function PantryPage() {
     }
   }
 
-  /* split */
   const active: PantryItemPage[] = [];
   const expired: PantryItemPage[] = [];
   items.forEach((it) => {
@@ -288,7 +270,6 @@ export default function PantryPage() {
     else active.push(it);
   });
 
-  /* for Fridge/TrashCan */
   const fridgeItems = active.map((it) => ({
     id: it.id, uid: it.uid, name: it.name, quantity: it.quantity,
     expiresAt: it.expiresAt ?? null, barcode: it.barcode ?? null, nutrition: it.nutrition ?? null,
@@ -298,7 +279,6 @@ export default function PantryPage() {
     expiresAt: it.expiresAt ?? null, barcode: it.barcode ?? null, nutrition: it.nutrition ?? null,
   }));
 
-  /* ---------- CONSUMPTION: write + totals ---------- */
   async function logConsumptionForItem(it: PantryItemPage, payload: { grams: number; nutrients: { sugars_g: number; satFat_g: number; sodium_g: number; kcal: number }}) {
     const u = auth.currentUser;
     if (!u) { router.replace("/auth/login"); return; }
@@ -319,7 +299,6 @@ export default function PantryPage() {
     }
   }
 
-  // Aggregate logs -> week/month
   const totalsWeek = useMemo(() => {
     const out = { sugars_g: 0, satFat_g: 0, sodium_g: 0, kcal: 0 };
     const since = new Date(); since.setDate(since.getDate() - 7);
@@ -348,7 +327,6 @@ export default function PantryPage() {
 
   return (
     <main className="wrap">
-      {/* HERO */}
       <section className="hero">
         <div className="heroInner">
           <div className="heroLeft">
@@ -359,26 +337,23 @@ export default function PantryPage() {
         </div>
       </section>
 
-      {/* QUICK STATS */}
       <section className="stats">
         <div className="stat"><div className="sTop"><span className="dot dot-ok" /> Active</div><div className="sNum">{active.length}</div></div>
         <div className="stat"><div className="sTop"><span className="dot dot-warn" /> Expired</div><div className="sNum">{expired.length}</div></div>
         <div className="stat"><div className="sTop"><span className="dot" /> Total</div><div className="sNum">{items.length}</div></div>
       </section>
 
-      {/* HEALTH COACH */}
       <HealthCoach
         week={{ title: "This week", totals: totalsWeek }}
         month={{ title: "This month", totals: totalsMonth }}
       />
 
-      {/* ADD PRODUCT */}
       <section className="card addCard">
         <div className="addHead">
-          <div className="addIcon" aria-hidden>ā˛•</div>
+          <div className="addIcon" aria-hidden>+</div>
           <div>
             <div className="addTitle">Add product</div>
-            <div className="addSub">Scan a barcode or type manually. Weā€™ll merge duplicates automatically.</div>
+            <div className="addSub">Scan a barcode or enter it manually — we’ll merge duplicates automatically.</div>
           </div>
         </div>
 
@@ -432,7 +407,6 @@ export default function PantryPage() {
         </div>
       </section>
 
-      {/* ACTIVE + FRIDGE */}
       <section className="list">
         <div className="twoCol">
           <aside className="leftCol">
@@ -472,7 +446,6 @@ export default function PantryPage() {
         </div>
       </section>
 
-      {/* EXPIRED + TRASHCAN */}
       <section className="list" style={{ marginTop: 20 }}>
         <div className="twoCol">
           <aside className="leftCol">
@@ -513,22 +486,28 @@ export default function PantryPage() {
       <style jsx>{`
         .wrap { max-width: 1120px; margin: 0 auto; padding: 20px 16px 96px; }
 
-        /* ---------- HERO ---------- */
         .hero { position: relative; margin: 6px 0 18px; }
         .heroInner { position: relative; border: 1px solid var(--border); background: color-mix(in oklab, var(--bg) 92%, transparent); backdrop-filter: blur(6px); border-radius: 22px; padding: 18px; display: grid; grid-template-columns: 1fr auto; align-items: center; box-shadow: 0 12px 38px rgba(2,6,23,.08); }
+        @media (max-width: 720px){
+          .heroInner{ grid-template-columns:1fr; gap:12px; text-align:center; }
+          .heroRight{ justify-self:center; }
+        }
         .heroLeft { display: grid; gap: 6px; }
         .title { font-size: clamp(26px, 4vw, 36px); font-weight: 900; letter-spacing: -0.02em; margin: 0; color: var(--text); }
         .sub { color: var(--muted); margin: 0; font-size: 15px; }
         .hl { color: var(--text); font-weight: 800; background: linear-gradient(90deg, color-mix(in oklab, var(--primary) 16%, transparent), transparent); padding: 0 6px; border-radius: 8px; }
 
-        /* ---------- LAYOUT ---------- */
         .twoCol{ display:grid; grid-template-columns: 260px 1fr; gap:16px; align-items:start; }
         .leftCol{ position: relative; }
         @media (min-width: 900px){ .leftCol{ position: sticky; top: 8px; height: fit-content; } }
         .rightCol{ min-width:0; }
         .rightCol.isClosed { display:flex; flex-direction:column; gap:14px; }
+        @media (max-width: 900px){
+          .twoCol{ grid-template-columns:1fr; }
+          .leftCol{ position:static; order:2; width:100%; margin-top:16px; }
+          .rightCol{ order:1; }
+        }
 
-        /* ---------- STATS ---------- */
         .stats { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin: 10px 0 18px; }
         @media (max-width: 560px){ .stats{ grid-template-columns: 1fr; } }
         .stat { border: 1px solid var(--border); background: var(--card-bg); border-radius: 16px; padding: 12px 14px; box-shadow: 0 8px 30px rgba(2,6,23,.06); }
@@ -538,10 +517,8 @@ export default function PantryPage() {
         .dot-warn { background: #f59e0b; }
         .sNum { font-weight: 900; font-size: 24px; line-height: 1; margin-top: 6px; }
 
-        /* ---------- CARD BASE ---------- */
         .card { border: 1px solid var(--border); background: linear-gradient(180deg, color-mix(in oklab, var(--card-bg) 92%, transparent), var(--card-bg)); border-radius: 20px; padding: 16px; box-shadow: 0 14px 40px rgba(2,6,23,.06), 0 2px 10px rgba(2,6,23,.04); }
 
-        /* ---------- ADD CARD ---------- */
         .addCard { margin-bottom: 24px; position: relative; }
         .addHead { display:flex; align-items:center; gap:12px; margin-bottom: 14px; }
         .addIcon { width:36px; height:36px; border-radius:12px; display:grid; place-items:center; background: color-mix(in oklab, var(--primary) 18%, var(--bg2)); border:1px solid var(--border); font-weight:800; box-shadow: 0 6px 16px rgba(2,6,23,.08); }
@@ -559,6 +536,7 @@ export default function PantryPage() {
         .input:active { transform: translateY(1px); }
 
         .barcodeRow { display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:end; }
+        @media (max-width:560px){ .barcodeRow{ grid-template-columns:1fr; } }
         .btn { border:1px solid var(--border); background:var(--bg2); padding:10px 14px; border-radius:12px; cursor:pointer; color: var(--text); font-weight:800; transition: background .2s ease, transform .04s ease; }
         .btn:active{ transform: translateY(1px); }
         .btn.ghost:hover{ background: color-mix(in oklab, var(--bg2) 85%, var(--primary) 15%); }
@@ -575,9 +553,13 @@ export default function PantryPage() {
         @media (max-width:560px){ .nutGrid{ grid-template-columns:1fr; } }
 
         .actions { position: sticky; bottom: -16px; display:flex; gap:12px; justify-content:flex-end; padding-top: 10px; background: linear-gradient(180deg, transparent, var(--bg) 40%); }
+        @media (max-width:600px){
+          .actions{ position:static; padding-top:0; background:none; flex-direction:column; align-items:stretch; gap:8px; }
+          .actions .btn,
+          .actions button{ width:100%; }
+        }
         .error { background: color-mix(in oklab, #ef4444 15%, var(--card-bg)); color:#7f1d1d; border:1px solid color-mix(in oklab, #ef4444 35%, var(--border)); border-radius:10px; padding:8px 10px; font-size:13px; }
 
-        /* ---------- LISTS ---------- */
         .list { margin-top: 18px; }
         .sectionHead { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom: 10px; }
         .secTitle { font-size:16px; font-weight:900; margin: 0; color: var(--text); letter-spacing: -0.01em; }

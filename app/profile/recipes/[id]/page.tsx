@@ -4,11 +4,10 @@ import EditorClient from "./EditorClient";
 import { getAdminDb } from "@/lib/firebaseAdmin";
 import { Timestamp, GeoPoint, DocumentReference } from "firebase-admin/firestore";
 
-/** Recursively convert Firestore Admin types to plain JSON for Client props */
+
 function toPlain(value: any): any {
   if (value == null) return value;
 
-  // Handle Firestore admin SDK types
   if (value instanceof Timestamp) return value.toDate().toISOString();
   if (value instanceof Date) return value.toISOString();
   if (value instanceof GeoPoint) return { lat: value.latitude, lng: value.longitude };
@@ -28,10 +27,9 @@ function toPlain(value: any): any {
 export default async function Page({ params }: { params: { id: string } }) {
   const id = params.id;
 
-  // Get admin Firestore (server-only)
   const adminDb = await getAdminDb();
 
-  // This await suspends the route; if you have app/profile/recipes/[id]/loading.tsx it will show
+  
   const snap = await adminDb.doc(`recipes/${id}`).get();
   if (!snap.exists) return notFound();
 

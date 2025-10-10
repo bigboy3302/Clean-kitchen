@@ -1,4 +1,3 @@
-// lib/recipesApi.ts
 export type Ingredient = { name: string; measure?: string | null };
 
 export type CommonRecipe = {
@@ -18,7 +17,6 @@ type ApiResponse = { ok: boolean; recipes: CommonRecipe[]; error?: string };
 
 async function j<T = any>(url: string): Promise<T> {
   const r = await fetch(url, { cache: "no-store" });
-  // We keep this strict; the server route now aims to always return 200 with ok:true
   if (!r.ok) {
     const txt = await r.text().catch(() => "");
     throw new Error(txt || `HTTP ${r.status} for ${url}`);
@@ -28,7 +26,6 @@ async function j<T = any>(url: string): Promise<T> {
 
 function ensureOk(data: ApiResponse): CommonRecipe[] {
   if (!data.ok) {
-    // Surface a soft, user-friendly error but keep UI running
     console.warn("[recipesApi] backend said not ok:", data.error);
     return [];
   }

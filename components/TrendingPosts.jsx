@@ -11,21 +11,15 @@ import {
   limit as qlimit,
 } from "firebase/firestore";
 
-/**
- * Live Top-5 trending posts by reposts.
- * - Tracks up to MAX_POSTS posts (ordered by createdAt desc).
- * - Subscribes to each post's /reposts subcollection and uses snapshot.size as the truth.
- * - Re-sorts on every change so it never gets stuck when someone unreposts.
- */
+
 export default function TrendingPosts({
-  maxPostsToTrack = 150, // how many recent posts to watch for trending
-  topN = 5,              // how many to show
+  maxPostsToTrack = 150,
+  topN = 5,              
 }) {
-  const [posts, setPosts] = useState([]); // [{id, ...data}]
-  const [repostCounts, setRepostCounts] = useState({}); // { postId: number }
+  const [posts, setPosts] = useState([]); 
+  const [repostCounts, setRepostCounts] = useState({}); 
   const repostUnsubsRef = useRef([]);
 
-  // Load recent posts (live)
   useEffect(() => {
     const qy = query(
       collection(db, "posts"),
@@ -41,9 +35,7 @@ export default function TrendingPosts({
     return () => stop();
   }, [maxPostsToTrack]);
 
-  // For every post, listen to its /reposts and track snapshot.size
   useEffect(() => {
-    // cleanup old listeners
     repostUnsubsRef.current.forEach((fn) => { try { fn(); } catch {} });
     repostUnsubsRef.current = [];
 
@@ -68,10 +60,10 @@ export default function TrendingPosts({
   const top = useMemo(() => {
     const ranked = posts
       .map((p) => ({ post: p, count: repostCounts[p.id] ?? 0 }))
-      .filter((x) => (x.count || 0) > 0) // only show stuff with >0 reposts
+      .filter((x) => (x.count || 0) > 0) 
       .sort((a, b) => {
         if (b.count !== a.count) return b.count - a.count;
-        // tie-breaker: newer first by createdAt
+    
         const ta = toMillis(a.post?.createdAt);
         const tb = toMillis(b.post?.createdAt);
         return tb - ta;

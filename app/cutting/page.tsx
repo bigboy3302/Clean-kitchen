@@ -41,7 +41,7 @@ export default function CuttingPage() {
         const p = snap.data() as Profile;
         const bmr = calcBmr(p);
         const tdee = tdeeFromBmr(bmr, 1.5);
-        const cutCals = Math.round(tdee * 0.8); // -20%
+        const cutCals = Math.round(tdee * 0.8); 
         setMacros(splitMacros(cutCals, 2.2, p.weightKg));
       }
     }

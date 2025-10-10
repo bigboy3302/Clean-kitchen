@@ -1,4 +1,3 @@
-// components/fitness/WorkoutModal.tsx
 "use client";
 
 import type { Goal } from "@/lib/fitness/calc";
@@ -6,40 +5,46 @@ import type { Exercise } from "@/lib/workouts/types";
 
 type Props = {
   exercise: Exercise;
-  goal?: Goal;             // <-- accept goal (optional)
+  goal?: Goal;
   onClose: () => void;
 };
 
 export default function WorkoutModal({ exercise, goal, onClose }: Props) {
-  function cap(s: string) {
-    return s.length ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+  function cap(value: string) {
+    return value.length ? value.charAt(0).toUpperCase() + value.slice(1) : value;
   }
 
-  // prefer direct gif first; fall back to images; last to placeholder
-  const mediaSrc =
-    exercise.gifUrl ||
-    exercise.imageThumbnailUrl ||
-    exercise.imageUrl ||
-    "/placeholder.png";
+  const mediaSrc = exercise.gifUrl
+    ? `/api/workouts/gif?src=${encodeURIComponent(exercise.gifUrl)}`
+    : exercise.imageThumbnailUrl
+    ? `/api/workouts/gif?src=${encodeURIComponent(exercise.imageThumbnailUrl)}`
+    : exercise.imageUrl
+    ? `/api/workouts/gif?src=${encodeURIComponent(exercise.imageUrl)}`
+    : exercise.id
+    ? `/api/workouts/gif?id=${encodeURIComponent(exercise.id)}`
+    : "/placeholder.png";
 
   return (
     <div className="ov" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet" onClick={(event) => event.stopPropagation()}>
         <div className="head">
           <div className="titleWrap">
             <h3 className="title">{cap(exercise.name)}</h3>
             {goal ? <span className={`goal ${goal}`}>{goal.toUpperCase()}</span> : null}
           </div>
-          <button className="close" onClick={onClose} aria-label="Close">✕</button>
+          <button className="close" onClick={onClose} aria-label="Close">
+            {"\u00d7"}
+          </button>
         </div>
 
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="hero" src={mediaSrc} alt={exercise.name} />
 
         <div className="meta">
           <span className="chip">{cap(exercise.bodyPart)}</span>
-          {exercise.primaryMuscles.slice(0, 2).map((m) => (
-            <span key={m} className="chip alt">{cap(m)}</span>
+          {exercise.primaryMuscles.slice(0, 2).map((muscle) => (
+            <span key={muscle} className="chip alt">
+              {cap(muscle)}
+            </span>
           ))}
           <span className="chip ghost">{cap(exercise.equipment)}</span>
         </div>
@@ -65,9 +70,9 @@ export default function WorkoutModal({ exercise, goal, onClose }: Props) {
         .titleWrap{display:flex;align-items:center;gap:8px}
         .title{margin:0;font-size:18px;font-weight:900;color:var(--text)}
         .goal{border-radius:999px;padding:2px 8px;font-size:11px;font-weight:800}
-        .goal.bulk{background:color-mix(in oklab,var(--primary) 28%,var(--bg2));}
-        .goal.cut{background:color-mix(in oklab,#ef4444 28%,var(--bg2));}
-        .goal.maintain{background:color-mix(in oklab,#10b981 28%,var(--bg2));}
+        .goal.bulk{background:color-mix(in oklab,var(--primary) 28%,var(--bg2))}
+        .goal.cut{background:color-mix(in oklab,#ef4444 28%,var(--bg2))}
+        .goal.maintain{background:color-mix(in oklab,#10b981 28%,var(--bg2))}
         .close{border:0;background:var(--primary);color:var(--primary-contrast);border-radius:10px;padding:6px 10px;font-weight:800;cursor:pointer}
         .hero{width:100%;max-height:420px;object-fit:cover;background:#0b1120}
         .meta{display:flex;gap:6px;flex-wrap:wrap;padding:0 12px}

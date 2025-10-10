@@ -16,7 +16,23 @@ import {
   deleteUser,
   User,
 } from "firebase/auth";
-import { doc, getDoc, runTransaction, setDoc, updateDoc } from "firebase/firestore";
+import type { CollectionReference, QueryDocumentSnapshot } from "firebase/firestore";
+import {
+  collection,
+  collectionGroup,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+  runTransaction,
+  setDoc,
+  startAfter,
+  updateDoc,
+  where,
+  writeBatch,
+} from "firebase/firestore";
 import { ref as sref, uploadBytes, getDownloadURL, listAll, deleteObject } from "firebase/storage";
 
 import ThemePicker from "@/components/theme/ThemePicker";
@@ -240,31 +256,76 @@ export default function ProfilePage() {
     setErr(null);
     setMsg(null);
     setBusySave(true);
-    const uname = slugifyUsername(username);
+    const requestedUsername = slugifyUsername(username);
+    const previousUsername = userDoc.username || null;
+    const previousDisplayName = fullName(userDoc.firstName, userDoc.lastName);
+    const previousAvatar = userDoc.photoURL ?? null;
+    let appliedUsername: string | null = previousUsername;
     try {
       await runTransaction(db, async (trx) => {
         const uref = doc(db, "users", me.uid);
-        
-        if (uname && uname !== userDoc.username) {
-          if (!validUsername(uname)) throw new Error("Username must be 3–20 characters: a–z, 0–9, . _ -");
-          const nref = doc(db, "usernames", uname);
-          const nsnap = await trx.get(nref);
-          if (nsnap.exists()) throw new Error("That username is taken.");
-          trx.set(nref, { uid: me.uid });
-          trx.update(uref, { username: uname });
+
+        const snapshot = await trx.get(uref);
+        const existing = (snapshot.exists() ? snapshot.data() : {}) as { username?: string | null };
+        const currentUsername = existing?.username ?? previousUsername ?? null;
+        let nextUsername = currentUsername;
+
+        if (requestedUsername && requestedUsername !== currentUsername) {
+          if (!validUsername(requestedUsername)) {
+            throw new Error("Username must be 3-20 characters: a-z, 0-9, . _ -");
+          }
+          const newRef = doc(db, "usernames", requestedUsername);
+          const newSnap = await trx.get(newRef);
+          if (newSnap.exists()) throw new Error("That username is taken.");
+          trx.set(newRef, { uid: me.uid });
+          nextUsername = requestedUsername;
         }
+
+        if (currentUsername && currentUsername !== nextUsername) {
+          trx.delete(doc(db, "usernames", currentUsername));
+        }
+
         trx.set(
           uref,
           {
             firstName: firstName.trim() || null,
             lastName: lastName.trim() || null,
-            ...(uname || userDoc.username ? { username: uname || userDoc.username } : {}),
+            username: nextUsername || null,
             prefs: { units, theme, emailNotifications },
           },
           { merge: true }
         );
+        appliedUsername = nextUsername || null;
       });
-      await updateProfile(me, { displayName: fullName(firstName, lastName) || undefined });
+
+      const displayNameNext = fullName(firstName, lastName);
+      await updateProfile(me, { displayName: displayNameNext || undefined });
+
+      const avatarURL = userDoc.photoURL ?? me.photoURL ?? null;
+
+      await setDoc(
+        doc(db, "usersPublic", me.uid),
+        {
+          displayName: displayNameNext || null,
+          username: appliedUsername,
+          avatarURL,
+        },
+        { merge: true }
+      );
+
+      const profileChanged =
+        appliedUsername !== previousUsername ||
+        (displayNameNext || null) !== (previousDisplayName || null) ||
+        avatarURL !== previousAvatar;
+
+      if (profileChanged) {
+        await propagateUserProfile(me.uid, {
+          displayName: displayNameNext || null,
+          username: appliedUsername,
+          avatarURL,
+        });
+      }
+
       setMsg("Profile saved.");
       setUserDoc((prev) =>
         prev
@@ -272,11 +333,13 @@ export default function ProfilePage() {
               ...prev,
               firstName: firstName.trim() || null,
               lastName: lastName.trim() || null,
-              username: slugifyUsername(username) || prev.username || null,
+              username: appliedUsername,
               prefs: { units, theme, emailNotifications },
             }
           : prev
       );
+      setUsername(appliedUsername || "");
+      setUnameMsg(null);
     } catch (e: any) {
       setErr(e?.message ?? "Failed to save profile.");
     } finally {
@@ -947,6 +1010,77 @@ export default function ProfilePage() {
       `}</style>
     </main>
   );
+}
+
+type AuthorUpdate = {
+  displayName: string | null;
+  username: string | null;
+  avatarURL: string | null;
+};
+
+const PROFILE_BATCH_SIZE = 200;
+
+function buildAuthorPatch(uid: string, info: AuthorUpdate) {
+  return {
+    "author.uid": uid,
+    "author.username": info.username ?? null,
+    "author.displayName": info.displayName ?? null,
+    "author.avatarURL": info.avatarURL ?? null,
+    "author.name": info.displayName ?? null,
+  };
+}
+
+async function updateDocsInBatches(colRef: CollectionReference, uid: string, info: AuthorUpdate) {
+  let cursor: QueryDocumentSnapshot | null = null;
+  const patch = buildAuthorPatch(uid, info);
+  while (true) {
+    const base = cursor
+      ? query(colRef, where("uid", "==", uid), orderBy("__name__"), startAfter(cursor), limit(PROFILE_BATCH_SIZE))
+      : query(colRef, where("uid", "==", uid), orderBy("__name__"), limit(PROFILE_BATCH_SIZE));
+    const snap = await getDocs(base);
+    if (snap.empty) break;
+    const batch = writeBatch(db);
+    snap.docs.forEach((docSnap) => {
+      batch.set(docSnap.ref, patch, { merge: true });
+    });
+    await batch.commit();
+    if (snap.size < PROFILE_BATCH_SIZE) break;
+    cursor = snap.docs[snap.docs.length - 1];
+  }
+}
+
+async function updateCollectionGroupInBatches(group: string, uid: string, info: AuthorUpdate) {
+  let cursor: QueryDocumentSnapshot | null = null;
+  const patch = buildAuthorPatch(uid, info);
+  while (true) {
+    const base = cursor
+      ? query(
+          collectionGroup(db, group),
+          where("uid", "==", uid),
+          orderBy("__name__"),
+          startAfter(cursor),
+          limit(PROFILE_BATCH_SIZE)
+        )
+      : query(collectionGroup(db, group), where("uid", "==", uid), orderBy("__name__"), limit(PROFILE_BATCH_SIZE));
+    const snap = await getDocs(base);
+    if (snap.empty) break;
+    const batch = writeBatch(db);
+    snap.docs.forEach((docSnap) => {
+      batch.set(docSnap.ref, patch, { merge: true });
+    });
+    await batch.commit();
+    if (snap.size < PROFILE_BATCH_SIZE) break;
+    cursor = snap.docs[snap.docs.length - 1];
+  }
+}
+
+async function propagateUserProfile(uid: string, info: AuthorUpdate) {
+  const postsRef = collection(db, "posts");
+  const recipesRef = collection(db, "recipes");
+  await updateDocsInBatches(postsRef, uid, info);
+  await updateDocsInBatches(recipesRef, uid, info);
+  await updateCollectionGroupInBatches("comments", uid, info);
+  await updateCollectionGroupInBatches("replies", uid, info);
 }
 
 

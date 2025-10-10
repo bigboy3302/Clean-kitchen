@@ -1,4 +1,3 @@
-/* components/pantry/PantryCard.tsx */
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -84,14 +83,12 @@ export default function PantryCard({ item, onSave, onDelete, onConsume }: Props)
     return `${y}-${m}-${day}`;
   }, [d]);
 
-  // EDIT modal
   const [editOpen, setEditOpen] = useState(false);
   const [name, setName] = useState(item.name);
   const [qty, setQty] = useState<number>(item.quantity || 1);
   const [exp, setExp] = useState<string>(expiresStr !== "—" ? expiresStr : "");
   const firstInputRef = useRef<HTMLInputElement | null>(null);
 
-  // NUTRITION modal
   const n = item.nutrition || {};
   const hasNutrition =
     !!item.barcode &&
@@ -111,11 +108,9 @@ export default function PantryCard({ item, onSave, onDelete, onConsume }: Props)
 
   const [nutriOpen, setNutriOpen] = useState(false);
 
-  // CONSUME modal
   const [consumeOpen, setConsumeOpen] = useState(false);
   const [consumeGrams, setConsumeGrams] = useState<number>(item.lastConsumedGrams ?? 100);
 
-  // DELETE confirm dialog
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
@@ -131,16 +126,13 @@ export default function PantryCard({ item, onSave, onDelete, onConsume }: Props)
     };
   }, [consumeGrams, n.sugars100g, n.satFat100g, n.sodium100g, n.kcalPer100g]);
 
-  /* sync on live update */
   useEffect(() => {
     setName(item.name);
     setQty(item.quantity || 1);
     setExp(expiresStr !== "—" ? expiresStr : "");
     setConsumeGrams(item.lastConsumedGrams ?? 100);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id, item.name, item.quantity, expiresStr, item.lastConsumedGrams]);
 
-  /* modal UX */
   useEffect(() => {
     const anyModal = editOpen || nutriOpen || consumeOpen;
     if (!anyModal) return;

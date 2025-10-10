@@ -1,4 +1,3 @@
-// lib/firebase/config.ts
 import type { FirebaseOptions } from "firebase/app";
 
 function readFromNextPublic(): Partial<FirebaseOptions> {
@@ -13,7 +12,6 @@ function readFromNextPublic(): Partial<FirebaseOptions> {
 }
 
 function readFromFirebaseHosting(): Partial<FirebaseOptions> {
-  // Firebase App Hosting injects this JSON string (you can see it in your logs)
   const raw = process.env.FIREBASE_WEBAPP_CONFIG;
   if (!raw) return {};
   try {
@@ -27,19 +25,15 @@ function readFromFirebaseHosting(): Partial<FirebaseOptions> {
       appId: parsed.appId,
     };
   } catch {
-    // Don’t crash builds on malformed env; just ignore
     return {};
   }
 }
 
-/**
- * Returns a complete Firebase web config if available, otherwise null.
- * NEXT_PUBLIC_* wins over FIREBASE_WEBAPP_CONFIG when both exist.
- */
+
 export function getFirebaseClientConfig(): FirebaseOptions | null {
   const fromNext = readFromNextPublic();
   const fromHosting = readFromFirebaseHosting();
-  const cfg: Partial<FirebaseOptions> = { ...fromHosting, ...fromNext }; // prefer NEXT_PUBLIC_*
+  const cfg: Partial<FirebaseOptions> = { ...fromHosting, ...fromNext }; 
 
   const needed = [
     cfg.apiKey,

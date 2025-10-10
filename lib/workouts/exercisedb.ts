@@ -1,10 +1,10 @@
 export type ExerciseDbItem = {
-  id: string;            // numeric string
+  id: string;            
   name: string;
   bodyPart: string;
   target: string;
   equipment: string;
-  gifUrl: string;        // full cloudfront url
+  gifUrl: string;        
 };
 
 function headers() {
@@ -27,12 +27,10 @@ async function fetchJSON<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** returns list of targets (muscles), e.g. ["abdominals","biceps",...] */
 export async function listTargets(): Promise<string[]> {
   return fetchJSON<string[]>(`/exercises/targetList`);
 }
 
-/** returns list of body parts if you ever need it */
 export async function listBodyParts(): Promise<string[]> {
   return fetchJSON<string[]>(`/exercises/bodyPartList`);
 }
@@ -48,7 +46,7 @@ export async function fetchExercises(options: {
   let list: ExerciseDbItem[];
 
   if (search) {
-    // ExerciseDB does exact/substring search by name
+   
     list = await fetchJSON<ExerciseDbItem[]>(`/exercises/name/${encodeURIComponent(search)}`);
   } else if (target) {
     list = await fetchJSON<ExerciseDbItem[]>(`/exercises/target/${encodeURIComponent(target)}`);
@@ -58,7 +56,6 @@ export async function fetchExercises(options: {
     list = await fetchJSON<ExerciseDbItem[]>(`/exercises`);
   }
 
-  // local paginate
   const start = Math.max(0, Number(offset) || 0);
   const end = start + Math.max(1, Math.min(40, Number(limit) || 12));
   return list.slice(start, end);

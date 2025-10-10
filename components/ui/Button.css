@@ -9,7 +9,6 @@
 .btn--md { padding: 10px 16px; font-size: 14px; }
 .btn--sm { padding: 8px 12px; font-size: 13px; }
 
-/* Variants */
 .btn--primary {
   background: var(--brand);
   color: #fff;

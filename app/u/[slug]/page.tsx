@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
@@ -16,7 +16,55 @@ const toMillis = (ts: AnyTs) =>
 
 function trim(str: string, n: number) {
   if (!str) return "";
-  return str.length <= n ? str : str.slice(0, n - 1) + "…";
+  const normalized = String(str);
+  if (normalized.length <= n) return normalized;
+  const slicePoint = Math.max(0, n - 3);
+  return `${normalized.slice(0, slicePoint).trimEnd()}...`;
+}
+
+function firstMediaUrl(value: unknown): string | null {
+  if (!value) return null;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+  if (typeof value === "object") {
+    const candidate =
+      (value as { url?: string; src?: string; downloadURL?: string; href?: string }).url ??
+      (value as any).src ??
+      (value as any).downloadURL ??
+      (value as any).href;
+    if (typeof candidate === "string") {
+      const trimmed = candidate.trim();
+      if (trimmed) return trimmed;
+    }
+  }
+  return null;
+}
+
+function pickRecipeCover(recipe: unknown): string | null {
+  if (!recipe || typeof recipe !== "object") return null;
+  const keys = ["imageURL", "image", "imageUrl", "cover", "coverUrl", "coverURL"];
+  for (const key of keys) {
+    const found = firstMediaUrl((recipe as Record<string, unknown>)[key]);
+    if (found) return found;
+  }
+  const gallery = (recipe as Record<string, unknown>).gallery;
+  if (Array.isArray(gallery)) {
+    for (const item of gallery) {
+      const found = firstMediaUrl(item);
+      if (found) return found;
+    }
+  }
+  const images = (recipe as Record<string, unknown>).images;
+  if (Array.isArray(images)) {
+    for (const item of images) {
+      const found = firstMediaUrl(item);
+      if (found) return found;
+    }
+  }
+  const media = (recipe as Record<string, unknown>).media;
+  return firstMediaUrl(media);
 }
 
 export default function PublicProfilePage() {
@@ -29,7 +77,6 @@ export default function PublicProfilePage() {
   const [err, setErr] = useState<string | null>(null);
   const [tab, setTab] = useState<"posts"|"recipes">("recipes");
 
-  // 1) resolve slug -> uid
   useEffect(() => {
     (async () => {
       try {
@@ -47,7 +94,6 @@ export default function PublicProfilePage() {
     })();
   }, [slug]);
 
-  // 2) public header
   useEffect(() => {
     if (!uid) return;
     getDoc(doc(db, "usersPublic", uid))
@@ -64,7 +110,6 @@ export default function PublicProfilePage() {
       .catch(() => {});
   }, [uid]);
 
-  // 3) posts (client-sort to avoid index)
   useEffect(() => {
     if (!uid) return;
     const qy = query(collection(db, "posts"), where("uid","==",uid), fsLimit(300));
@@ -81,10 +126,8 @@ export default function PublicProfilePage() {
       }
     }, (e)=>setErr(e?.message ?? "Failed to load posts."));
     return () => stop();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uid]);
 
-  // 4) recipes (client-sort to avoid index)
   useEffect(() => {
     if (!uid) return;
     const qy = query(collection(db, "recipes"), where("uid","==",uid), fsLimit(300));
@@ -109,7 +152,7 @@ export default function PublicProfilePage() {
   if (!uid) {
     return (
       <main className="wrap">
-        <div className="card">Loading profile…</div>
+        <div className="card">Loading profileâ€¦</div>
         <style jsx>{styles}</style>
       </main>
     );
@@ -119,11 +162,9 @@ export default function PublicProfilePage() {
 
   return (
     <main className="wrap">
-      {/* HEADER */}
       <header className="head">
         <div className="who">
           {profile?.avatarURL ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img className="avatar" src={profile.avatarURL} alt="" />
           ) : (
             <div className="avatar ph">{name[0]?.toUpperCase() || "U"}</div>
@@ -149,27 +190,52 @@ export default function PublicProfilePage() {
             <p className="muted">No recipes yet.</p>
           ) : (
             <ul className="recipeGrid">
-              {sortedRecipes.map((r)=>(
-                <li key={r.id} className="rc">
-                  <Link href={`/recipes/${r.id}`} className="cardLink" aria-label={`Open recipe ${r.title || ""}`}>
-                    <article className="recipeCard">
-                      <div className="media">
-                        {r.imageURL
-                          ? <img src={r.imageURL} alt="" />
-                          : <div className="ph" aria-hidden><svg width="24" height="24" viewBox="0 0 24 24"><path d="M4 5h16v14H4z M8 11a2 2 0 114 0 2 2 0 01-4 0zm10 6l-4.5-6-3.5 4.5L8 13l-4 4h14z" fill="currentColor"/></svg></div>}
-                      </div>
-                      <div className="rcBody">
-                        <h3 className="rcTitle">{trim(r.title || "Untitled recipe", 64)}</h3>
-                        {r.description ? <p className="rcDesc">{trim(r.description, 120)}</p> : null}
-                        <div className="rcMeta">
-                          {r.ingredients?.length ? <span className="badge">{r.ingredients.length} ingredients</span> : <span className="badge secondary">No ingredients</span>}
-                          {r.createdAt ? <span className="muted">{new Date(toMillis(r.createdAt)).toLocaleDateString()}</span> : null}
+              {sortedRecipes.map((r) => {
+                const cover = pickRecipeCover(r);
+                return (
+                  <li key={r.id} className="rc">
+                    <Link href={`/recipes/${r.id}`} className="cardLink" aria-label={`Open recipe ${r.title || ""}`}>
+                      <article className="recipeCard">
+                        <div className="media">
+                          {cover ? (
+                            <img
+                              src={cover}
+                              alt=""
+                              loading="lazy"
+                              onError={(event) => {
+                                event.currentTarget.src = "/placeholder.png";
+                              }}
+                            />
+                          ) : (
+                            <div className="ph" aria-hidden="true">
+                              <svg width="24" height="24" viewBox="0 0 24 24">
+                                <path
+                                  d="M4 5h16v14H4z M8 11a2 2 0 114 0 2 2 0 01-4 0zm10 6l-4.5-6-3.5 4.5L8 13l-4 4h14z"
+                                  fill="currentColor"
+                                />
+                              </svg>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    </article>
-                  </Link>
-                </li>
-              ))}
+                        <div className="rcBody">
+                          <h3 className="rcTitle">{trim(r.title || "Untitled recipe", 64)}</h3>
+                          {r.description ? <p className="rcDesc">{trim(r.description, 120)}</p> : null}
+                          <div className="rcMeta">
+                            {r.ingredients?.length ? (
+                              <span className="badge">{r.ingredients.length} ingredients</span>
+                            ) : (
+                              <span className="badge secondary">No ingredients</span>
+                            )}
+                            {r.createdAt ? (
+                              <span className="muted">{new Date(toMillis(r.createdAt)).toLocaleDateString()}</span>
+                            ) : null}
+                          </div>
+                        </div>
+                      </article>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
@@ -193,7 +259,7 @@ export default function PublicProfilePage() {
                         <div className="pmTitle">{trim(p.text || p.title || "Untitled post", 80)}</div>
                         <div className="pmMeta">
                           <span className="muted">{p.createdAt ? new Date(toMillis(p.createdAt)).toLocaleString() : ""}</span>
-                          {p.reposts ? <span className="badge">↻ {p.reposts}</span> : null}
+                          {p.reposts ? <span className="badge">â†» {p.reposts}</span> : null}
                         </div>
                       </div>
                     </article>
@@ -282,3 +348,8 @@ const styles = `
   .thumb{ width:64px; height:64px; }
 }
 `;
+
+
+
+
+

@@ -1,8 +1,3 @@
-/* styles/skins/app-flare.css
-   Sexy global skin that respects your theme tokens.
-   No hard-coded colors; everything uses CSS variables. */
-
-/* ---- subtle layered background ---- */
 html, body {
   background:
     radial-gradient(1600px 800px at 10% -10%, color-mix(in oklab, var(--primary) 6%, transparent), transparent 45%),
@@ -10,7 +5,6 @@ html, body {
     var(--bg);
 }
 
-/* ---- navbar polish (glass + active-ish hover) ---- */
 .navbar {
   background: color-mix(in oklab, var(--bg2) 86%, transparent);
   border-bottom: 1px solid var(--border);
@@ -28,7 +22,6 @@ html, body {
   border-color: color-mix(in oklab, var(--primary) 35%, var(--border));
 }
 
-/* ---- cards (global) ---- */
 .card {
   background: var(--card-bg);
   border: 1px solid var(--card-border, var(--border));
@@ -39,7 +32,6 @@ html, body {
   box-shadow: 0 14px 38px color-mix(in oklab, #000 12%, transparent), 0 1px 0 color-mix(in oklab, #000 6%, transparent);
 }
 
-/* ---- buttons (matches your Button.tsx class names) ---- */
 .btn {
   border-radius: 14px;
   font-weight: 700;
@@ -69,12 +61,10 @@ html, body {
 }
 .btn.ghost:hover { background: color-mix(in oklab, var(--text) 5%, transparent); }
 
-/* sizes from your Button.tsx */
 .btn.sm { padding: 6px 10px; font-size: .9rem; }
 .btn.md { padding: 8px 14px; font-size: 1rem; }
 .btn.lg { padding: 12px 18px; font-size: 1.05rem; }
 
-/* ---- inputs (shared) ---- */
 input, select, textarea {
   border: 1px solid var(--border);
   background: var(--bg2);
@@ -88,7 +78,6 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 0 0 6px color-mix(in oklab, var(--ring) 20%, transparent);
 }
 
-/* ---- “wave” search field (reusable) ---- */
 .wave-group { position: relative; }
 .wave-group .input {
   font-size: 16px;
@@ -134,7 +123,6 @@ input:focus, select:focus, textarea:focus {
 .wave-group .input:focus ~ .bar:before,
 .wave-group .input:focus ~ .bar:after { width: 50%; }
 
-/* ---- image polish: lighter overlays so photos don’t look black ---- */
 .img-soften {
   position: relative;
   overflow: hidden;
@@ -153,7 +141,6 @@ input:focus, select:focus, textarea:focus {
 }
 .img-soften:hover > img { transform: scale(1.06); }
 
-/* ---- modal glow ---- */
 .overlay { background: color-mix(in oklab, #000 56%, transparent); }
 .modal {
   background: var(--card-bg);
@@ -161,7 +148,6 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 28px 80px color-mix(in oklab, #000 40%, transparent);
 }
 
-/* ---- chips/tags ---- */
 .chip {
   border: 1px solid var(--border);
   background: color-mix(in oklab, var(--primary) 7%, var(--bg2));
@@ -177,7 +163,6 @@ input:focus, select:focus, textarea:focus {
   border-color: var(--primary);
 }
 
-/* ---- sticky topbars on pages ---- */
 .topbar {
   background: var(--bg2);
   border-bottom: 1px solid var(--border);
@@ -185,16 +170,13 @@ input:focus, select:focus, textarea:focus {
   padding-top: 6px; padding-bottom: 6px;
 }
 
-/* ---- subtle section titles ---- */
 .h2, .h3 {
   color: var(--text);
   letter-spacing: .2px;
 }
 
-/* ---- utility: grid container feels airier ---- */
 .container { padding-top: 28px; }
 
-/* ---- ConfirmDialog tune ---- */
 .ov { background: color-mix(in oklab, #000 55%, transparent); }
 .box {
   background: var(--card-bg);

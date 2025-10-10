@@ -6,15 +6,15 @@ import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 let started = false;
 
+type AppCheckGlobal = typeof self & { FIREBASE_APPCHECK_DEBUG_TOKEN?: string | boolean };
+
 export function initAppCheck() {
   if (started) return;
   started = true;
 
- 
   const dbg = process.env.NEXT_PUBLIC_APPCHECK_DEBUG_TOKEN;
   if (process.env.NODE_ENV !== "production") {
-    // @ts-ignore
-    self.FIREBASE_APPCHECK_DEBUG_TOKEN = dbg || true;
+    (self as AppCheckGlobal).FIREBASE_APPCHECK_DEBUG_TOKEN = dbg || true;
     if (dbg) console.log("[AppCheck] Using pinned debug token from .env");
   }
 

@@ -30,16 +30,14 @@ export default function WeeklyPlannerPage() {
   const [err, setErr] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  // per-day inputs
   const [newWorkout, setNewWorkout] = useState<Record<string, string>>({});
   const [newMeal, setNewMeal] = useState<Record<string, string>>({});
 
-  // Initial load: wait for auth, then fetch or create week doc
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const { uid } = await requireSignedIn(); // waits until auth resolves
+        const { uid } = await requireSignedIn();
         if (!alive) return;
         setUid(uid);
 

@@ -23,7 +23,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { auth, db, storage } from "@/lib/firebase";
 import PostCard from "@/components/posts/PostCard";
 
-/* ---------- tiny helpers ---------- */
+
 function getImageDims(file) {
   return new Promise((res, rej) => {
     const img = new Image();
@@ -61,7 +61,6 @@ export default function DashboardPage() {
   const [uid, setUid] = useState(null);
   const [ready, setReady] = useState(false);
 
-  // feed + trending
   const [recentPosts, setRecentPosts] = useState([]);
   const [trending, setTrending] = useState([]);
   const [trendingReposts, setTrendingReposts] = useState({});
@@ -93,7 +92,7 @@ export default function DashboardPage() {
       .map(({ post }) => post);
   }, [trending, trendingReposts]);
 
-  // composer
+ 
   const [openComposer, setOpenComposer] = useState(false);
   const [postText, setPostText] = useState("");
   const [postFiles, setPostFiles] = useState([]);
@@ -114,7 +113,6 @@ export default function DashboardPage() {
     return () => stop();
   }, [router]);
 
-  // recent posts (main feed)
   useEffect(() => {
     const qy = query(
       collection(db, "posts"),
@@ -160,7 +158,6 @@ export default function DashboardPage() {
     };
   }, [trending]);
 
-  // trending by recency (top 5)
   useEffect(() => {
     const tQ = query(
       collection(db, "posts"),
@@ -173,9 +170,7 @@ export default function DashboardPage() {
     return () => stop();
   }, []);
 
-  /* ---------- PostCard handlers ---------- */
   async function handleToggleLike(post, liked) {
-    // verify auth at the moment of click
     const curUid = auth.currentUser?.uid || null;
     if (!curUid) {
       console.warn("Like blocked: no auth user");
@@ -198,7 +193,7 @@ export default function DashboardPage() {
       }
     } catch (e) {
       console.error("[like] failed", { path: likeRef.path, auth: curUid, postId: post.id }, e);
-      throw e; // lets PostCard revert optimistic state
+      throw e; 
     }
   }
 
@@ -269,10 +264,8 @@ export default function DashboardPage() {
   }
 
   async function handleComment() {
-    // dashboard sends user to thread page for full comment UX
   }
 
-  /* ---------- composer ---------- */
   function onPick(e) {
     const list = Array.from(e.target.files || []).slice(0, 4);
     setPostFiles(list);
@@ -292,7 +285,7 @@ export default function DashboardPage() {
     setBusyPost(true);
     setErrPost(null);
     try {
-      // author snapshot (denormalized)
+    
       let author = { username: null, displayName: null, avatarURL: null };
       try {
         const uSnap = await getDoc(doc(db, "users", uid));
@@ -308,18 +301,17 @@ export default function DashboardPage() {
         }
       } catch {}
 
-      // create post doc
+ 
       const postRef = await addDoc(collection(db, "posts"), {
         uid,
         text: text || null,
         media: [],
-        likes: 0,     // optional field; UI uses subcollection counts
-        reposts: 0,   // optional field; UI uses subcollection counts
+        likes: 0,     
+        reposts: 0,   
         createdAt: serverTimestamp(),
         author,
       });
 
-      // upload media (optional)
       if (postFiles.length) {
         const uploaded = [];
         for (const file of postFiles) {
@@ -350,7 +342,7 @@ export default function DashboardPage() {
         await updateDoc(postRef, { media: uploaded });
       }
 
-      // reset composer
+
       setPostText("");
       setPostFiles([]);
       setPreviews([]);
@@ -381,7 +373,6 @@ export default function DashboardPage() {
       </header>
 
       <div className="container grid">
-        {/* MAIN FEED */}
         <section className="main">
           <div className="feed">
             {recentPosts.map((p) => (
@@ -402,7 +393,6 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* SIDEBAR: TRENDING */}
         <aside className="side">
           <div className="panel">
             <div className="panelHead">
@@ -446,7 +436,7 @@ export default function DashboardPage() {
         </aside>
       </div>
 
-      {/* COMPOSER */}
+     
       {openComposer && (
         <div className="backdrop" onClick={() => setOpenComposer(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -497,7 +487,6 @@ export default function DashboardPage() {
       )}
 
       <style jsx>{`
-        /* ---------- theme tokens ---------- */
         :root {
           --bg: #0b0c10;
           --bg-soft: #0f1117;
@@ -522,7 +511,7 @@ export default function DashboardPage() {
           }
         }
 
-        /* ---------- layout ---------- */
+
         .page { color: var(--text); padding-bottom: 80px; }
         .container { max-width: 1120px; margin: 0 auto; padding: 16px; }
         .top { display:flex; align-items:center; justify-content:space-between; }
@@ -540,7 +529,7 @@ export default function DashboardPage() {
           .side { order: -1; }
         }
 
-        /* ---------- buttons/inputs ---------- */
+
         .btn {
           border: 1px solid var(--border);
           background: var(--card);
@@ -572,12 +561,12 @@ export default function DashboardPage() {
           box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 20%, transparent);
         }
 
-        /* ---------- feed ---------- */
+     
         .feed { display:grid; gap: 14px; }
         :global(.feed > *) { max-width: 720px; width: 100%; margin: 0 auto; }
         .empty { color: var(--muted); text-align:center; padding: 18px; }
 
-        /* ---------- sidebar trending ---------- */
+      
         .panel {
           position: sticky; top: 16px;
           background: var(--card);
@@ -624,7 +613,6 @@ export default function DashboardPage() {
         .trTitle { font-weight:800; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .trMeta  { color: var(--muted); font-size:12px; }
 
-        /* ---------- composer modal ---------- */
         .backdrop {
           position: fixed; inset: 0;
           background: color-mix(in oklab, #000 55%, transparent);

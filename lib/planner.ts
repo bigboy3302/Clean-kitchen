@@ -11,23 +11,22 @@ import { db } from "@/lib/firebase";
 export type DayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
 export type DayPlan = {
-  workouts: string[]; // free text or your structured items later
-  meals: string[];    // recipe titles/ids/links
+  workouts: string[]; 
+  meals: string[];    
 };
 
 export type WeekPlan = {
   uid: string;
-  week: string; // e.g. 2025-W41
+  week: string; 
   days: Record<DayKey, DayPlan>;
   createdAt?: any;
   updatedAt?: any;
 };
 
-/** ISO week key like "2025-W41" */
 export function isoWeekKey(d = new Date()): string {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNum = (date.getUTCDay() + 6) % 7; // Mon=0..Sun=6
-  date.setUTCDate(date.getUTCDate() - dayNum + 3); // go to Thursday
+  const dayNum = (date.getUTCDay() + 6) % 7; 
+  date.setUTCDate(date.getUTCDate() - dayNum + 3);
   const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
   const week =
     1 +
@@ -59,7 +58,6 @@ export function emptyWeek(uid: string, week = isoWeekKey()): WeekPlan {
   };
 }
 
-/** Read or create the doc (includes uid for your rules). */
 export async function loadOrCreateWeek(uid: string, week = isoWeekKey()): Promise<WeekPlan> {
   const ref = weekRef(uid, week);
   const snap = await getDoc(ref);
@@ -70,7 +68,6 @@ export async function loadOrCreateWeek(uid: string, week = isoWeekKey()): Promis
   return seed;
 }
 
-/** Bulk save/merge the week. */
 export async function saveWeek(plan: WeekPlan): Promise<void> {
   const ref = weekRef(plan.uid, plan.week);
   await setDoc(
@@ -80,7 +77,6 @@ export async function saveWeek(plan: WeekPlan): Promise<void> {
   );
 }
 
-/** Update a single day in the week. */
 export async function saveDay(
   uid: string,
   week: string,

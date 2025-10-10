@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 
-/** Mount this once globally (e.g., in app/layout.tsx) to ensure a users/{uid} doc exists */
+
 export default function EnsureUserDoc() {
   useEffect(() => {
     const u = auth.currentUser;
@@ -17,7 +17,6 @@ export default function EnsureUserDoc() {
           uid: u.uid,
           email: u.email ?? null,
           createdAt: serverTimestamp(),
-          // place-holders for metrics (you may already fill these elsewhere)
           heightCm: null,
           weightKg: null,
           age: null,

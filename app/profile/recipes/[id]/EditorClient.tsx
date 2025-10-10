@@ -10,7 +10,6 @@ import { getDownloadURL, ref as sref, uploadBytes } from "firebase/storage";
 import BookWritingLoader from "./BookWritingLoader";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
-/* ---------------- types ---------------- */
 type Row = { name: string; qty: string; unit: "g" | "kg" | "ml" | "l" | "pcs" | "tbsp" | "tsp" | "cup" };
 type RecipeDoc = {
   id: string;
@@ -25,7 +24,6 @@ type RecipeDoc = {
   author?: { uid?: string | null; name?: string | null } | null;
 };
 
-/* ---------------- helpers ---------------- */
 function parseMeasure(measure?: string | null): { qty: string; unit: Row["unit"] | "" } {
   if (!measure) return { qty: "", unit: "" };
   const m = String(measure).trim();
@@ -56,15 +54,12 @@ function toInstructionsText(steps: string[]): string {
     .join("\n");
 }
 
-/* =========================================================================
-   CLIENT EDITOR — waits for auth before permission logic (no flash)
-   ========================================================================= */
+
 export default function EditorClient({ initial }: { initial: RecipeDoc }) {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const id = params.id;
 
-  // Auth
   const [me, setMe] = useState<{ uid: string } | null>(null);
   const [authReady, setAuthReady] = useState(false);
   useEffect(() => {
@@ -75,7 +70,6 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
     return () => stop();
   }, []);
 
-  // Seed UI state from server data
   const [ownerUid] = useState<string | null>(initial?.uid || null);
   const [title, setTitle] = useState(initial?.title || "");
   const [category, setCategory] = useState(initial?.category || "");
@@ -96,31 +90,28 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Delete confirm UX
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
 
   const isOwner = useMemo(() => !!me && !!ownerUid && me.uid === ownerUid, [me, ownerUid]);
 
-  /* ---------- ingredient rows ---------- */
   function setRow(i: number, patch: Partial<Row>) {
     setRows((list) => list.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   }
   function addRow() { setRows((l) => [...l, { name: "", qty: "", unit: "g" }]); }
   function removeRow(i: number) { setRows((l) => (l.length > 1 ? l.filter((_, idx) => idx !== i) : l)); }
 
-  /* ---------- steps ---------- */
   function setStepText(i: number, val: string) { setSteps((s) => s.map((t, idx) => (idx === i ? val : t))); }
   function addStep() { setSteps((s) => [...s, ""]); }
   function removeStep(i: number) { setSteps((s) => (s.length > 1 ? s.filter((_, idx) => idx !== i) : s)); }
 
-  /* ---------- cover upload (fix pooled event with a ref) ---------- */
+ 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   async function onPickCover(e: React.ChangeEvent<HTMLInputElement>) {
-    const inputEl = fileInputRef.current;            // safe reference
-    const file = e.currentTarget.files?.[0];         // read immediately
+    const inputEl = fileInputRef.current;            
+    const file = e.currentTarget.files?.[0];         
     if (!file || !me?.uid || !id) {
       if (inputEl) inputEl.value = "";
       return;
@@ -137,7 +128,7 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
       setErr(e?.message || "Failed to upload cover.");
     } finally {
       setSaving(false);
-      if (inputEl) inputEl.value = "";              // reset selection reliably
+      if (inputEl) inputEl.value = "";              
     }
   }
 

@@ -21,13 +21,13 @@ export type WorkoutItem = {
 };
 
 export type DayPlan = {
-  date: string;         // YYYY-MM-DD
-  items: WorkoutItem[]; // always array
+  date: string;         
+  items: WorkoutItem[]; 
 };
 
 export type WeekPlan = {
-  weekId: string;          // e.g. "2025-W41"
-  startIsoDate: string;    // Monday YYYY-MM-DD
+  weekId: string;         
+  startIsoDate: string;    
   days: Record<DayKey, DayPlan>;
 };
 
@@ -63,7 +63,7 @@ function fmtDate(d = new Date()): string {
 
 function getMonday(d = new Date()): Date {
   const x = new Date(d);
-  const day = x.getDay(); // 0..6
+  const day = x.getDay(); 
   const diff = (day === 0 ? -6 : 1) - day;
   x.setDate(x.getDate() + diff);
   x.setHours(0, 0, 0, 0);
@@ -101,7 +101,6 @@ export async function saveMetrics(m: Metrics) {
   localStorage.setItem(key("metrics"), JSON.stringify(clean));
 }
 
-// ---------- Weeks ----------
 function newEmptyWeekPlan(forDate = new Date()): WeekPlan {
   const monday = getMonday(forDate);
   const weekId = isoWeekId(forDate);
@@ -123,7 +122,7 @@ export async function getWeekPlan(targetWeekId?: string): Promise<WeekPlan> {
   const weekId = targetWeekId || isoWeekId(new Date());
   const cached = safeParse<WeekPlan>(localStorage.getItem(planKey(weekId)));
   if (cached?.days) {
-    // ensure structure
+  
     let mutated = false;
     for (const d of DAY_KEYS) {
       if (!cached.days[d]) {
@@ -173,7 +172,6 @@ export async function removeDayItem(weekId: string, day: DayKey, id: string): Pr
   localStorage.setItem(planKey(plan.weekId), JSON.stringify(plan));
 }
 
-// ---------- Meals ----------
 const FALLBACK_MEALS: SuggestedMeal[] = [
   { id: "52772", title: "Teriyaki Chicken Casserole", image: "https://www.themealdb.com/images/media/meals/wvpsxx1468256321.jpg" },
   { id: "52804", title: "Poutine", image: "https://www.themealdb.com/images/media/meals/uuyrrx1487327597.jpg" },

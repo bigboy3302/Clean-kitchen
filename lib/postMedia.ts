@@ -1,4 +1,3 @@
-// lib/postMedia.ts
 import { db, storage } from "@/lib/firebase";
 import { doc, updateDoc, arrayUnion, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
@@ -7,17 +6,14 @@ export type AddMediaArgs = {
   uid: string;
   postId: string;
   files: File[];
-  /** Max number of files allowed (default: 4) */
   limit?: number;
-  /** Overall progress, as a fraction 0..1 across all files */
   onProgress?: (p: number) => void;
 };
 
 type MediaItem = {
   url: string;
   type: "image" | "video";
-  path: string; // storage path
-  // You can add width/height/duration later if you extract them client-side
+  path: string;
 };
 
 export async function addMediaToPost({
@@ -33,10 +29,9 @@ export async function addMediaToPost({
 
   const toUpload = files.slice(0, limit);
 
-  // Track aggregate progress across all files
   const totals = toUpload.map((f) => f.size);
   const totalBytesAll = totals.reduce((a, b) => a + b, 0) || 1;
-  const transferredMap = new Map<number, number>(); // fileIndex -> bytesTransferred
+  const transferredMap = new Map<number, number>(); 
 
   const media: MediaItem[] = [];
 
@@ -83,12 +78,9 @@ export async function addMediaToPost({
 
   if (media.length) {
     const postRef = doc(db, "posts", postId);
-    // If you want to append to an existing array:
     await updateDoc(postRef, {
       media: arrayUnion(...media),
       updatedAt: serverTimestamp(),
     });
-    // If you prefer to replace media array entirely, do:
-    // await updateDoc(postRef, { media, updatedAt: serverTimestamp() });
   }
 }

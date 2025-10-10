@@ -28,7 +28,6 @@ export default function RegisterPage() {
   const [err, setErr]   = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // resend cooldown
   const COOLDOWN = 60;
   const [cooldown, setCooldown] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);

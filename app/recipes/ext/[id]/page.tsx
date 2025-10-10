@@ -26,7 +26,6 @@ export default function ExternalRecipePage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  // where to go “back” to (if browser history is thin)
   const backHref = useMemo(() => {
     return search.get("back") || "/fitness/day";
   }, [search]);
@@ -69,12 +68,12 @@ export default function ExternalRecipePage() {
   }, [id]);
 
   function goBack() {
-    // Try browser back first
+ 
     if (typeof window !== "undefined" && window.history.length > 1) {
       router.back();
       return;
     }
-    // Fallback to fitness day
+
     router.push(backHref);
   }
 

@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 export default function BookWritingLoader({ variant = "flip" }: { variant?: "flip" | "pen" }) {
   const [mounted, setMounted] = useState(false);
 
-  // Mount to <body> and lock scroll while loader is visible
+  
   useEffect(() => {
     setMounted(true);
     const prevOverflow = document.documentElement.style.overflow;

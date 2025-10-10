@@ -60,7 +60,7 @@ const mediaSrc = (ex: Exercise | null) => {
   return "/placeholder.png";
 };
 
-// ✅ No dependency on item.exerciseId anymore
+
 const exerciseFromItem = (item: WorkoutItem): Exercise | null => {
   if (!item.exercise) return null;
   const meta = item.exercise;
@@ -77,13 +77,25 @@ const exerciseFromItem = (item: WorkoutItem): Exercise | null => {
     bodyPart: meta.bodyPart ? String(meta.bodyPart) : "Full body",
     target: meta.target ?? (primaryMuscles[0] || "General"),
     equipment: meta.equipment ? String(meta.equipment) : equipmentList[0] || "Bodyweight",
-    gifUrl: typeof meta.imageUrl === "string" ? meta.imageUrl : "",
-    imageUrl: typeof meta.imageUrl === "string" ? meta.imageUrl : null,
+    gifUrl:
+      typeof meta.gifUrl === "string"
+        ? meta.gifUrl
+        : typeof meta.imageUrl === "string"
+        ? meta.imageUrl
+        : "",
+    imageUrl:
+      typeof meta.imageUrl === "string"
+        ? meta.imageUrl
+        : typeof meta.gifUrl === "string"
+        ? meta.gifUrl
+        : null,
     imageThumbnailUrl:
       typeof meta.imageThumbnailUrl === "string"
         ? meta.imageThumbnailUrl
         : typeof meta.imageUrl === "string"
         ? meta.imageUrl
+        : typeof meta.gifUrl === "string"
+        ? meta.gifUrl
         : null,
     descriptionHtml: typeof meta.descriptionHtml === "string" ? meta.descriptionHtml : "",
     primaryMuscles,
@@ -255,7 +267,7 @@ export default function DayPlannerPage() {
 
       {error ? <div className="alert">{error}</div> : null}
 
-      {/* WORKOUTS */}
+      {}
       <section className="card">
         <div className="sectionHead">
           <div>
@@ -316,7 +328,7 @@ export default function DayPlannerPage() {
 
                   {resolved ? (
                     <div className="workBody">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      {}
                       <img src={mediaSrc(resolved)} alt={resolved.name} className="workImg" loading="lazy" />
                       <div className="workMeta">
                         <div className="workName">{cap(resolved.name)}</div>
@@ -341,7 +353,7 @@ export default function DayPlannerPage() {
         )}
       </section>
 
-      {/* MEALS */}
+      {}
       <section className="card">
         <div className="sectionHead">
           <div>
@@ -353,7 +365,7 @@ export default function DayPlannerPage() {
         <div className="mealGrid">
           {recipes.map((meal) => (
             <button key={meal.id} className="mealCard" onClick={() => setOpenRecipeId(meal.id)}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {}
               <img src={meal.image || "/placeholder.png"} alt={meal.title} loading="lazy" />
               <div className="mealInfo">
                 <div className="mealTitle">{meal.title}</div>
@@ -418,3 +430,4 @@ export default function DayPlannerPage() {
     </main>
   );
 }
+

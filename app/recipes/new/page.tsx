@@ -1,4 +1,4 @@
-// app/recipes/new/page.tsx
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -22,7 +22,6 @@ export default function NewRecipePage() {
   }, [router]);
 
   function parseIngredients(text: string) {
-    // allow "1 cup sugar" or "sugar - 1 cup"
     const lines = text
       .split("\n")
       .map((l) => l.trim())

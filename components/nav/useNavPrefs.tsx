@@ -11,7 +11,7 @@ export type NavOrderItem = "dashboard" | "pantry" | "recipes" | "fitness" | "pro
 export interface NavPrefs {
   placement?: NavPlacement;
   accent?: string | null;
-  icon?: string | null;   // icon tint
+  icon?: string | null;   
   compact?: boolean;
   glow?: boolean;
   order?: NavOrderItem[];
@@ -37,34 +37,19 @@ export const defaultNavPrefs: Required<
 
 type ReturnShape = {
   uid: string | null;
-  /** Raw value from Firestore (can be null if none saved yet) */
   nav: NavPrefs | null;
-  /** Defaults merged with current nav (safe to render immediately) */
   effective: Required<NavPrefs>;
   loading: boolean;
   error: unknown;
-  /**
-   * Shallow update: only provided keys are changed, others in prefs.nav are preserved.
-   * Example: save({ compact: true })
-   */
   save: (partial: NavPrefs) => Promise<void>;
-  /**
-   * Replace entire prefs.nav with the provided object (use with care).
-   */
   replace: (next: NavPrefs) => Promise<void>;
 };
-
-/**
- * Uses your initialized singletons { auth, db } from lib/firebase.
- * Avoids the app/no-app error by never calling getAuth()/getFirestore() directly here.
- */
 export default function useNavPrefs(): ReturnShape {
   const [uid, setUid] = useState<string | null>(auth.currentUser?.uid ?? null);
   const [nav, setNav] = useState<NavPrefs | null>(null);
   const [loading, setLoading] = useState<boolean>(!!uid);
   const [error, setError] = useState<unknown>(null);
 
-  // Watch auth
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
       setUid(user?.uid ?? null);
@@ -72,7 +57,6 @@ export default function useNavPrefs(): ReturnShape {
     return () => unsub();
   }, []);
 
-  // Subscribe to user nav prefs
   useEffect(() => {
     if (!uid) {
       setNav(null);

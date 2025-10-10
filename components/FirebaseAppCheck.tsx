@@ -16,7 +16,6 @@ export default function FirebaseAppCheck() {
         isTokenAutoRefreshEnabled: true,
       });
     } catch {
-      // ignore "already initialized" during fast refresh
     }
   }, []);
 

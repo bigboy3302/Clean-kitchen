@@ -8,7 +8,6 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc, onSnapshot } from "firebase/firestore";
 
-/* ---------------- types ---------------- */
 type Author = {
   uid?: string | null;
   username?: string | null;
@@ -35,7 +34,6 @@ type RecipeDoc = {
   createdAt?: any;
 };
 
-/* tiny helpers */
 function toMillis(ts: any): number {
   try {
     if (!ts) return 0;
@@ -52,9 +50,7 @@ function toLines(txt?: string | null): string[] {
     .filter(Boolean);
 }
 
-/* =======================================================================
-   PUBLIC RECIPE PAGE
-   ======================================================================= */
+
 export default function RecipePublicPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -66,7 +62,6 @@ export default function RecipePublicPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  // auth
   useEffect(() => {
     const stop = onAuthStateChanged(auth, (u) => {
       setMe(u || null);
@@ -75,7 +70,6 @@ export default function RecipePublicPage() {
     return () => stop();
   }, []);
 
-  // live recipe
   useEffect(() => {
     if (!id) return;
     const ref = doc(db, "recipes", String(id));
@@ -144,7 +138,7 @@ export default function RecipePublicPage() {
 
   return (
     <main className="wrap">
-      {/* top bar */}
+     
       <header className="strip">
         <Link className="btn ghost" href="/recipes">← All recipes</Link>
         <div className="actions">
@@ -152,11 +146,10 @@ export default function RecipePublicPage() {
         </div>
       </header>
 
-      {/* hero section */}
       <section className="hero">
         <div className="cover">
           {cover ? (
-            // eslint-disable-next-line @next/next/no-img-element
+           
             <img src={cover} alt={title} />
           ) : (
             <div className="ph" aria-hidden>
@@ -172,7 +165,7 @@ export default function RecipePublicPage() {
           <div className="meta">
             <div className="who">
               {recipe?.author?.avatarURL ? (
-                // eslint-disable-next-line @next/next/no-img-element
+              
                 <img className="avatar" src={recipe.author.avatarURL} alt="" />
               ) : (
                 <div className="avatar ph">{authorName[0]?.toUpperCase() || "U"}</div>
@@ -197,9 +190,8 @@ export default function RecipePublicPage() {
         </div>
       </section>
 
-      {/* content grid */}
+   
       <section className="grid">
-        {/* ingredients side */}
         <aside className="panel">
           <div className="panelHead"><span className="dot" /> Ingredients</div>
           {ing.length === 0 ? (
@@ -208,7 +200,7 @@ export default function RecipePublicPage() {
             <ul className="ingList">
               {ing.map((it, idx) => {
                 const name = it?.name || "Ingredient";
-                // support measure or {qty,unit}
+                
                 const measure =
                   it?.measure ??
                   [it?.qty, it?.unit].filter(Boolean).join(" ");
@@ -224,7 +216,6 @@ export default function RecipePublicPage() {
           )}
         </aside>
 
-        {/* steps + gallery */}
         <article className="body">
           <section className="steps">
             <h2 className="h2">Steps</h2>
@@ -249,7 +240,6 @@ export default function RecipePublicPage() {
   );
 }
 
-/* ---------------- styles ---------------- */
 const styles = `
 .wrap{ max-width: 1100px; margin: 0 auto; padding: 14px; color: var(--text); }
 .card{ border:1px solid var(--border); background: var(--card-bg); border-radius: 14px; padding: 12px; }

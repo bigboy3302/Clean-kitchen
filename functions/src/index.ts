@@ -3,9 +3,9 @@
  * Docs: https://firebase.google.com/docs/functions/typescript
  */
 
-import { setGlobalOptions } from "firebase-functions/v2";       // <-- v2
-import { onRequest } from "firebase-functions/v2/https";        // <-- v2
-import * as logger from "firebase-functions/logger";            // <-- logger package
+import { setGlobalOptions } from "firebase-functions/v2";      
+import { onRequest } from "firebase-functions/v2/https";        
+import * as logger from "firebase-functions/logger";           
 
 // Limit concurrent containers (cost control)
 setGlobalOptions({ maxInstances: 10 });

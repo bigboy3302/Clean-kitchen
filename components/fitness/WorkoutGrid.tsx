@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Goal } from "@/lib/fitness/calc";
@@ -9,18 +9,17 @@ import {
   type DayKey,
 } from "@/lib/fitness/store";
 
-// Local helpers
 const MIN_SEARCH_CHARS = 2;
 const cache = new Map<string, Exercise[]>();
 
 type Exercise = {
   id: string;
   name: string;
-  bodyPart: string;          // ExerciseDB uses bodyPart; we show it as a chip
-  target: string;            // ExerciseDB’s main target (e.g., “cardio”, “biceps”)
+  bodyPart: string;
+  target: string;
   equipment: string;
-  gifUrl: string;            // e.g., https://d205bpvrqc9yn1.cloudfront.net/0001.gif
-  imageUrl: string | null;   // (legacy compatibility)
+  gifUrl: string;
+  imageUrl: string | null;
   imageThumbnailUrl: string | null;
   descriptionHtml: string;
   primaryMuscles: string[];
@@ -29,7 +28,7 @@ type Exercise = {
 };
 
 type Props = {
-  initialBodyPart?: string; // kept for backwards compat; here we treat it as initial target
+  initialBodyPart?: string;
   title?: string;
   limit?: number;
   goal?: Goal;
@@ -56,13 +55,11 @@ export default function WorkoutGrid({
 
   const lastKeyRef = useRef<string>("");
 
-  // debounce search
   useEffect(() => {
     const id = setTimeout(() => setDebouncedQ(q.trim()), 450);
     return () => clearTimeout(id);
   }, [q]);
 
-  // Load targets for tabs (ExerciseDB “targetList” mapped on server to /api/workouts/bodyparts)
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -85,7 +82,6 @@ export default function WorkoutGrid({
     };
   }, [initialBodyPart]);
 
-  // Load exercises
   useEffect(() => {
     let alive = true;
     setBusy(true);
@@ -118,7 +114,6 @@ export default function WorkoutGrid({
         if (!alive || lastKeyRef.current !== key) return;
 
         if (Array.isArray(data)) {
-          // ensure name is present
           const cleaned = (data as Exercise[]).filter((x) => x && x.name);
           cache.set(key, cleaned);
           setList(cleaned);
@@ -140,7 +135,6 @@ export default function WorkoutGrid({
     };
   }, [sel, debouncedQ, limit]);
 
-  // add picked exercise to today's planner
   async function addToToday(ex: Exercise) {
     try {
       const plan = await getWeekPlan();
@@ -150,15 +144,15 @@ export default function WorkoutGrid({
         id: crypto.randomUUID(),
         name: ex.name,
         done: false,
-        // store minimal exercise meta so Day page can render details and GIFs
         exercise: {
           id: ex.id,
           name: ex.name,
           bodyPart: ex.bodyPart,
           target: ex.target,
           equipment: ex.equipment,
-          imageUrl: ex.gifUrl || ex.imageUrl || null,
-          imageThumbnailUrl: ex.gifUrl || ex.imageThumbnailUrl || null,
+          gifUrl: ex.gifUrl,
+          imageUrl: ex.imageUrl || ex.gifUrl || null,
+          imageThumbnailUrl: ex.imageThumbnailUrl || ex.gifUrl || null,
           descriptionHtml: ex.descriptionHtml,
           primaryMuscles: ex.primaryMuscles,
           secondaryMuscles: ex.secondaryMuscles,
@@ -167,7 +161,7 @@ export default function WorkoutGrid({
       };
 
       await upsertDayItem(plan.weekId, today, item);
-      setToast(`Added “${ex.name}” to Today`);
+      setToast(`Added "${ex.name}" to Today`);
       setTimeout(() => setToast(null), 2000);
     } catch (e: any) {
       setToast(e?.message || "Failed to add to Today");
@@ -181,20 +175,22 @@ export default function WorkoutGrid({
   }
 
   const heading = useMemo(() => {
-    if (debouncedQ.length >= MIN_SEARCH_CHARS) return `Results for “${debouncedQ}”`;
+    if (debouncedQ.length >= MIN_SEARCH_CHARS) return `Results for "${debouncedQ}"`;
     return `${cap(sel)} exercises`;
   }, [debouncedQ, sel]);
 
   function mediaSrc(ex: Exercise) {
-    // Prefer ExerciseDB direct GIF; falls back to imageUrl or placeholder
-    if (ex.gifUrl) return ex.gifUrl;
-    if (ex.imageUrl) return ex.imageUrl;
+    if (ex.gifUrl) return `/api/workouts/gif?src=${encodeURIComponent(ex.gifUrl)}`;
+    if (ex.imageThumbnailUrl)
+      return `/api/workouts/gif?src=${encodeURIComponent(ex.imageThumbnailUrl)}`;
+    if (ex.imageUrl) return `/api/workouts/gif?src=${encodeURIComponent(ex.imageUrl)}`;
+    if (ex.id) return `/api/workouts/gif?id=${encodeURIComponent(ex.id)}`;
     return "/placeholder.png";
   }
 
   function snippet(html: string) {
     const text = (html || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-    return text.length > 160 ? `${text.slice(0, 160)}…` : text || "No description available.";
+    return text.length > 160 ? `${text.slice(0, 160)}â€¦` : text || "No description available.";
   }
 
   return (
@@ -230,7 +226,7 @@ export default function WorkoutGrid({
         </div>
       )}
 
-      {busy && <p className="muted">Loading…</p>}
+      {busy && <p className="muted">Loadingâ€¦</p>}
       {err && <p className="error">{err}</p>}
       {!busy && !err && list.length === 0 && (
         <p className="muted">No exercises found. Try another search or target.</p>
@@ -239,7 +235,7 @@ export default function WorkoutGrid({
       <div className="grid">
         {list.map((ex) => (
           <article key={`${ex.id}-${ex.name}`} className="item">
-            {/* We use <img> (not next/image) because these are external GIFs */}
+            {}
             <img
               src={mediaSrc(ex)}
               alt={ex.name}
@@ -275,14 +271,14 @@ export default function WorkoutGrid({
         ))}
       </div>
 
-      {/* Simple modal */}
+      {}
       {openEx ? (
         <div className="ov" role="dialog" aria-modal="true" onClick={() => setOpenEx(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="mh">
               <div className="mt">{cap(openEx.name)}</div>
               <button className="x" onClick={() => setOpenEx(null)} aria-label="Close">
-                ✕
+                âœ•
               </button>
             </div>
             <div className="mbody">
@@ -348,7 +344,7 @@ export default function WorkoutGrid({
         .muted{color:var(--muted)}
         .error{background:color-mix(in oklab,#ef4444 18%,var(--card-bg));color:#7f1d1d;border:1px solid color-mix(in oklab,#ef4444 45%,var(--border));border-radius:10px;padding:8px 12px;margin-top:8px;font-size:13px}
 
-        /* responsive grid */
+        
         .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
         @media (max-width:1200px){ .grid{grid-template-columns:repeat(3,minmax(0,1fr));} }
         @media (max-width:880px){ .grid{grid-template-columns:repeat(2,minmax(0,1fr));} }
@@ -372,7 +368,7 @@ export default function WorkoutGrid({
         .btn.primary{background:var(--primary);color:var(--primary-contrast);border-color:var(--primary)}
         .btn:hover{transform:translateY(-1px)}
 
-        /* modal */
+        
         .ov{position:fixed;inset:0;background:rgba(2,6,23,.55);display:grid;place-items:center;padding:16px;z-index:2200}
         .modal{width:100%;max-width:720px;background:var(--card-bg);border:1px solid var(--border);border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
         .mh{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border)}
@@ -399,3 +395,4 @@ function getTodayKey(date = new Date()): DayKey {
   const js = date.getDay();
   return (["sun", "mon", "tue", "wed", "thu", "fri", "sat"][js] as DayKey) || "mon";
 }
+

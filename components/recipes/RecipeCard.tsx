@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-/* ---------- types ---------- */
 export type IngredientObj = { name: string; measure?: string | null };
 type PanelPlacement = "push" | "overlay-left" | "overlay-right";
 
@@ -20,11 +19,9 @@ export type RecipeCardProps = {
   baseServings?: number | null;
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
-  /** if provided, shows an Edit button that links to editor */
   editHref?: string;
 };
 
-/* ---------- helpers ---------- */
 function parseNumber(txt: string): number | null {
   const t = txt.trim();
   if (!t) return null;
@@ -54,7 +51,6 @@ function fmt(n: number): string {
   return Math.abs(r - Math.round(r)) < 1e-9 ? String(Math.round(r)) : String(r);
 }
 
-/* ---------- component ---------- */
 export default function RecipeCard({
   title,
   imageUrl,
@@ -91,7 +87,6 @@ export default function RecipeCard({
   const dec = () => setServings((s) => Math.max(1, s - 1));
   const inc = () => setServings((s) => Math.min(99, s + 1));
 
-  // Lock body scroll when the card is open on mobile
   useEffect(() => {
     if (!open) return;
     if (typeof window === "undefined" || typeof document === "undefined") return;
@@ -135,17 +130,13 @@ export default function RecipeCard({
 
   return (
     <div className={`rk-card ${open ? "open" : ""} ${panelPlacement}`}>
-      {/* LEFT: cover */}
       <div
         className="photo"
         onClick={() => (open ? onClose() : onOpen())}
         role="button"
         aria-label={open ? "Close details" : "Open details"}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={imageUrl} alt={title} className="img" />
-
-        {/* chips */}
         <div className="chips">
           {typeof minutes === "number" && (
             <div className="pill">
@@ -171,10 +162,9 @@ export default function RecipeCard({
         </button>
       )}
 
-      {/* RIGHT: slide panel */}
       {open && (
         <aside className={`panel ${panelPlacement}`} aria-hidden={!open}>
-          {/* Tabs */}
+
           <div className="tabs" role="tablist" aria-label="Recipe sections">
             <button
               role="tab"
@@ -195,7 +185,7 @@ export default function RecipeCard({
           </div>
 
           <div className="content">
-            {/* Servings + Favorite + Edit */}
+
             <div className="servingsRow">
               <label>Servings</label>
               <div className="svCtrls">
@@ -252,7 +242,6 @@ export default function RecipeCard({
               </div>
             </div>
 
-            {/* ONE section at a time */}
             {tab === "ingredients" ? (
               <div className="col">
                 <p className="step">INGREDIENTS</p>
@@ -289,7 +278,6 @@ export default function RecipeCard({
             )}
           </div>
 
-          {/* Close bubble (desktop / large) */}
           <button className="toggle" onClick={onClose} type="button" aria-label="Close details">
             <span className="chev">×</span>
           </button>

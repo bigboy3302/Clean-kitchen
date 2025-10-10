@@ -3,9 +3,7 @@
 type Props = {
   src?: string | null;
   alt?: string;
-  /** Avatar size in px (default 38) */
   size?: number;
-  /** Fallback initial */
   name?: string | null;
   className?: string;
 };

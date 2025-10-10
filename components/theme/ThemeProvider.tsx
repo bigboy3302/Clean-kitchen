@@ -1,4 +1,3 @@
-/* components/theme/ThemeProvider.tsx */
 "use client";
 
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -61,7 +60,6 @@ function applyCssVars(p: Palette, dataTheme?: "light" | "dark" | "custom") {
   el.style.setProperty("--border", p.border);
   el.style.setProperty("--ring", p.ring);
 
-  // extra tokens used by components
   el.style.setProperty("--card-bg", p.bg2);
   el.style.setProperty("--card-border", p.border);
   el.style.setProperty("--btn-bg", p.primary);

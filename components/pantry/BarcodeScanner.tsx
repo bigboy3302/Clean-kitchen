@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -14,16 +13,16 @@ type Props = {
 export default function BarcodeScanner({
   onDetected,
   autoStart = true,
-  maxHeight = 560, 
+  maxHeight = 560,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
+  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
   const [running, setRunning] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-
   const hints = useMemo(() => {
-    const m = new Map();
+    const m = new Map<DecodeHintType, any>();
     m.set(DecodeHintType.POSSIBLE_FORMATS, [
       BarcodeFormat.EAN_13,
       BarcodeFormat.UPC_A,
@@ -37,11 +36,10 @@ export default function BarcodeScanner({
     return m;
   }, []);
 
- 
   const readerOpts = useMemo(
     () => ({
-      delayBetweenScanAttempts: 200,  
-      delayBetweenScanSuccess: 500,   
+      delayBetweenScanAttempts: 200,
+      delayBetweenScanSuccess: 500,
     }),
     []
   );
@@ -49,36 +47,36 @@ export default function BarcodeScanner({
   useEffect(() => {
     if (autoStart) startCamera();
     return () => stopCamera();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart]);
 
   async function startCamera() {
     if (running) return;
     setErr(null);
     try {
       if (videoRef.current) {
+        // iOS/Safari friendlies
         videoRef.current.setAttribute("playsInline", "true");
         videoRef.current.autoplay = true;
         videoRef.current.muted = true;
       }
 
-      const constraints: MediaStreamConstraints = {
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          frameRate: { ideal: 30 },
-        },
-        audio: false,
-      };
+      if (!readerRef.current) {
+        readerRef.current = new BrowserMultiFormatReader(hints, readerOpts);
+      }
+      const reader = readerRef.current;
 
-      const reader = new BrowserMultiFormatReader(hints, readerOpts);
-      const controls = await reader.decodeFromConstraints(
-        constraints,
+      const controls = await reader.decodeFromVideoDevice(
+        undefined,
         videoRef.current!,
-        (result) => {
+        (result, error, ctrl) => {
+          if (error && error.name !== "NotFoundException") {
+            console.debug("[barcode] decode error", error);
+          }
           if (result) {
-            stopCamera();                
-            onDetected(result.getText()); 
+            ctrl?.stop();
+            stopCamera();
+            onDetected(result.getText());
           }
         }
       );
@@ -88,14 +86,17 @@ export default function BarcodeScanner({
       setErr(
         e?.name === "NotAllowedError"
           ? "Camera permission was denied. Allow it in the browser settings."
-          : e?.message || "Camera failed to start. Check HTTPS or try again."
+          : e?.message || "Camera failed to start. Use HTTPS or try again."
       );
       setRunning(false);
     }
   }
 
   function stopCamera() {
-    try { controlsRef.current?.stop(); } catch {}
+    try {
+      controlsRef.current?.stop();
+      readerRef.current = null;
+    } catch {}
     controlsRef.current = null;
 
     const v = videoRef.current;
@@ -111,14 +112,18 @@ export default function BarcodeScanner({
     <div className="scanWrap">
       <div className="row">
         {!running ? (
-          <button type="button" className="btn" onClick={startCamera}>Start camera</button>
+          <button type="button" className="btn" onClick={startCamera}>
+            Start camera
+          </button>
         ) : (
-          <button type="button" className="btn" onClick={stopCamera}>Stop camera</button>
+          <button type="button" className="btn" onClick={stopCamera}>
+            Stop camera
+          </button>
         )}
       </div>
 
       <div className="cam">
-        <video ref={videoRef} className="video" />
+        <video ref={videoRef} className="video" autoPlay playsInline muted />
         <div className="hint">
           Tip: fill most of the frame, keep lines horizontal, avoid glare. Works best over HTTPS.
         </div>
@@ -129,7 +134,7 @@ export default function BarcodeScanner({
       <style jsx>{`
         .scanWrap { display:grid; gap:10px; }
         .row { display:flex; gap:8px; }
-        .btn { border:1px solid #e5e7eb; background:#000000; padding:8px 12px; border-radius:10px; cursor:pointer; }
+        .btn { border:1px solid #e5e7eb; background:#000000; color:#fff; padding:8px 12px; border-radius:10px; cursor:pointer; }
         .cam { display:grid; gap:6px; }
         .video {
           width: 100%;
@@ -143,7 +148,8 @@ export default function BarcodeScanner({
         .hint { color:#64748b; font-size:12px; }
         .err {
           background:#fef2f2; color:#991b1b;
-          border:1px solidrgb(153, 32, 32); border-radius:8px;
+          border:1px solid rgb(153, 32, 32); 
+          border-radius:8px;
           padding:6px 8px; font-size:12px;
         }
       `}</style>
