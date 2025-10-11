@@ -267,17 +267,22 @@ service cloud.firestore {
     match /usernames/{uname} {
       allow read: if true;
 
-      // Reserve a new username: must be signed in, must not already exist, and the doc must map to caller's uid
+      // Reserve or re-assert a username mapping if it is free or already owned by the caller
       allow create: if isSignedIn()
-                    && !exists(/databases/$(database)/documents/usernames/$(uname))
+                    && request.resource.data.uid == request.auth.uid
+                    && (
+                         !exists(/databases/$(database)/documents/usernames/$(uname))
+                         || get(/databases/$(database)/documents/usernames/$(uname)).data.uid == request.auth.uid
+                       );
+
+      // Permit idempotent updates when the caller already owns the entry
+      allow update: if isSignedIn()
+                    && resource.data.uid == request.auth.uid
                     && request.resource.data.uid == request.auth.uid;
 
       // Let the owner free their previous username during a rename
       allow delete: if isSignedIn()
                     && resource.data.uid == request.auth.uid;
-
-      // No in-place updates to username docs
-      allow update: if false;
     }
 
     /* ---------- default deny ---------- */

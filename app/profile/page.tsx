@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { auth, db, storage } from "@/lib/firebase";
+import { auth, db, storage, functions } from "@/lib/firebase";
 import {
   onAuthStateChanged,
   sendPasswordResetEmail,
@@ -36,6 +36,7 @@ import {
 import { ref as sref, uploadBytes, getDownloadURL, listAll, deleteObject } from "firebase/storage";
 
 import ThemePicker from "@/components/theme/ThemePicker";
+import { useTheme } from "@/components/theme/ThemeProvider";
 import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -55,7 +56,6 @@ type UserDoc = {
   };
 };
 
-
 function slugifyUsername(v: string) {
   return v.trim().toLowerCase().replace(/[^a-z0-9._-]/g, "").replace(/\.{2,}/g, ".").slice(0, 20);
 }
@@ -70,6 +70,7 @@ function fullName(fn?: string | null, ln?: string | null) {
 
 export default function ProfilePage() {
   const router = useRouter();
+  const { mode, setMode } = useTheme();
 
  
   const [authReady, setAuthReady] = useState(false);
@@ -91,7 +92,6 @@ export default function ProfilePage() {
 
   
   const [units, setUnits] = useState<"metric" | "imperial">("metric");
-  const [theme, setTheme] = useState<"system" | "light" | "dark">("system");
   const [emailNotifications, setEmailNotifications] = useState<boolean>(true);
 
   
@@ -142,7 +142,7 @@ export default function ProfilePage() {
           setLastName("");
           setUsername("");
           setUnits("metric");
-          setTheme("system");
+          setMode("system");
           setEmailNotifications(true);
         } else {
           const d = snap.data() as UserDoc;
@@ -151,7 +151,7 @@ export default function ProfilePage() {
           setLastName(d.lastName || "");
           setUsername(d.username || "");
           setUnits(d.prefs?.units || "metric");
-          setTheme(d.prefs?.theme || "system");
+          setMode(d.prefs?.theme || "system");
           setEmailNotifications(d.prefs?.emailNotifications ?? true);
         }
         setNewEmail(me.email || "");
@@ -185,7 +185,13 @@ export default function ProfilePage() {
           return;
         }
         const snap = await getDoc(doc(db, "usernames", v));
-        setUnameMsg(snap.exists() ? "That username is taken." : "Username is available.");
+        if (snap.exists()) {
+          const owner = snap.get("uid");
+          if (owner === me.uid) setUnameMsg("This username is already reserved for you.");
+          else setUnameMsg("That username is taken.");
+        } else {
+          setUnameMsg("Username is available.");
+        }
       } catch {
         setUnameMsg(null);
       } finally {
@@ -264,7 +270,6 @@ export default function ProfilePage() {
     try {
       await runTransaction(db, async (trx) => {
         const uref = doc(db, "users", me.uid);
-
         const snapshot = await trx.get(uref);
         const existing = (snapshot.exists() ? snapshot.data() : {}) as { username?: string | null };
         const currentUsername = existing?.username ?? previousUsername ?? null;
@@ -276,7 +281,9 @@ export default function ProfilePage() {
           }
           const newRef = doc(db, "usernames", requestedUsername);
           const newSnap = await trx.get(newRef);
-          if (newSnap.exists()) throw new Error("That username is taken.");
+          if (newSnap.exists() && newSnap.get("uid") !== me.uid) {
+            throw new Error("That username is taken.");
+          }
           trx.set(newRef, { uid: me.uid });
           nextUsername = requestedUsername;
         }
@@ -291,7 +298,7 @@ export default function ProfilePage() {
             firstName: firstName.trim() || null,
             lastName: lastName.trim() || null,
             username: nextUsername || null,
-            prefs: { units, theme, emailNotifications },
+            prefs: { units, theme: mode, emailNotifications },
           },
           { merge: true }
         );
@@ -334,12 +341,16 @@ export default function ProfilePage() {
               firstName: firstName.trim() || null,
               lastName: lastName.trim() || null,
               username: appliedUsername,
-              prefs: { units, theme, emailNotifications },
+              prefs: { units, theme: mode, emailNotifications },
             }
           : prev
       );
       setUsername(appliedUsername || "");
-      setUnameMsg(null);
+      if (requestedUsername && requestedUsername !== previousUsername) {
+        setUnameMsg("Username updated. Your content will refresh shortly.");
+      } else {
+        setUnameMsg(null);
+      }
     } catch (e: any) {
       setErr(e?.message ?? "Failed to save profile.");
     } finally {

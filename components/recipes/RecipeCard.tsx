@@ -187,6 +187,26 @@ export default function RecipeCard({
           <div className="content">
 
             <div className="servingsRow">
+              <div className="favoriteCluster">
+                <button
+                  type="button"
+                  aria-pressed={isFavorite}
+                  title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                  className={`favBtn ${isFavorite ? "on" : ""}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleFavorite?.();
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M12 21s-6-4.35-8.4-8.11C1.43 10.12 2.68 6.5 6 6.5c2 0 3.09 1.36 3.78 2.44.18.28.26.4.22.4s.04-.12.22-.4C10.91 7.86 12 6.5 14 6.5c3.32 0 4.57 3.62 2.4 6.39C18 16.65 12 21 12 21z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  <span>{isFavorite ? "Saved" : "Favorite"}</span>
+                </button>
+              </div>
               <label>Servings</label>
               <div className="svCtrls">
                 <button type="button" className="svBtn" onClick={dec} aria-label="Decrease servings">
@@ -208,25 +228,6 @@ export default function RecipeCard({
               </div>
 
               <div className="actionCluster">
-                <button
-                  type="button"
-                  aria-pressed={isFavorite}
-                  title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                  className={`favBtn ${isFavorite ? "on" : ""}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleFavorite?.();
-                  }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      d="M12 21s-6-4.35-8.4-8.11C1.43 10.12 2.68 6.5 6 6.5c2 0 3.09 1.36 3.78 2.44.18.28.26.4.22.4s.04-.12.22-.4C10.91 7.86 12 6.5 14 6.5c3.32 0 4.57 3.62 2.4 6.39C18 16.65 12 21 12 21z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                  <span>{isFavorite ? "Saved" : "Favorite"}</span>
-                </button>
-
                 {editHref ? (
                   <a href={editHref} className="editBtn" onClick={(e) => e.stopPropagation()}>
                     <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
@@ -244,7 +245,11 @@ export default function RecipeCard({
 
             {tab === "ingredients" ? (
               <div className="col">
-                <p className="step">INGREDIENTS</p>
+                <p className="step"></p>
+                <br/>
+                <br/>
+                <br/>
+                <br/>
                 <div className="text">
                   {scaled.length ? (
                     <ul className="ul">
@@ -262,7 +267,11 @@ export default function RecipeCard({
               </div>
             ) : (
               <div className="col">
-                <p className="step">PREPARATION</p>
+                <p className="step"></p>
+                <br/>
+                <br/>
+                <br/>
+                <br/>
                 <div className="text">
                   {steps.length ? (
                     <ol className="ol">
@@ -453,6 +462,9 @@ export default function RecipeCard({
           border-bottom: 1px solid rgba(148, 163, 184, 0.25);
           box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
           flex-wrap: wrap;
+        }
+        .favoriteCluster {
+          display: none;
         }
         .servingsRow label {
           font-weight: 800;
@@ -804,6 +816,17 @@ export default function RecipeCard({
             background: rgba(226, 232, 240, 0.92);
             box-shadow: 0 1px 8px rgba(148, 163, 184, 0.18) inset;
           }
+          .rk-card.open .favoriteCluster {
+            display: inline-flex;
+            width: 100%;
+            justify-content: flex-start;
+            margin-bottom: 8px;
+            order: -1;
+          }
+          .rk-card.open .favoriteCluster .favBtn {
+            width: auto;
+            justify-content: flex-start;
+          }
           .rk-card.open .content {
             flex: 1 1 0;
             min-height: 0;
@@ -947,12 +970,6 @@ export default function RecipeCard({
             flex: 1 1 auto;
             justify-content: flex-end;
           }
-          .rk-card.open .servingsRow {
-            flex-direction: column;
-            align-items: stretch;
-            gap: 14px;
-            padding: 14px 0 12px;
-          }
           .rk-card.open .actionCluster {
             width: 100%;
             margin-left: 0;
@@ -962,6 +979,14 @@ export default function RecipeCard({
           .rk-card.open .editBtn {
             width: 100%;
             justify-content: center;
+          }
+          .rk-card.open .servingsRow {
+            position: static;
+            top: auto;
+            padding: 12px 0 10px;
+            background: transparent;
+            box-shadow: none;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.18);
           }
         }
       `}</style>
