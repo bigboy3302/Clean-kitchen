@@ -382,7 +382,7 @@ export default function PantryPage() {
             <label className="label">Scan with camera</label>
             <div className="scanner"><BarcodeScanner key={scannerKey} autoStart={scannerAutoStart} onDetected={handleDetected} /></div>
             <div className="rowHint">
-              {nutriBusy ? <span className="muted small">Looking up nutritionā€¦</span> : <span className="muted small">Tip: hold steady 20ā€“30cm away</span>}
+              {nutriBusy ? <span className="muted small">Looking up nutrition's</span> : <span className="muted small">Tip: hold steady 20-30cm away</span>}
               {nutriErr ? <span className="error small">{nutriErr}</span> : null}
             </div>
           </div>
