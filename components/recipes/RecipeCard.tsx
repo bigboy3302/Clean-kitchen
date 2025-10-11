@@ -438,12 +438,28 @@ export default function RecipeCard({
         .servingsRow {
           display: flex;
           align-items: center;
+          justify-content: space-between;
           gap: 16px;
-          padding: 0 20px 8px 20px;
+          padding: 12px 20px;
+          margin-bottom: 12px;
+          position: sticky;
+          top: 0;
+          z-index: 5;
+          background: linear-gradient(
+            180deg,
+            rgba(248, 250, 252, 0.96) 0%,
+            rgba(241, 245, 249, 0.86) 100%
+          );
+          border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+          box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
+          flex-wrap: wrap;
         }
         .servingsRow label {
           font-weight: 800;
           color: #36354e;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          font-size: 12px;
         }
 
         .svCtrls {
@@ -476,6 +492,8 @@ export default function RecipeCard({
           display: flex;
           align-items: center;
           gap: 12px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
         }
 
         .favBtn {
@@ -507,23 +525,19 @@ export default function RecipeCard({
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          border: 1px solid color-mix(in oklab, var(--primary) 35%, var(--border));
-          border-radius: 12px;
-          padding: 8px 14px;
-          background: linear-gradient(
-            180deg,
-            color-mix(in oklab, var(--primary) 12%, var(--bg2) 88%),
-            var(--bg2)
-          );
-          color: var(--text);
+          border-radius: 999px;
+          padding: 8px 18px;
+          background: var(--primary);
+          color: var(--primary-contrast);
           font-weight: 700;
           text-decoration: none;
-          transition: 0.15s transform, 0.2s background, 0.2s border-color, 0.15s box-shadow;
+          border: 1px solid var(--primary);
+          transition: 0.15s transform, 0.2s filter, 0.2s box-shadow;
         }
         .editBtn:hover {
           transform: translateY(-1px);
-          box-shadow: 0 12px 24px rgba(37, 99, 235, 0.15);
-          border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
+          filter: brightness(1.04);
+          box-shadow: 0 14px 30px rgba(37, 99, 235, 0.18);
         }
 
         .col {
@@ -817,18 +831,57 @@ export default function RecipeCard({
           .rk-card.open .servingsRow {
             display: flex;
             flex-wrap: wrap;
-            gap: 20px;
+            gap: 18px;
             justify-content: space-between;
             align-items: center;
             width: 100%;
             min-height: 64px;
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            padding: 16px 0;
+            margin-bottom: 8px;
+            background: linear-gradient(
+              180deg,
+              rgba(248, 250, 252, 0.98) 0%,
+              rgba(241, 245, 249, 0.86) 100%
+            );
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+            box-shadow: 0 12px 22px rgba(15, 23, 42, 0.12);
           }
           .rk-card.open .actionCluster {
+            display: flex;
+            align-items: center;
+            gap: 14px;
             margin-left: auto;
-            gap: 16px;
+            flex-wrap: wrap;
           }
           .rk-card.open .editBtn {
             padding: 10px 18px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: var(--primary);
+            color: var(--primary-contrast);
+            display: inline-flex;
+            gap: 8px;
+            align-items: center;
+            text-decoration: none;
+            font-weight: 700;
+            transition: transform 0.12s ease, filter 0.18s ease;
+          }
+          .rk-card.open .editBtn:hover {
+            filter: brightness(1.05);
+          }
+          .rk-card.open .editBtn:active {
+            transform: translateY(1px);
+          }
+          .rk-card.open .servingsRow label {
+            font-weight: 700;
+            font-size: 0.9rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #475569;
           }
           .rk-card.open .col {
             margin: 0;
@@ -886,6 +939,29 @@ export default function RecipeCard({
           .closeMobile:hover {
             transform: translateY(-2px);
             box-shadow: 0 26px 42px rgba(244, 63, 94, 0.42);
+          }
+          .rk-card.open .svCtrls {
+            flex: 0 0 auto;
+          }
+          .rk-card.open .actionCluster {
+            flex: 1 1 auto;
+            justify-content: flex-end;
+          }
+          .rk-card.open .servingsRow {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 14px;
+            padding: 14px 0 12px;
+          }
+          .rk-card.open .actionCluster {
+            width: 100%;
+            margin-left: 0;
+            justify-content: flex-start;
+            gap: 12px;
+          }
+          .rk-card.open .editBtn {
+            width: 100%;
+            justify-content: center;
           }
         }
       `}</style>

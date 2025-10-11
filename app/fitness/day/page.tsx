@@ -1,8 +1,11 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Button from "@/components/ui/Button";
 import Link from "next/link";
+import { format, parseISO } from "date-fns";
+import Container from "@/components/Container";
+import PageHeader from "@/components/PageHeader";
+import Button from "@/components/ui/Button";
 import {
   getWeekPlan,
   upsertDayItem,
@@ -59,7 +62,6 @@ const mediaSrc = (ex: Exercise | null) => {
   if (ex.id) return `/api/workouts/gif?id=${encodeURIComponent(ex.id)}`;
   return "/placeholder.png";
 };
-
 
 const exerciseFromItem = (item: WorkoutItem): Exercise | null => {
   if (!item.exercise) return null;
@@ -226,49 +228,56 @@ export default function DayPlannerPage() {
 
   const dayDateIso = plan?.days?.[day]?.date;
   const dayDateLabel = useMemo(() => {
-    if (!dayDateIso) return new Date().toLocaleDateString();
-    const parsed = new Date(`${dayDateIso}T00:00:00`);
-    if (Number.isNaN(parsed.getTime())) return dayDateIso;
-    return parsed.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+    if (!dayDateIso) return "Loading date...";
+    try {
+      const parsed = parseISO(dayDateIso);
+      if (Number.isNaN(parsed.getTime())) return dayDateIso;
+      return format(parsed, "MMM d, yyyy");
+    } catch {
+      return dayDateIso;
+    }
   }, [dayDateIso]);
 
   const planEmpty = !busy && items.length === 0;
+  const isLoadingPlan = busy && !plan;
 
   return (
-    <main className="shell">
-      <header className="top">
-        <div>
-          <h1 className="title">Today</h1>
-          <p className="muted">
-            {dayNames[day]} · {dayDateLabel}
-          </p>
-        </div>
-        <Link className="btn" href="/fitness">
-          ← Back to fitness home
-        </Link>
-      </header>
+    <Container as="main" className="plannerShell">
+      <PageHeader
+        title="Daily planner"
+        subtitle={`${dayNames[day]} - ${dayDateLabel}`}
+        actions={(
+          <Link className="backLink" href="/fitness">
+            Back to fitness
+          </Link>
+        )}
+      />
 
-      <nav className="dayNav" aria-label="Select day">
-        {dayOrder.map((d) => (
-          <button
-            key={d}
-            type="button"
-            className={`dayBtn ${day === d ? "active" : ""}`}
-            onClick={() => setDay(d)}
-          >
-            {dayNames[d].slice(0, 3)}
-          </button>
-        ))}
-      </nav>
+      <section className="sectionCard dayCard">
+        <div className="daySummary">
+          <span className="summaryLabel">Selected day</span>
+          <div className="summaryValues">
+            <span className="summaryName">{dayNames[day]}</span>
+            <span className="summaryDate">{dayDateLabel}</span>
+          </div>
+        </div>
+        <nav className="dayNav" aria-label="Select day">
+          {dayOrder.map((d) => (
+            <button
+              key={d}
+              type="button"
+              className={`dayBtn ${day === d ? "active" : ""}`}
+              onClick={() => setDay(d)}
+            >
+              {dayNames[d].slice(0, 3)}
+            </button>
+          ))}
+        </nav>
+      </section>
 
       {error ? <div className="alert">{error}</div> : null}
 
-      {}
-      <section className="card">
+      <section className="sectionCard workoutCard">
         <div className="sectionHead">
           <div>
             <h2 className="sectionTitle">Workout checklist</h2>
@@ -292,8 +301,8 @@ export default function DayPlannerPage() {
           </Button>
         </div>
 
-        {busy && !plan ? (
-          <p className="muted">Loading plan…</p>
+        {isLoadingPlan ? (
+          <p className="muted">Loading plan...</p>
         ) : planEmpty ? (
           <div className="empty">No workouts yet. Add your first item above.</div>
         ) : (
@@ -328,7 +337,6 @@ export default function DayPlannerPage() {
 
                   {resolved ? (
                     <div className="workBody">
-                      {}
                       <img src={mediaSrc(resolved)} alt={resolved.name} className="workImg" loading="lazy" />
                       <div className="workMeta">
                         <div className="workName">{cap(resolved.name)}</div>
@@ -353,81 +361,383 @@ export default function DayPlannerPage() {
         )}
       </section>
 
-      {}
-      <section className="card">
+      <section className="sectionCard mealsCard">
         <div className="sectionHead">
           <div>
-            <h2 className="sectionTitle">Today’s meals</h2>
+            <h2 className="sectionTitle">Today's meals</h2>
             <p className="muted">Tap a meal to preview ingredients & preparation.</p>
           </div>
         </div>
 
         <div className="mealGrid">
           {recipes.map((meal) => (
-            <button key={meal.id} className="mealCard" onClick={() => setOpenRecipeId(meal.id)}>
-              {}
+            <button
+              key={meal.id}
+              type="button"
+              className="mealCard"
+              onClick={() => setOpenRecipeId(meal.id)}
+            >
               <img src={meal.image || "/placeholder.png"} alt={meal.title} loading="lazy" />
               <div className="mealInfo">
                 <div className="mealTitle">{meal.title}</div>
-                <span className="mealLink">Open →</span>
+                <span className="mealLink">Open &gt;</span>
               </div>
             </button>
           ))}
-          {recipes.length === 0 ? <p className="muted">No recipes saved for today yet.</p> : null}
+          {recipes.length === 0 ? <p className="muted noMeals">No recipes saved for today yet.</p> : null}
         </div>
       </section>
 
-      {openRecipeId ? <RecipeModal id={openRecipeId!} onClose={() => setOpenRecipeId(null)} /> : null}
+      {openRecipeId ? <RecipeModal id={openRecipeId} onClose={() => setOpenRecipeId(null)} /> : null}
 
       <style jsx>{`
-        .shell{max-width:950px;margin:0 auto;padding:16px 12px 64px;display:flex;flex-direction:column;gap:14px}
-        .top{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;align-items:flex-end}
-        .title{margin:0;font-size:26px;font-weight:900;color:var(--text)}
-        .muted{color:var(--muted)}
-        .btn{border:1px solid var(--border);background:var(--bg2);color:var(--text);border-radius:999px;padding:8px 14px;font-weight:600;text-decoration:none}
-
-        .dayNav{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
-        .dayBtn{border:1px solid var(--border);background:var(--bg2);color:var(--text);border-radius:10px;padding:6px 11px;font-weight:600;transition:all .12s ease}
-        .dayBtn.active{background:var(--primary);border-color:var(--primary);color:var(--primary-contrast);box-shadow:0 10px 24px rgba(37,99,235,.18)}
-
-        .alert{border:1px solid color-mix(in oklab,#ef4444 40%,var(--border));background:color-mix(in oklab,#ef4444 12%,var(--card-bg));color:#7f1d1d;border-radius:12px;padding:10px 14px}
-
-        .card{border:1px solid var(--border);background:var(--card-bg);border-radius:20px;padding:16px;box-shadow:0 18px 40px rgba(15,23,42,.08);display:flex;flex-direction:column;gap:14px}
-        .sectionHead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-        .sectionTitle{margin:0;font-size:20px;font-weight:800;color:var(--text)}
-        .badge{border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700;text-transform:uppercase}
-        .badge.bulk{background:color-mix(in oklab,var(--primary) 28%,var(--bg2))}
-        .badge.cut{background:color-mix(in oklab,#ef4444 28%,var(--bg2))}
-        .badge.maintain{background:color-mix(in oklab,#10b981 28%,var(--bg2))}
-
-        .addRow{display:flex;gap:8px;flex-wrap:wrap}
-        .inp{flex:1;border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:var(--bg2);color:var(--text)}
-
-        .planList{list-style:none;margin:0;padding:0;display:grid;gap:12px}
-        .workItem{border:1px solid var(--border);border-radius:16px;padding:14px;background:var(--bg2);display:flex;flex-direction:column;gap:10px}
-        .workItem.done{opacity:.65}
-        .workTop{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
-        .check{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--text)}
-        .ghostBtn{background:transparent;border:1px solid color-mix(in oklab,var(--primary) 35%,var(--border));color:color-mix(in oklab,var(--primary) 45%,var(--text));border-radius:999px;padding:4px 12px;font-weight:600}
-        .workBody{display:grid;grid-template-columns:130px 1fr;gap:12px}
-        @media (max-width:640px){ .workBody{grid-template-columns:1fr;} }
-        .workImg{width:100%;border-radius:12px;object-fit:cover;background:var(--bg);border:1px solid var(--border)}
-        .workMeta{display:flex;flex-direction:column;gap:8px}
-        .workName{font-weight:800;color:var(--text);font-size:16px}
-        .workDesc{margin:0;color:var(--muted);font-size:13px;line-height:1.4}
-        .chipsRow{display:flex;gap:6px;flex-wrap:wrap}
-        .chip{font-size:11px;border-radius:999px;padding:3px 9px;border:1px solid color-mix(in oklab,var(--primary) 35%,var(--border));background:color-mix(in oklab,var(--primary) 12%,var(--bg2));color:color-mix(in oklab,var(--primary) 45%,var(--text))}
-
-        .empty{border:1px dashed var(--border);border-radius:16px;padding:16px;text-align:center;background:color-mix(in oklab,var(--bg2) 70%,transparent)}
-
-        .mealGrid{display:grid;gap:10px}
-        .mealCard{display:grid;grid-template-columns:70px 1fr;gap:10px;align-items:center;border:1px solid var(--border);border-radius:14px;padding:10px;background:var(--bg2);text-align:left;cursor:pointer}
-        .mealCard img{width:70px;height:70px;object-fit:cover;border-radius:12px;border:1px solid var(--border)}
-        .mealInfo{display:flex;align-items:center;justify-content:space-between;gap:12px}
-        .mealTitle{font-weight:700;color:var(--text)}
-        .mealLink{font-size:12px;color:var(--primary)}
+        .plannerShell {
+          display: grid;
+          gap: 24px;
+          padding-block: 24px 72px;
+        }
+        .muted {
+          color: var(--muted);
+        }
+        .backLink {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 16px;
+          border-radius: 999px;
+          border: 1px solid var(--border);
+          background: var(--bg2);
+          color: var(--text);
+          font-weight: 600;
+          text-decoration: none;
+          transition: filter 0.18s ease, transform 0.12s ease;
+        }
+        .backLink:hover {
+          filter: brightness(1.05);
+        }
+        .backLink:active {
+          transform: translateY(1px);
+        }
+        .sectionCard {
+          border: 1px solid var(--border);
+          background: linear-gradient(180deg, color-mix(in oklab, var(--card-bg) 95%, transparent), var(--card-bg));
+          border-radius: 20px;
+          padding: 20px;
+          box-shadow: var(--shadow);
+          display: grid;
+          gap: 16px;
+        }
+        .dayCard {
+          gap: 18px;
+        }
+        .daySummary {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-end;
+          flex-wrap: wrap;
+          gap: 12px;
+        }
+        .summaryLabel {
+          font-size: 0.75rem;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--muted);
+        }
+        .summaryValues {
+          display: grid;
+          gap: 4px;
+        }
+        .summaryName {
+          font-size: 1.4rem;
+          font-weight: 800;
+          color: var(--text);
+        }
+        .summaryDate {
+          color: var(--muted);
+          font-weight: 600;
+        }
+        .dayNav {
+          display: grid;
+          grid-auto-flow: column;
+          gap: 10px;
+          overflow-x: auto;
+          padding-bottom: 4px;
+          margin: 0;
+        }
+        .dayNav::-webkit-scrollbar {
+          height: 6px;
+        }
+        .dayBtn {
+          min-width: 72px;
+          border-radius: 12px;
+          padding: 8px 12px;
+          font-weight: 600;
+          border: 1px solid var(--border);
+          background: var(--bg2);
+          color: var(--text);
+          transition: background 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+        }
+        .dayBtn:hover {
+          transform: translateY(-1px);
+        }
+        .dayBtn:focus-visible {
+          outline: none;
+          box-shadow: 0 0 0 4px color-mix(in oklab, var(--ring) 45%, transparent);
+        }
+        .dayBtn.active {
+          border-color: var(--primary);
+          background: color-mix(in oklab, var(--primary) 20%, var(--bg2));
+          color: var(--primary-contrast);
+          box-shadow: 0 10px 24px color-mix(in oklab, var(--primary) 28%, transparent);
+        }
+        .alert {
+          border: 1px solid color-mix(in oklab, #ef4444 45%, var(--border));
+          background: color-mix(in oklab, #ef4444 16%, var(--card-bg));
+          color: #7f1d1d;
+          border-radius: 14px;
+          padding: 12px 16px;
+          font-size: 0.95rem;
+        }
+        .sectionHead {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 12px;
+        }
+        .sectionTitle {
+          margin: 0;
+          font-size: 1.1rem;
+          font-weight: 800;
+          color: var(--text);
+          letter-spacing: -0.01em;
+        }
+        .badge {
+          border-radius: 999px;
+          padding: 5px 12px;
+          font-size: 0.7rem;
+          font-weight: 700;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          background: color-mix(in oklab, var(--bg2) 85%, var(--primary) 15%);
+          color: var(--primary-contrast);
+        }
+        .badge.bulk {
+          background: color-mix(in oklab, var(--primary) 26%, var(--bg2));
+        }
+        .badge.cut {
+          background: color-mix(in oklab, #ef4444 26%, var(--bg2));
+          color: #fff;
+        }
+        .badge.maintain {
+          background: color-mix(in oklab, #0ea5e9 26%, var(--bg2));
+          color: #0b1220;
+        }
+        .addRow {
+          display: flex;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .inp {
+          flex: 1;
+          min-width: 220px;
+          border: 1px solid var(--border);
+          border-radius: 14px;
+          padding: 12px 14px;
+          background: var(--bg2);
+          color: var(--text);
+          transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+        }
+        .inp:focus {
+          border-color: color-mix(in oklab, var(--primary) 35%, var(--border));
+          box-shadow: 0 0 0 4px color-mix(in oklab, var(--ring) 45%, transparent);
+          background: var(--bg);
+          outline: none;
+        }
+        .planList {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: grid;
+          gap: 14px;
+        }
+        .workItem {
+          border: 1px solid var(--border);
+          border-radius: 18px;
+          padding: 16px;
+          background: color-mix(in oklab, var(--bg2) 95%, transparent);
+          display: grid;
+          gap: 14px;
+          transition: border-color 0.18s ease, background 0.18s ease;
+        }
+        .workItem.done {
+          opacity: 0.65;
+        }
+        .workTop {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 12px;
+        }
+        .check {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          font-weight: 700;
+          color: var(--text);
+        }
+        .check input {
+          width: 18px;
+          height: 18px;
+          border: 1px solid var(--border);
+          border-radius: 6px;
+        }
+        .ghostBtn {
+          border-radius: 999px;
+          padding: 6px 14px;
+          border: 1px solid color-mix(in oklab, var(--primary) 35%, var(--border));
+          background: color-mix(in oklab, var(--bg2) 92%, transparent);
+          color: color-mix(in oklab, var(--primary) 45%, var(--text));
+          font-weight: 600;
+          cursor: pointer;
+          transition: background 0.18s ease, border-color 0.18s ease;
+        }
+        .ghostBtn:hover {
+          background: color-mix(in oklab, var(--primary) 18%, var(--bg2));
+          border-color: var(--primary);
+        }
+        .ghostBtn:disabled {
+          opacity: 0.55;
+          cursor: not-allowed;
+        }
+        .workBody {
+          display: grid;
+          grid-template-columns: minmax(0, 130px) 1fr;
+          gap: 16px;
+          align-items: start;
+        }
+        .workImg {
+          width: 100%;
+          border-radius: 14px;
+          object-fit: cover;
+          background: var(--bg);
+          border: 1px solid var(--border);
+          max-height: 160px;
+        }
+        .workMeta {
+          display: grid;
+          gap: 10px;
+        }
+        .workName {
+          font-weight: 800;
+          font-size: 1rem;
+          color: var(--text);
+        }
+        .workDesc {
+          margin: 0;
+          color: var(--muted);
+          font-size: 0.9rem;
+          line-height: 1.5;
+        }
+        .chipsRow {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .chip {
+          font-size: 0.7rem;
+          border-radius: 999px;
+          padding: 4px 10px;
+          border: 1px solid color-mix(in oklab, var(--primary) 30%, var(--border));
+          background: color-mix(in oklab, var(--primary) 12%, var(--bg2));
+          color: color-mix(in oklab, var(--primary) 45%, var(--text));
+        }
+        .empty {
+          border: 1px dashed var(--border);
+          border-radius: 16px;
+          padding: 18px;
+          text-align: center;
+          background: color-mix(in oklab, var(--bg2) 88%, transparent);
+          font-weight: 600;
+          color: var(--muted);
+        }
+        .mealGrid {
+          display: grid;
+          gap: 14px;
+          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        }
+        .mealCard {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          border: 1px solid var(--border);
+          border-radius: 16px;
+          padding: 12px;
+          background: color-mix(in oklab, var(--bg2) 94%, transparent);
+          cursor: pointer;
+          transition: transform 0.12s ease, box-shadow 0.2s ease, border-color 0.18s ease;
+          text-align: left;
+        }
+        .mealCard:hover {
+          transform: translateY(-2px);
+          border-color: var(--primary);
+          box-shadow: 0 14px 32px color-mix(in oklab, var(--primary) 18%, transparent);
+        }
+        .mealCard img {
+          width: 72px;
+          height: 72px;
+          border-radius: 14px;
+          object-fit: cover;
+          border: 1px solid var(--border);
+          flex-shrink: 0;
+        }
+        .mealInfo {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+          width: 100%;
+        }
+        .mealTitle {
+          font-weight: 700;
+          color: var(--text);
+          flex: 1;
+        }
+        .mealLink {
+          font-size: 0.8rem;
+          font-weight: 600;
+          color: var(--primary);
+          white-space: nowrap;
+        }
+        .noMeals {
+          grid-column: 1 / -1;
+          text-align: center;
+        }
+        @media (max-width: 720px) {
+          .plannerShell {
+            gap: 20px;
+            padding-block: 20px 60px;
+          }
+          .sectionCard {
+            padding: 18px 16px;
+          }
+          .addRow {
+            flex-direction: column;
+          }
+          .inp {
+            min-width: unset;
+            width: 100%;
+          }
+          .workBody {
+            grid-template-columns: 1fr;
+          }
+          .workImg {
+            max-height: 200px;
+          }
+        }
       `}</style>
-    </main>
+    </Container>
   );
 }
-

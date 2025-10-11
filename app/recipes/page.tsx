@@ -1,4 +1,4 @@
-/* app/recipes/page.tsx */
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -21,13 +21,10 @@ import {
   lookupMealById, searchMealsByIngredientsAND,
 } from "@/lib/recipesApi";
 
-/* ---------------- helpers ---------------- */
 const capFirst = (s: string) => s.replace(/^\p{L}/u, (m) => m.toUpperCase());
 const ridFor = (r: CommonRecipe) => (r.source === "api" ? `api-${r.id}` : `user-${r.id}`);
 
-/* =========================================================================
-   SIGN-IN PROMPT (replaces window.alert)
-   ========================================================================= */
+
 function SignInPrompt({
   open,
   onClose,
@@ -74,9 +71,7 @@ function SignInPrompt({
   );
 }
 
-/* =========================================================================
-   PANTRY PICKER (popup) — only used when signed in
-   ========================================================================= */
+
 function PantryPicker({
   open, onClose, allItems, onSearch, busy,
 }: {
@@ -130,9 +125,6 @@ function PantryPicker({
   );
 }
 
-/* =========================================================================
-   CREATE RECIPE WIZARD — only used when signed in
-   ========================================================================= */
 type Row = { name: string; qty: string; unit: "g" | "kg" | "ml" | "l" | "pcs" | "tbsp" | "tsp" | "cup" };
 
 function CreateRecipeWizard({
@@ -176,7 +168,7 @@ function CreateRecipeWizard({
   }
 
   async function save() {
-    if (!meUid) return; // guarded by parent
+    if (!meUid) return;
     const t = capFirst(title.trim());
     const cleanRows = rows
       .map(r => ({ name: r.name.trim(), qty: r.qty.trim(), unit: r.unit }))
@@ -240,7 +232,6 @@ function CreateRecipeWizard({
               <label className="lab">Cover photo <span className="muted small">(optional)</span></label>
               {imgPrev ? (
                 <div className="pick">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img className="cover" src={imgPrev} alt="preview" />
                   <Button variant="secondary" size="sm" onClick={()=>{ setImgPrev(null); setImgFile(null); }}>Remove</Button>
                 </div>
@@ -360,9 +351,6 @@ function CreateRecipeWizard({
   );
 }
 
-/* =========================================================================
-   FAVORITES OVERLAY — only used when signed in
-   ========================================================================= */
 function FavOverlay({
   uid, onClose, onOpen,
 }: {
@@ -411,7 +399,6 @@ function FavOverlay({
           <div className="gridFav">
             {rows.map((r) => (
               <div key={r.id} className="fi">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 {r.image ? <img className="fimg" src={r.image} alt={r.title} /> : <div className="fimg" />}
                 <div className="ft">{r.title}</div>
                 <div className="btns">
@@ -443,43 +430,32 @@ function FavOverlay({
   );
 }
 
-/* =========================================================================
-   PAGE
-   ========================================================================= */
 export default function RecipesPage() {
   const [me, setMe] = useState<string | null>(auth.currentUser?.uid ?? null);
 
-  // lists
   const [apiRecipes, setApiRecipes] = useState<CommonRecipe[]>([]);
   const [userRecipes, setUserRecipes] = useState<CommonRecipe[]>([]);
   const [pantryRecipes, setPantryRecipes] = useState<CommonRecipe[] | null>(null);
 
-  // favorites
   const [favs, setFavs] = useState<Record<string, boolean>>({});
   const [showFavs, setShowFavs] = useState(false);
 
-  // pantry names
   const [pantry, setPantry] = useState<string[]>([]);
 
-  // search + filters
   const [q, setQ] = useState("");
   const [mode, setMode] = useState<"name" | "ingredient">("name");
   const [areaFilter, setAreaFilter] = useState<string>("any");
   const [busySearch, setBusySearch] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // modals
   const [openModal, setOpenModal] = useState<CommonRecipe | null>(null);
   const [showPantryPicker, setShowPantryPicker] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
 
-  // sign-in prompt
   const [showSigninPrompt, setShowSigninPrompt] = useState(false);
 
-  // card expansion
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
-  /* ---------- auth + listeners ---------- */
   useEffect(() => {
     const stopAuth = onAuthStateChanged(auth, (u) => {
       setMe(u?.uid ?? null);
@@ -538,7 +514,6 @@ export default function RecipesPage() {
     return () => stopAuth();
   }, []);
 
-  /* ---------- initial API list ---------- */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -550,7 +525,6 @@ export default function RecipesPage() {
     return () => { alive = false; };
   }, []);
 
-  /* ---------- search ---------- */
   useEffect(() => {
     const id = setTimeout(async () => {
       setErr(null);
@@ -591,10 +565,9 @@ export default function RecipesPage() {
     }
   }
 
-  /* ---------- favorites ---------- */
   async function toggleFav(r: CommonRecipe) {
     const uid = me;
-    if (!uid) { setShowSigninPrompt(true); return; } // 🔔 show popup instead of alert
+    if (!uid) { setShowSigninPrompt(true); return; }
     const id = ridFor(r);
     const ref = doc(db, "users", uid, "favoriteRecipes", id);
     if (favs[id]) {
@@ -639,7 +612,6 @@ export default function RecipesPage() {
     setShowFavs(false);
   }
 
-  /* ---------- merge + local filter on user recipes ---------- */
   const userFiltered = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s || mode !== "name") return userRecipes;
@@ -662,7 +634,6 @@ export default function RecipesPage() {
     return combined.filter(r => (r.area || "").toLowerCase() === areaFilter.toLowerCase());
   }, [combined, areaFilter]);
 
-  /* ---------- signed-in only controls visibility ---------- */
   const isSignedIn = !!me;
 
   return (
@@ -678,7 +649,6 @@ export default function RecipesPage() {
         </div>
       </div>
 
-      {/* controls */}
       <section className="card controls" aria-label="Search and actions">
         <div className="row">
           <div className="seg">
@@ -709,7 +679,6 @@ export default function RecipesPage() {
             </select>
           </div>
 
-          {/* actions — ONLY when signed in */}
           {isSignedIn ? (
             <div className="actionsRow">
               <Button variant="secondary" onClick={() => setShowPantryPicker(true)}>Find with my pantry</Button>
@@ -726,7 +695,6 @@ export default function RecipesPage() {
         {pantryRecipes && <p className="muted small">Showing suggestions from your pantry.</p>}
       </section>
 
-      {/* GRID */}
       <section className="list">
         <div className="gridCards">
           {visibleRecipes.map((r, idx) => {
@@ -744,7 +712,6 @@ export default function RecipesPage() {
             const minutes = (r as any).minutes ?? null;
             const baseServings = (r as any).servings ?? 2;
 
-            // Only show Edit for your own user recipes
             const isMine = r.source === "user" && !!me && (r.author?.uid === me);
             const editHref = isMine ? `/profile/recipes/${r.id}` : undefined;
 
@@ -771,7 +738,6 @@ export default function RecipesPage() {
         </div>
       </section>
 
-      {/* Modal */}
       {openModal ? (
         <RecipeModal
           recipe={openModal}
@@ -781,7 +747,6 @@ export default function RecipesPage() {
         />
       ) : null}
 
-      {/* Overlays — only mount when signed in */}
       {isSignedIn && showPantryPicker && (
         <PantryPicker
           open={showPantryPicker}
@@ -809,7 +774,6 @@ export default function RecipesPage() {
         />
       )}
 
-      {/* Sign-in prompt (shown for favorite when signed out) */}
       <SignInPrompt open={showSigninPrompt} onClose={() => setShowSigninPrompt(false)} onSigninHref="/auth/login" />
 
       <style jsx>{`

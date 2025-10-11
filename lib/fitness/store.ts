@@ -178,25 +178,38 @@ const FALLBACK_MEALS: SuggestedMeal[] = [
   { id: "52977", title: "Corba", image: "https://www.themealdb.com/images/media/meals/58oia61564916529.jpg" },
 ];
 
-function mealsKey(dateIso: string) { return key(`meals:${dateIso}`); }
+function mealsKey(dateIso: string, goal: "cut" | "maintain" | "bulk") {
+  return key(`meals:${dateIso}:${goal}`);
+}
 function todayIso() { return fmtDate(new Date()); }
 
 export async function getOrCreateDailyMeals(dateIso?: string, _goal: "cut" | "maintain" | "bulk" = "maintain", count = 3) {
   const day = dateIso || todayIso();
-  const cached = safeParse<SuggestedMeal[]>(localStorage.getItem(mealsKey(day)));
-  if (Array.isArray(cached) && cached.length >= count) return cached.slice(0, count);
+  const goal = _goal || "maintain";
+  const safeCount = Math.min(Math.max(count, 1), 6);
+  const cacheId = mealsKey(day, goal);
+
+  const cached = safeParse<SuggestedMeal[]>(localStorage.getItem(cacheId));
+  if (Array.isArray(cached) && cached.length >= safeCount) return cached.slice(0, safeCount);
 
   try {
-    const res = await fetch(`/api/recipes/suggest?count=${count}`, { cache: "no-store" });
+    const params = new URLSearchParams({
+      count: String(safeCount),
+      goal,
+      date: day,
+    });
+    const res = await fetch(`/api/recipes/random?${params.toString()}`, { cache: "no-store" });
     if (res.ok) {
       const list = (await res.json()) as SuggestedMeal[];
       if (Array.isArray(list) && list.length) {
-        localStorage.setItem(mealsKey(day), JSON.stringify(list));
-        return list.slice(0, count);
+        localStorage.setItem(cacheId, JSON.stringify(list));
+        return list.slice(0, safeCount);
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
-  localStorage.setItem(mealsKey(day), JSON.stringify(FALLBACK_MEALS));
-  return FALLBACK_MEALS.slice(0, count);
+  localStorage.setItem(cacheId, JSON.stringify(FALLBACK_MEALS));
+  return FALLBACK_MEALS.slice(0, safeCount);
 }
