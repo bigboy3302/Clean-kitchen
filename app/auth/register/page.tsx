@@ -48,8 +48,8 @@ export default function RegisterPage() {
   const actionCodeSettings = {
     url:
       typeof window !== "undefined"
-        ? `${window.location.origin}/onboarding`
-        : "http://localhost:3000/onboarding",
+        ? `${window.location.origin}/recipes`
+        : "http://localhost:3000/recipes",
     handleCodeInApp: false,
   };
 
@@ -119,7 +119,7 @@ export default function RegisterPage() {
     try {
       await u.reload();
       if (auth.currentUser?.emailVerified) {
-        router.replace("/onboarding");
+        router.replace("/recipes");
       } else {
         setErr("Email is not verified yet. Check your inbox or resend.");
       }

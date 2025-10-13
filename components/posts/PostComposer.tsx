@@ -1,10 +1,61 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { auth, db, storage } from "@/lib/firebase";
-import { addDoc, collection, serverTimestamp, updateDoc, doc, getDoc } from "firebase/firestore";
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import { useEffect, useRef, useState } from "react";
+import { auth, db } from "@/lib/firebase";
+import { addDoc, collection, serverTimestamp, doc, getDoc } from "firebase/firestore";
 import { addMediaToPost } from "@/lib/postMedia";
+
+const MAX_IMAGE_DIMENSION = 1600;
+
+async function optimiseImage(file: File, maxDim = MAX_IMAGE_DIMENSION): Promise<File> {
+  if (!file.type.startsWith("image/")) return file;
+
+  const shouldSkip = file.size <= 350 * 1024; // keep small images untouched
+  if (shouldSkip) return file;
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = (err) => reject(err);
+      image.src = objectUrl;
+    });
+
+    let { width, height } = img;
+    if (width <= maxDim && height <= maxDim) return file;
+
+    if (width > height) {
+      height = Math.round((height / width) * maxDim);
+      width = maxDim;
+    } else {
+      width = Math.round((width / height) * maxDim);
+      height = maxDim;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, width);
+    canvas.height = Math.max(1, height);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const outputType = file.type === "image/png" ? "image/png" : "image/jpeg";
+    const blob: Blob | null = await new Promise((resolve) =>
+      canvas.toBlob(resolve, outputType, outputType === "image/jpeg" ? 0.82 : undefined)
+    );
+    if (!blob) return file;
+
+    const base = file.name.replace(/\.\w+$/, "") || "image";
+    const extension = outputType === "image/png" ? ".png" : ".jpg";
+    const optimisedName = `${base}-optimised${extension}`;
+    return new File([blob], optimisedName, { type: outputType, lastModified: Date.now() });
+  } catch {
+    return file;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
 
 export default function PostComposer() {
   const [text, setText] = useState("");
@@ -15,10 +66,36 @@ export default function PostComposer() {
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
-  function onPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const list = Array.from(e.target.files || []).slice(0,4);
-    setFiles(list);
-    setPreviews(list.map(f=>({ url: URL.createObjectURL(f), type: f.type.startsWith("video")?"video":"image" })));
+  useEffect(() => {
+    return () => {
+      previews.forEach((p) => URL.revokeObjectURL(p.url));
+    };
+  }, [previews]);
+
+  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const list = Array.from(e.target.files || []).slice(0, 4);
+    if (!list.length) {
+      setFiles([]);
+      setPreviews((prev) => {
+        prev.forEach((p) => URL.revokeObjectURL(p.url));
+        return [];
+      });
+      return;
+    }
+
+    const processed = await Promise.all(
+      list.map(async (file) => (file.type.startsWith("image/") ? optimiseImage(file) : file))
+    );
+    const nextPreviews = processed.map((f) => ({
+      url: URL.createObjectURL(f),
+      type: f.type.startsWith("video") ? "video" : "image",
+    }));
+
+    setFiles(processed);
+    setPreviews((prev) => {
+      prev.forEach((p) => URL.revokeObjectURL(p.url));
+      return nextPreviews;
+    });
   }
 
   async function createPost() {

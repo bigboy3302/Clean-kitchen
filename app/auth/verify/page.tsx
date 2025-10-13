@@ -34,7 +34,7 @@ export default function VerifyEmailPage() {
     setBusy(true);
     await user.reload();
     if (auth.currentUser?.emailVerified) {
-      router.replace("/onboarding");
+      router.replace("/recipes");
     } else {
       setMsg("Still not verified. Check your inbox or try again.");
       setBusy(false);
