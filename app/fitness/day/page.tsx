@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -19,6 +19,8 @@ import {
   type SuggestedMeal,
 } from "@/lib/fitness/store";
 import RecipeModal from "@/components/recipes/RecipeModal";
+import { lookupMealById } from "@/lib/recipesApi";
+import type { CommonRecipe } from "@/components/recipes/types";
 
 type Exercise = {
   id: string;
@@ -115,7 +117,7 @@ export default function DayPlannerPage() {
   const [goal, setGoal] = useState<"bulk" | "cut" | "maintain">("maintain");
   const [exByItem, setExByItem] = useState<Record<string, Exercise | null>>({});
   const [recipes, setRecipes] = useState<SuggestedMeal[]>([]);
-  const [openRecipeId, setOpenRecipeId] = useState<string | null>(null);
+  const [openRecipe, setOpenRecipe] = useState<CommonRecipe | null>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -240,6 +242,31 @@ export default function DayPlannerPage() {
 
   const planEmpty = !busy && items.length === 0;
   const isLoadingPlan = busy && !plan;
+
+  async function openMeal(meal: SuggestedMeal) {
+    try {
+      const full = await lookupMealById(meal.id);
+      if (full) {
+        setOpenRecipe(full);
+        return;
+      }
+    } catch {
+      // fall through to fallback shape
+    }
+    // Fallback if API didn’t return details; shape it as CommonRecipe
+    const fallback: CommonRecipe = {
+      id: meal.id,
+      source: "api",
+      title: meal.title,
+      image: meal.image || null,
+      category: null,
+      area: null,
+      ingredients: [],
+      instructions: null,
+      author: { uid: null as any, name: null },
+    };
+    setOpenRecipe(fallback);
+  }
 
   return (
     <Container as="main" className="plannerShell">
@@ -375,7 +402,7 @@ export default function DayPlannerPage() {
               key={meal.id}
               type="button"
               className="mealCard"
-              onClick={() => setOpenRecipeId(meal.id)}
+              onClick={() => openMeal(meal)}
             >
               <img src={meal.image || "/placeholder.png"} alt={meal.title} loading="lazy" />
               <div className="mealInfo">
@@ -388,7 +415,14 @@ export default function DayPlannerPage() {
         </div>
       </section>
 
-      {openRecipeId ? <RecipeModal id={openRecipeId} onClose={() => setOpenRecipeId(null)} /> : null}
+      {openRecipe ? (
+        <RecipeModal
+          recipe={openRecipe}
+          isFavorite={false}
+          onToggleFavorite={() => {}}
+          onClose={() => setOpenRecipe(null)}
+        />
+      ) : null}
 
       <style jsx>{`
         .plannerShell {
