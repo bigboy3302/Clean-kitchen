@@ -1,9 +1,8 @@
-﻿
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { auth, db, storage, functions } from "@/lib/firebase";
+import { auth, db, storage } from "@/lib/firebase";
 import {
   onAuthStateChanged,
   sendPasswordResetEmail,
@@ -42,7 +41,6 @@ import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 
-
 type UserDoc = {
   uid: string;
   email: string;
@@ -73,15 +71,12 @@ export default function ProfilePage() {
   const router = useRouter();
   const { mode, setMode } = useTheme();
 
- 
   const [authReady, setAuthReady] = useState(false);
   const [me, setMe] = useState<User | null>(null);
 
- 
   const [userDoc, setUserDoc] = useState<UserDoc | null>(null);
   const [loadingDoc, setLoadingDoc] = useState(true);
 
-  
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState("");
@@ -91,16 +86,13 @@ export default function ProfilePage() {
   const [newEmail, setNewEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
 
-  
   const [units, setUnits] = useState<"metric" | "imperial">("metric");
   const [emailNotifications, setEmailNotifications] = useState<boolean>(true);
 
-  
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [busyUpload, setBusyUpload] = useState(false);
 
-  
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busySave, setBusySave] = useState(false);
@@ -109,7 +101,6 @@ export default function ProfilePage() {
   const [showDelete, setShowDelete] = useState(false);
   const [confirmText, setConfirmText] = useState("");
 
-  
   useEffect(() => {
     const stop = onAuthStateChanged(auth, (u) => {
       setMe(u || null);
@@ -163,8 +154,7 @@ export default function ProfilePage() {
         setLoadingDoc(false);
       }
     })();
-  }, [authReady, me]);
-
+  }, [authReady, me, setMode]);
 
   useEffect(() => {
     if (!username) {
@@ -202,7 +192,6 @@ export default function ProfilePage() {
     return () => clearTimeout(id);
   }, [username, me, userDoc?.username]);
 
-
   async function uploadAvatar() {
     if (!file || !me) return;
     if (!/image\/(png|jpe?g|webp)/i.test(file.type)) {
@@ -218,7 +207,11 @@ export default function ProfilePage() {
     setBusyUpload(true);
     try {
       const r = sref(storage, `avatars/${me.uid}/avatar.jpg`);
-      await uploadBytes(r, file);
+      // CRITICAL: pass contentType so storage.rules isImage()/isVideo() can evaluate true
+      await uploadBytes(r, file, {
+        contentType: file.type,
+        cacheControl: "public, max-age=3600",
+      });
       const url = await getDownloadURL(r);
       await updateProfile(me, { photoURL: url });
       await updateDoc(doc(db, "users", me.uid), { photoURL: url });
@@ -278,7 +271,7 @@ export default function ProfilePage() {
 
         if (requestedUsername && requestedUsername !== currentUsername) {
           if (!validUsername(requestedUsername)) {
-            throw new Error("Username must be 3-20 characters: a-z, 0-9, . _ -");
+            throw new Error("Username must be 3–20 characters: a–z, 0–9, . _ -");
           }
           const newRef = doc(db, "usernames", requestedUsername);
           const newSnap = await trx.get(newRef);
@@ -426,7 +419,6 @@ export default function ProfilePage() {
     setMsg(null);
     setBusyDelete(true);
     try {
-      
       try {
         const root = sref(storage, `avatars/${me.uid}`);
         const { items, prefixes } = await listAll(root);
@@ -503,7 +495,7 @@ export default function ProfilePage() {
                       </Button>
                     </div>
                     <p className="avatarHint muted">
-                      {file ? `Selected: ${file.name}` : "PNG or JPG, up to 2MB."}
+                      {file ? `Selected: ${file.name}` : "PNG/JPG/WEBP, up to 5 MB."}
                     </p>
                   </div>
 
@@ -538,7 +530,6 @@ export default function ProfilePage() {
                   <div className="grid2">
                     <Input label="First name" value={firstName} onChange={(e: any) => setFirstName(e.target.value)} />
                     <Input label="Last name" value={lastName} onChange={(e: any) => setLastName(e.target.value)} />
-                   
                     <Input label="UID" value={userDoc.uid} readOnly />
                   </div>
                   <div className="actionsRow">
@@ -1083,9 +1074,3 @@ async function propagateUserProfile(uid: string, info: AuthorUpdate) {
   await updateCollectionGroupInBatches("comments", uid, info);
   await updateCollectionGroupInBatches("replies", uid, info);
 }
-
-
-
-
-
-

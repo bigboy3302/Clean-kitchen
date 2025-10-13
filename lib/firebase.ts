@@ -1,3 +1,4 @@
+// lib/firebase.ts
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore, collection, doc, type Firestore } from "firebase/firestore";
@@ -7,20 +8,22 @@ import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,          // clean-kitchen-de925.firebaseapp.com
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,            // clean-kitchen-de925
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!,    // clean-kitchen-de925.appspot.com
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
 };
 
 if (Object.values(firebaseConfig).some((v) => !v)) {
   console.error("Missing Firebase env vars:", firebaseConfig);
-  throw new Error("Missing Firebase env vars (.env.local)");
+  throw new Error("Missing Firebase env vars (.env / Vercel env)");
 }
 
 declare global {
+  // eslint-disable-next-line no-var
   var _firebaseApp: FirebaseApp | undefined;
+  // eslint-disable-next-line no-var
   var _appCheckInited: boolean | undefined;
 }
 
