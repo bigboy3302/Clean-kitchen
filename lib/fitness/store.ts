@@ -1,9 +1,14 @@
+// lib/fitness/store.ts
+/* ======================================================================
+   Types
+====================================================================== */
 export type DayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
 export type WorkoutItem = {
   id: string;
   name: string;
   done: boolean;
+  /** Optional embedded exercise metadata for rich rendering in /fitness/day */
   exercise?: {
     id?: string | number;
     name?: string;
@@ -21,13 +26,13 @@ export type WorkoutItem = {
 };
 
 export type DayPlan = {
-  date: string;         
-  items: WorkoutItem[]; 
+  date: string;          // ISO yyyy-mm-dd
+  items: WorkoutItem[];  // checklist items
 };
 
 export type WeekPlan = {
-  weekId: string;         
-  startIsoDate: string;    
+  weekId: string;                    // e.g. "2025-W41"
+  startIsoDate: string;              // Monday yyyy-mm-dd
   days: Record<DayKey, DayPlan>;
 };
 
@@ -46,7 +51,44 @@ export type SuggestedMeal = {
   image?: string | null;
 };
 
+/** Minimal shape we accept when adding from the movement library */
+export type ExerciseLike = {
+  id?: string | number;
+  name: string;
+  bodyPart?: string;
+  target?: string;
+  equipment?: string;
+  gifUrl?: string | null;
+  imageUrl?: string | null;
+  imageThumbnailUrl?: string | null;
+  descriptionHtml?: string;
+  primaryMuscles?: (string | number)[];
+  secondaryMuscles?: (string | number)[];
+  equipmentList?: (string | number)[];
+};
+
+/* ======================================================================
+   Safe storage (SSR friendly)
+====================================================================== */
 const LS_PREFIX = "ck:v1:";
+const mem = new Map<string, string>();
+
+function hasLS() {
+  try {
+    return typeof window !== "undefined" && !!window.localStorage;
+  } catch {
+    return false;
+  }
+}
+
+function lsGet(k: string): string | null {
+  return hasLS() ? window.localStorage.getItem(k) : (mem.get(k) ?? null);
+}
+function lsSet(k: string, v: string) {
+  if (hasLS()) window.localStorage.setItem(k, v);
+  else mem.set(k, v);
+}
+
 const key = (suffix: string) => `${LS_PREFIX}${suffix}`;
 
 function safeParse<T>(json: string | null): T | null {
@@ -54,28 +96,28 @@ function safeParse<T>(json: string | null): T | null {
   try { return JSON.parse(json) as T; } catch { return null; }
 }
 
+/* ======================================================================
+   Dates & week helpers
+====================================================================== */
 function fmtDate(d = new Date()): string {
   const y = d.getFullYear();
   const m = `${d.getMonth() + 1}`.padStart(2, "0");
   const day = `${d.getDate()}`.padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
-
 function getMonday(d = new Date()): Date {
   const x = new Date(d);
-  const day = x.getDay(); 
-  const diff = (day === 0 ? -6 : 1) - day;
+  const day = x.getDay(); // 0..6 (Sun..Sat)
+  const diff = (day === 0 ? -6 : 1) - day; // shift back to Monday
   x.setDate(x.getDate() + diff);
   x.setHours(0, 0, 0, 0);
   return x;
 }
-
 function addDays(base: Date, n: number): Date {
   const d = new Date(base);
   d.setDate(d.getDate() + n);
   return d;
 }
-
 function isoWeekId(d: Date): string {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   const dayNum = date.getUTCDay() || 7;
@@ -84,23 +126,27 @@ function isoWeekId(d: Date): string {
   const weekNo = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
   return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
 }
-
 export function currentDayKey(date = new Date()): DayKey {
   const js = date.getDay();
   return (["sun", "mon", "tue", "wed", "thu", "fri", "sat"][js] as DayKey) || "mon";
 }
-
 const DAY_KEYS: DayKey[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 
-export async function getMetrics() {
-  return safeParse<Metrics>(localStorage.getItem(key("metrics")));
+/* ======================================================================
+   Metrics (client)
+====================================================================== */
+export async function getMetrics(): Promise<Metrics | null> {
+  return safeParse<Metrics>(lsGet(key("metrics")));
 }
 export async function saveMetrics(m: Metrics) {
   const clean: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(m)) if (v !== undefined) clean[k] = v;
-  localStorage.setItem(key("metrics"), JSON.stringify(clean));
+  lsSet(key("metrics"), JSON.stringify(clean));
 }
 
+/* ======================================================================
+   Week plan (client)
+====================================================================== */
 function newEmptyWeekPlan(forDate = new Date()): WeekPlan {
   const monday = getMonday(forDate);
   const weekId = isoWeekId(forDate);
@@ -120,9 +166,9 @@ const planKey = (weekId: string) => key(`plan:${weekId}`);
 
 export async function getWeekPlan(targetWeekId?: string): Promise<WeekPlan> {
   const weekId = targetWeekId || isoWeekId(new Date());
-  const cached = safeParse<WeekPlan>(localStorage.getItem(planKey(weekId)));
+  const cached = safeParse<WeekPlan>(lsGet(planKey(weekId)));
   if (cached?.days) {
-  
+    // Defensive repair to avoid undefined .items / push errors
     let mutated = false;
     for (const d of DAY_KEYS) {
       if (!cached.days[d]) {
@@ -133,11 +179,11 @@ export async function getWeekPlan(targetWeekId?: string): Promise<WeekPlan> {
         mutated = true;
       }
     }
-    if (mutated) localStorage.setItem(planKey(weekId), JSON.stringify(cached));
+    if (mutated) lsSet(planKey(weekId), JSON.stringify(cached));
     return cached;
   }
   const fresh = newEmptyWeekPlan(new Date());
-  localStorage.setItem(planKey(fresh.weekId), JSON.stringify(fresh));
+  lsSet(planKey(fresh.weekId), JSON.stringify(fresh));
   return fresh;
 }
 
@@ -149,7 +195,7 @@ export async function upsertDayItem(weekId: string, day: DayKey, item: WorkoutIt
   if (idx >= 0) dayPlan.items[idx] = { ...dayPlan.items[idx], ...item };
   else dayPlan.items.push(item);
   plan.days[day] = dayPlan;
-  localStorage.setItem(planKey(plan.weekId), JSON.stringify(plan));
+  lsSet(planKey(plan.weekId), JSON.stringify(plan));
 }
 
 export async function toggleDone(weekId: string, day: DayKey, id: string, done: boolean): Promise<void> {
@@ -159,7 +205,7 @@ export async function toggleDone(weekId: string, day: DayKey, id: string, done: 
   const idx = dp.items.findIndex((x) => x.id === id);
   if (idx >= 0) {
     dp.items[idx] = { ...dp.items[idx], done: !!done };
-    localStorage.setItem(planKey(plan.weekId), JSON.stringify(plan));
+    lsSet(planKey(plan.weekId), JSON.stringify(plan));
   }
 }
 
@@ -169,9 +215,45 @@ export async function removeDayItem(weekId: string, day: DayKey, id: string): Pr
   if (!dp?.items) return;
   dp.items = dp.items.filter((x) => x.id !== id);
   plan.days[day] = dp;
-  localStorage.setItem(planKey(plan.weekId), JSON.stringify(plan));
+  lsSet(planKey(plan.weekId), JSON.stringify(plan));
 }
 
+/* ======================================================================
+   “Add to Today” helper (for the library grid)
+====================================================================== */
+export async function addExerciseToToday(ex: ExerciseLike, day?: DayKey) {
+  const now = new Date();
+  const wk = await getWeekPlan(); // current week
+  const targetDay: DayKey = day || currentDayKey(now);
+  const name = ex.name?.trim() || "Exercise";
+
+  const item: WorkoutItem = {
+    id: crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    name,
+    done: false,
+    exercise: {
+      id: ex.id,
+      name: ex.name,
+      bodyPart: ex.bodyPart,
+      target: ex.target,
+      equipment: ex.equipment,
+      imageUrl: ex.imageUrl ?? ex.gifUrl ?? null,
+      imageThumbnailUrl: ex.imageThumbnailUrl ?? ex.imageUrl ?? ex.gifUrl ?? null,
+      gifUrl: ex.gifUrl ?? null,
+      descriptionHtml: ex.descriptionHtml,
+      primaryMuscles: ex.primaryMuscles,
+      secondaryMuscles: ex.secondaryMuscles,
+      equipmentList: ex.equipmentList,
+    },
+  };
+
+  await upsertDayItem(wk.weekId, targetDay, item);
+  return { weekId: wk.weekId, day: targetDay, item };
+}
+
+/* ======================================================================
+   Daily meals (client) – pulls from your /api/recipes/random
+====================================================================== */
 const FALLBACK_MEALS: SuggestedMeal[] = [
   { id: "52772", title: "Teriyaki Chicken Casserole", image: "https://www.themealdb.com/images/media/meals/wvpsxx1468256321.jpg" },
   { id: "52804", title: "Poutine", image: "https://www.themealdb.com/images/media/meals/uuyrrx1487327597.jpg" },
@@ -183,33 +265,77 @@ function mealsKey(dateIso: string, goal: "cut" | "maintain" | "bulk") {
 }
 function todayIso() { return fmtDate(new Date()); }
 
-export async function getOrCreateDailyMeals(dateIso?: string, _goal: "cut" | "maintain" | "bulk" = "maintain", count = 3) {
+export async function getOrCreateDailyMeals(
+  dateIso?: string,
+  _goal: "cut" | "maintain" | "bulk" = "maintain",
+  count = 3
+) {
   const day = dateIso || todayIso();
   const goal = _goal || "maintain";
   const safeCount = Math.min(Math.max(count, 1), 6);
   const cacheId = mealsKey(day, goal);
 
-  const cached = safeParse<SuggestedMeal[]>(localStorage.getItem(cacheId));
+  const cached = safeParse<SuggestedMeal[]>(lsGet(cacheId));
   if (Array.isArray(cached) && cached.length >= safeCount) return cached.slice(0, safeCount);
 
   try {
-    const params = new URLSearchParams({
-      count: String(safeCount),
-      goal,
-      date: day,
-    });
+    const params = new URLSearchParams({ count: String(safeCount), goal, date: day });
     const res = await fetch(`/api/recipes/random?${params.toString()}`, { cache: "no-store" });
     if (res.ok) {
       const list = (await res.json()) as SuggestedMeal[];
       if (Array.isArray(list) && list.length) {
-        localStorage.setItem(cacheId, JSON.stringify(list));
+        lsSet(cacheId, JSON.stringify(list));
         return list.slice(0, safeCount);
       }
     }
   } catch {
-    /* ignore */
+    // ignore — use fallback
   }
 
-  localStorage.setItem(cacheId, JSON.stringify(FALLBACK_MEALS));
+  lsSet(cacheId, JSON.stringify(FALLBACK_MEALS));
   return FALLBACK_MEALS.slice(0, safeCount);
+}
+
+/* ======================================================================
+   Auth helpers for Weekly page
+   - Minimal, safe default works even without Firebase.
+   - If you have Firebase auth, uncomment the code below and wire to it.
+====================================================================== */
+
+/** Returns the current user id or null. Replace with your real auth if you have it. */
+export async function getCurrentUserId(): Promise<string | null> {
+  // --- Default: no-op (always "signed in" anonymously) ---
+  // Return null if you want Weekly page to require login.
+  // return null;
+
+  // If you use Firebase client auth, you can replace with:
+  // try {
+  //   const { getAuth, onAuthStateChanged } = await import("firebase/auth");
+  //   const { app } = await import("@/lib/firebase");
+  //   const auth = getAuth(app);
+  //   const u = auth.currentUser;
+  //   if (u) return u.uid;
+  //   return new Promise<string | null>((resolve) =>
+  //     onAuthStateChanged(auth, (user) => resolve(user?.uid ?? null), () => resolve(null))
+  //   );
+  // } catch {
+  //   return null;
+  // }
+
+  // For now, return a deterministic anonymous id so per-user storage is distinct if desired.
+  const anonKey = key("anonUid");
+  const existing = lsGet(anonKey);
+  if (existing) return existing;
+  const uid = `anon_${Math.random().toString(36).slice(2, 10)}`;
+  lsSet(anonKey, uid);
+  return uid;
+}
+
+/** Ensures a user is signed in during runtime; throws if not. */
+export async function requireSignedIn(): Promise<string> {
+  const uid = await getCurrentUserId();
+  if (!uid) {
+    throw new Error("AUTH_REQUIRED");
+  }
+  return uid;
 }
