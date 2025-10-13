@@ -209,7 +209,7 @@ export default function WeeklyPlannerPage() {
                   onChange={(e) => setNewMeal((s) => ({ ...s, [d.key]: e.currentTarget.value }))}
                 />
                 <button className="btn sm" onClick={() => addMeal(d.key)}>
-                  Add
+                  Add +
                 </button>
               </div>
             </div>
