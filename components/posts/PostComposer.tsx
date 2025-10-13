@@ -5,6 +5,8 @@ import { auth, db } from "@/lib/firebase";
 import { addDoc, collection, serverTimestamp, doc, getDoc } from "firebase/firestore";
 import { addMediaToPost } from "@/lib/postMedia";
 
+type MediaPreview = { url: string; type: "image" | "video" };
+
 const MAX_IMAGE_DIMENSION = 1600;
 
 async function optimiseImage(file: File, maxDim = MAX_IMAGE_DIMENSION): Promise<File> {
@@ -60,7 +62,7 @@ async function optimiseImage(file: File, maxDim = MAX_IMAGE_DIMENSION): Promise<
 export default function PostComposer() {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
-  const [previews, setPreviews] = useState<{url:string;type:"image"|"video"}[]>([]);
+  const [previews, setPreviews] = useState<MediaPreview[]>([]);
   const [pct, setPct] = useState<number>(0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -86,9 +88,10 @@ export default function PostComposer() {
     const processed = await Promise.all(
       list.map(async (file) => (file.type.startsWith("image/") ? optimiseImage(file) : file))
     );
-    const nextPreviews = processed.map((f) => ({
+
+    const nextPreviews: MediaPreview[] = processed.map((f) => ({
       url: URL.createObjectURL(f),
-      type: f.type.startsWith("video") ? "video" : "image",
+      type: f.type.startsWith("video") ? "video" : "image", // stays within the union
     }));
 
     setFiles(processed);
@@ -106,7 +109,6 @@ export default function PostComposer() {
 
     setBusy(true);
     try {
-      
       let author = { username: null as string|null, displayName: null as string|null, avatarURL: null as string|null };
       try {
         const snap = await getDoc(doc(db, "users", user.uid));
@@ -136,7 +138,7 @@ export default function PostComposer() {
           postId,
           files,
           limit: 4,
-          onProgress: (p) => setPct(Math.round(p*100)),
+          onProgress: (p) => setPct(Math.round(p * 100)),
         });
       }
 
@@ -164,7 +166,9 @@ export default function PostComposer() {
       {previews.length > 0 && (
         <div className={`grid mcount-${previews.length}`}>
           {previews.map((m,i)=>(
-            <div key={i} className="cell">{m.type==="video"?<video src={m.url} controls/>:<img src={m.url} alt=""/>}</div>
+            <div key={i} className="cell">
+              {m.type === "video" ? <video src={m.url} controls/> : <img src={m.url} alt="preview"/>}
+            </div>
           ))}
         </div>
       )}
