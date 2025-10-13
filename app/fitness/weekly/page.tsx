@@ -1,3 +1,4 @@
+// app/fitness/weekly/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -37,14 +38,15 @@ export default function WeeklyPlannerPage() {
     let alive = true;
     (async () => {
       try {
-        const { uid } = await requireSignedIn();
+        // ✅ requireSignedIn returns a string UID (not { uid })
+        const gotUid = await requireSignedIn();
         if (!alive) return;
-        setUid(uid);
+        setUid(gotUid);
 
         const wk = isoWeekKey();
         setWeek(wk);
 
-        const data = await loadOrCreateWeek(uid, wk);
+        const data = await loadOrCreateWeek(gotUid, wk);
         if (!alive) return;
         setPlan(data);
       } catch (e: any) {
@@ -53,7 +55,9 @@ export default function WeeklyPlannerPage() {
         if (alive) setBusy(false);
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const canSave = useMemo(() => !!uid && !!plan, [uid, plan]);
@@ -149,7 +153,9 @@ export default function WeeklyPlannerPage() {
           <div className="muted">{plan.week}</div>
         </div>
         <div className="actions">
-          <button className="btn" onClick={saveAll} disabled={!canSave}>Save all</button>
+          <button className="btn" onClick={saveAll} disabled={!canSave}>
+            Save all
+          </button>
         </div>
       </div>
 
@@ -164,7 +170,9 @@ export default function WeeklyPlannerPage() {
                 {plan.days[d.key].workouts.map((w, i) => (
                   <li key={i} className="row">
                     <span className="text">{w}</span>
-                    <button className="x" onClick={() => removeItem(d.key, "workouts", i)} aria-label="Remove">✕</button>
+                    <button className="x" onClick={() => removeItem(d.key, "workouts", i)} aria-label="Remove">
+                      ✕
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -175,7 +183,9 @@ export default function WeeklyPlannerPage() {
                   value={newWorkout[d.key] || ""}
                   onChange={(e) => setNewWorkout((s) => ({ ...s, [d.key]: e.currentTarget.value }))}
                 />
-                <button className="btn sm" onClick={() => addWorkout(d.key)}>Add</button>
+                <button className="btn sm" onClick={() => addWorkout(d.key)}>
+                  Add
+                </button>
               </div>
             </div>
 
@@ -185,7 +195,9 @@ export default function WeeklyPlannerPage() {
                 {plan.days[d.key].meals.map((m, i) => (
                   <li key={i} className="row">
                     <span className="text">{m}</span>
-                    <button className="x" onClick={() => removeItem(d.key, "meals", i)} aria-label="Remove">✕</button>
+                    <button className="x" onClick={() => removeItem(d.key, "meals", i)} aria-label="Remove">
+                      ✕
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -196,7 +208,9 @@ export default function WeeklyPlannerPage() {
                   value={newMeal[d.key] || ""}
                   onChange={(e) => setNewMeal((s) => ({ ...s, [d.key]: e.currentTarget.value }))}
                 />
-                <button className="btn sm" onClick={() => addMeal(d.key)}>Add</button>
+                <button className="btn sm" onClick={() => addMeal(d.key)}>
+                  Add
+                </button>
               </div>
             </div>
           </section>
