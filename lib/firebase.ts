@@ -35,6 +35,7 @@ export const db: Firestore = getFirestore(app);
 export const storage = getStorage(app);
 export const functions = getFunctions(app);
 
+// App Check (reCAPTCHA v3)
 function initAppCheckOnce() {
   if (typeof window === "undefined") return;
   if (globalThis._appCheckInited) return;
