@@ -23,8 +23,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body>
+      <head>
         <ThemeScript />
+      </head>
+      <body suppressHydrationWarning>
         <ThemeProvider>
           <EnsureUserDoc />
           <header className="ck-navbar">

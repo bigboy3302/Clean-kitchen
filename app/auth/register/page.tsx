@@ -33,26 +33,6 @@ export default function RegisterPage() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const bodyStyle = document.body.style;
-    const htmlStyle = document.documentElement.style;
-    const prevBodyOverflow = bodyStyle.overflow;
-    const prevBodyPadding = bodyStyle.paddingBottom;
-    const prevHtmlOverflow = htmlStyle.overflow;
-
-    bodyStyle.overflow = "hidden";
-    bodyStyle.paddingBottom = "0";
-    htmlStyle.overflow = "hidden";
-
-    return () => {
-      bodyStyle.overflow = prevBodyOverflow;
-      bodyStyle.paddingBottom = prevBodyPadding;
-      htmlStyle.overflow = prevHtmlOverflow;
-    };
-  }, []);
-
-  useEffect(() => {
     if (cooldown <= 0 && timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
@@ -168,7 +148,7 @@ export default function RegisterPage() {
     }
   }
 
-  return phase === "form" ? (
+  const formView = (
     <AuthShell
       title="Create account"
       subtitle="Get started with Clean-Kitchen"
@@ -199,7 +179,7 @@ export default function RegisterPage() {
         />
 
         <Input
-          label="Password (min 6)"
+          label="Password (min 8)"
           type="password"
           value={pass}
           onChange={(e) => setPass((e.target as HTMLInputElement).value)}
@@ -214,7 +194,9 @@ export default function RegisterPage() {
         </Button>
       </form>
     </AuthShell>
-  ) : (
+  );
+
+  const verifyView = (
     <AuthShell title="Verify your email" subtitle="We’ve sent a verification email.">
       <div className="space-y-4">
         {err  && <p className="rounded-md bg-red-50 p-2 text-sm text-red-700">{err}</p>}
@@ -239,5 +221,36 @@ export default function RegisterPage() {
         </div>
       </div>
     </AuthShell>
+  );
+
+  return (
+    <>
+      <div className="auth-page">{phase === "form" ? formView : verifyView}</div>
+      <style jsx>{`
+        .auth-page {
+          width: 100%;
+        }
+      `}</style>
+      <style jsx global>{`
+        main.container.section {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          min-height: calc(100dvh - 160px);
+          padding: clamp(24px, 8vh, 80px) 16px;
+        }
+        @media (max-width: 900px) {
+          main.container.section {
+            min-height: calc(100dvh - 120px);
+          }
+        }
+        @media (max-width: 640px) {
+          main.container.section {
+            align-items: flex-start;
+            padding: 32px 12px 40px;
+          }
+        }
+      `}</style>
+    </>
   );
 }

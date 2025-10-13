@@ -247,9 +247,7 @@ export default function RecipeCard({
               <div className="col">
                 <p className="step"></p>
                 <br/>
-                <br/>
-                <br/>
-                <br/>
+
                 <div className="text">
                   {scaled.length ? (
                     <ul className="ul">
@@ -269,9 +267,7 @@ export default function RecipeCard({
               <div className="col">
                 <p className="step"></p>
                 <br/>
-                <br/>
-                <br/>
-                <br/>
+                
                 <div className="text">
                   {steps.length ? (
                     <ol className="ol">

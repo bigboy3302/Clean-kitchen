@@ -39,7 +39,7 @@ export default function TrashCan({ items, isOpen, onToggleOpen }: Props) {
           <div className="binBody">
             <div className="lip" />
             <div className="texture" />
-            <div className="badge">TC</div>
+            
           </div>
           <div className={`pedal ${isOpen ? "pressed" : ""}`} />
         </div>

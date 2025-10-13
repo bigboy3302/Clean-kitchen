@@ -431,7 +431,7 @@ function FavOverlay({
 }
 
 export default function RecipesPage() {
-  const [me, setMe] = useState<string | null>(auth.currentUser?.uid ?? null);
+  const [me, setMe] = useState<string | null>(null);
 
   const [apiRecipes, setApiRecipes] = useState<CommonRecipe[]>([]);
   const [userRecipes, setUserRecipes] = useState<CommonRecipe[]>([]);
@@ -457,12 +457,26 @@ export default function RecipesPage() {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
   useEffect(() => {
+    let stopUserSub: (() => void) | null = null;
+    let stopFavsSub: (() => void) | null = null;
+    let stopPantrySub: (() => void) | null = null;
+
+    const cleanupUserSubs = () => {
+      if (stopUserSub) stopUserSub();
+      if (stopFavsSub) stopFavsSub();
+      if (stopPantrySub) stopPantrySub();
+      stopUserSub = stopFavsSub = stopPantrySub = null;
+    };
+
+    setMe(auth.currentUser?.uid ?? null);
+
     const stopAuth = onAuthStateChanged(auth, (u) => {
+      cleanupUserSubs();
       setMe(u?.uid ?? null);
 
       if (u) {
         const qMine = query(collection(db, "recipes"), where("uid", "==", u.uid));
-        const stopUser = onSnapshot(
+        stopUserSub = onSnapshot(
           qMine,
           (snap) => {
             const rows = snap.docs
@@ -489,14 +503,14 @@ export default function RecipesPage() {
         );
 
         const fq = query(collection(db, "users", u.uid, "favoriteRecipes"));
-        const stopFavs = onSnapshot(fq, (snap) => {
+        stopFavsSub = onSnapshot(fq, (snap) => {
           const map: Record<string, boolean> = {};
           snap.docs.forEach((d) => (map[d.id] = true));
           setFavs(map);
         });
 
         const pq = query(collection(db, "pantryItems"), where("uid", "==", u.uid));
-        const stopPantry = onSnapshot(pq, (snap) => {
+        stopPantrySub = onSnapshot(pq, (snap) => {
           const names = snap.docs
             .map((d) => (d.data() as any)?.name || "")
             .filter(Boolean)
@@ -504,14 +518,17 @@ export default function RecipesPage() {
           const uniq = Array.from(new Set(names)).sort((a,b)=>a.localeCompare(b));
           setPantry(uniq);
         });
-
-        return () => { stopUser(); stopFavs(); stopPantry(); };
       } else {
-        setUserRecipes([]); setFavs({}); setPantry([]);
+        setUserRecipes([]);
+        setFavs({});
+        setPantry([]);
       }
     });
 
-    return () => stopAuth();
+    return () => {
+      stopAuth();
+      cleanupUserSubs();
+    };
   }, []);
 
   useEffect(() => {

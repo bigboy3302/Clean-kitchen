@@ -93,7 +93,6 @@ export default function Fridge({ items, isOpen, onToggleOpen }: Props) {
       <div className="objectWrap" aria-hidden>
         <div className="shadow" />
         <div className={`fridgeObject ${isOpen ? "swing" : ""}`}>
-          <span className="badge">F</span>
           <div className="door top">
             <div className="shine" />
             <div className={`handle ${isOpen ? "pulled" : ""}`} />

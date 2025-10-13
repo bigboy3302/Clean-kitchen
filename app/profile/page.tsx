@@ -16,7 +16,7 @@ import {
   deleteUser,
   User,
 } from "firebase/auth";
-import type { CollectionReference, QueryDocumentSnapshot } from "firebase/firestore";
+import type { CollectionReference, DocumentData, Query, QueryDocumentSnapshot } from "firebase/firestore";
 import {
   collection,
   collectionGroup,
@@ -37,6 +37,7 @@ import { ref as sref, uploadBytes, getDownloadURL, listAll, deleteObject } from 
 
 import ThemePicker from "@/components/theme/ThemePicker";
 import { useTheme } from "@/components/theme/ThemeProvider";
+import type { ThemeMode } from "@/components/theme/ThemeProvider";
 import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -51,7 +52,7 @@ type UserDoc = {
   lastName?: string | null;
   prefs?: {
     units?: "metric" | "imperial";
-    theme?: "system" | "light" | "dark";
+    theme?: ThemeMode;
     emailNotifications?: boolean;
   };
 };
@@ -537,18 +538,7 @@ export default function ProfilePage() {
                   <div className="grid2">
                     <Input label="First name" value={firstName} onChange={(e: any) => setFirstName(e.target.value)} />
                     <Input label="Last name" value={lastName} onChange={(e: any) => setLastName(e.target.value)} />
-                    <div className="field">
-                      <label className="lab">Username</label>
-                      <input
-                        className="inp"
-                        value={username}
-                        onChange={(e) => setUsername(e.currentTarget.value)}
-                        placeholder="yourname"
-                      />
-                      <div className="muted small">
-                        {checkingUname ? "Checking..." : unameMsg ?? "3-20 chars: a-z, 0-9, . _ -"}
-                      </div>
-                    </div>
+                   
                     <Input label="UID" value={userDoc.uid} readOnly />
                   </div>
                   <div className="actionsRow">
@@ -1041,17 +1031,17 @@ function buildAuthorPatch(uid: string, info: AuthorUpdate) {
   };
 }
 
-async function updateDocsInBatches(colRef: CollectionReference, uid: string, info: AuthorUpdate) {
-  let cursor: QueryDocumentSnapshot | null = null;
+async function updateDocsInBatches(colRef: CollectionReference<DocumentData>, uid: string, info: AuthorUpdate) {
+  let cursor: QueryDocumentSnapshot<DocumentData> | null = null;
   const patch = buildAuthorPatch(uid, info);
   while (true) {
-    const base = cursor
+    const base: Query<DocumentData> = cursor
       ? query(colRef, where("uid", "==", uid), orderBy("__name__"), startAfter(cursor), limit(PROFILE_BATCH_SIZE))
       : query(colRef, where("uid", "==", uid), orderBy("__name__"), limit(PROFILE_BATCH_SIZE));
     const snap = await getDocs(base);
     if (snap.empty) break;
     const batch = writeBatch(db);
-    snap.docs.forEach((docSnap) => {
+    snap.docs.forEach((docSnap: QueryDocumentSnapshot<DocumentData>) => {
       batch.set(docSnap.ref, patch, { merge: true });
     });
     await batch.commit();
@@ -1061,10 +1051,10 @@ async function updateDocsInBatches(colRef: CollectionReference, uid: string, inf
 }
 
 async function updateCollectionGroupInBatches(group: string, uid: string, info: AuthorUpdate) {
-  let cursor: QueryDocumentSnapshot | null = null;
+  let cursor: QueryDocumentSnapshot<DocumentData> | null = null;
   const patch = buildAuthorPatch(uid, info);
   while (true) {
-    const base = cursor
+    const base: Query<DocumentData> = cursor
       ? query(
           collectionGroup(db, group),
           where("uid", "==", uid),
@@ -1076,7 +1066,7 @@ async function updateCollectionGroupInBatches(group: string, uid: string, info: 
     const snap = await getDocs(base);
     if (snap.empty) break;
     const batch = writeBatch(db);
-    snap.docs.forEach((docSnap) => {
+    snap.docs.forEach((docSnap: QueryDocumentSnapshot<DocumentData>) => {
       batch.set(docSnap.ref, patch, { merge: true });
     });
     await batch.commit();

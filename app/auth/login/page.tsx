@@ -4,8 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { auth } from "@/lib/firebase";
 import AuthShell from "@/components/auth/AuthShell";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -42,9 +41,8 @@ export default function LoginPage() {
     setErr(null);
     setBusy(true);
     try {
-      const cred = await signInWithEmailAndPassword(auth, email.trim(), pass);
-      const snap = await getDoc(doc(db, "users", cred.user.uid));
-      router.replace(snap.exists() && (snap.data() as any)?.username ? "/dashboard" : "/onboarding");
+      await signInWithEmailAndPassword(auth, email.trim(), pass);
+      router.replace("/recipes");
     } catch (e: any) {
       setErr(e?.message ?? "Neizdevās ielogoties.");
     } finally {
@@ -57,9 +55,8 @@ export default function LoginPage() {
     setBusy(true);
     try {
       const provider = new GoogleAuthProvider();
-      const cred = await signInWithPopup(auth, provider);
-      const snap = await getDoc(doc(db, "users", cred.user.uid));
-      router.replace(snap.exists() && (snap.data() as any)?.username ? "/dashboard" : "/onboarding");
+      await signInWithPopup(auth, provider);
+      router.replace("/recipes");
     } catch (e: any) {
       setErr(e?.message ?? "Google sign-in failed.");
     } finally {

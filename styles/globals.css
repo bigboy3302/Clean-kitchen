@@ -4,11 +4,17 @@
   --primary-contrast: #ffffff;
 
   --bg: #f7f7fa;           
-  --bg-raised: #ffffff;    
+  --bg-raised: #ffffff;
+  --bg2: #ffffff;
   --text: #0f172a;         
   --muted: #667085;        
   --border: #e5e7eb;      
   --ring: rgba(37, 99, 235, .25); 
+  --card-bg: #ffffff;
+  --card-border: #e5e7eb;
+  --btn-bg: #2563eb;
+  --btn-fg: #ffffff;
+  --btn-border: transparent;
 
   
   --radius: 14px;
@@ -30,10 +36,16 @@
 
   --bg: #0b1220;
   --bg-raised: #0f1629;
+  --bg2: #0f1629;
   --text: #e5e7eb;
   --muted: #9aa4b2;
   --border: #1f2937;
   --ring: rgba(96,165,250,.35);
+  --card-bg: #0f1629;
+  --card-border: #1f2937;
+  --btn-bg: #60a5fa;
+  --btn-fg: #0b1220;
+  --btn-border: transparent;
   --shadow: 0 1px 2px rgba(2,6,23,.35), 0 8px 24px rgba(2,6,23,.45);
 }
 
@@ -84,18 +96,12 @@ input, select, textarea {
   width: 100%;
   font: inherit;
   color: var(--text);
-  background: #fff;
+  background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 10px 12px;
   outline: 0;
   transition: border .15s ease, box-shadow .15s ease, background .15s ease;
-}
-:root[data-theme="dark"] input,
-:root[data-theme="dark"] select,
-:root[data-theme="dark"] textarea {
-  background: #0f1629;
-  color: var(--text);
 }
 input::placeholder, textarea::placeholder { color: #94a3b8 }
 input:focus, select:focus, textarea:focus {
@@ -124,17 +130,15 @@ input:focus, select:focus, textarea:focus {
 .btn--primary { background: var(--primary); color: var(--primary-contrast) }
 .btn--primary:hover { opacity: .94 }
 .btn--secondary { background: var(--bg-raised); border: 1px solid var(--border); color: var(--text) }
-.btn--secondary:hover { background: #f3f6fb }
-:root[data-theme="dark"] .btn--secondary:hover { background: #111827 }
+.btn--secondary:hover { background: color-mix(in oklab, var(--bg-raised) 88%, var(--primary) 12%); }
 .btn--ghost { background: transparent; color: var(--text) }
-.btn--ghost:hover { background: rgba(2,6,23,.06) }
-:root[data-theme="dark"] .btn--ghost:hover { background: rgba(255,255,255,.06) }
+.btn--ghost:hover { background: color-mix(in oklab, var(--bg) 90%, var(--primary) 10% / 12%); }
 .btn--destructive { background: #e11d48; color: #fff }
 .btn--destructive:hover { filter: brightness(.95) }
 
 .badge {
   display: inline-block;
-  background: #f1f5f9;
+  background: color-mix(in oklab, var(--bg) 88%, var(--primary) 12% / 16%);
   border: 1px solid var(--border);
   padding: 6px 10px;
   border-radius: 999px;
@@ -175,12 +179,12 @@ input:focus, select:focus, textarea:focus {
   border: 1px solid transparent;
 }
 .nav-link:hover {
-  background: rgba(37, 99, 235, .08);
-  border-color: rgba(37, 99, 235, .18);
+  background: color-mix(in oklab, var(--bg-raised) 88%, var(--primary) 12%);
+  border-color: color-mix(in oklab, var(--border) 72%, var(--primary) 28%);
 }
 .nav-link[aria-current="page"] {
-  background: rgba(37, 99, 235, .10);
-  border-color: rgba(37, 99, 235, .25);
+  background: color-mix(in oklab, var(--bg-raised) 82%, var(--primary) 18%);
+  border-color: color-mix(in oklab, var(--border) 55%, var(--primary) 45%);
 }
 
 .ck-navbar-inner .ck-bell-right {
@@ -204,8 +208,8 @@ input:focus, select:focus, textarea:focus {
   border-radius: 999px; object-fit: cover; border: 1px solid var(--border); display: block; background: #000;
 }
 .comment-avatar-ph {
-  border-radius: 999px; display: grid; place-items: center; background: #f1f5f9; color: var(--text);
-  font-weight: 700; border: 1px solid #e2e8f0;
+  border-radius: 999px; display: grid; place-items: center; background: var(--bg2); color: var(--text);
+  font-weight: 700; border: 1px solid var(--border);
 }
 .comment-textcol { min-width: 0 }
 .comment-meta { display: flex; gap: 8px; align-items: baseline; margin-bottom: 4px }
@@ -221,9 +225,8 @@ input:focus, select:focus, textarea:focus {
 .comment-input { margin: 8px 0 14px }
 .comment-ta {
   width: 100%; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px;
-  resize: vertical; max-height: 240px; overflow: auto; background: #fff; color: var(--text);
+  resize: vertical; max-height: 240px; overflow: auto; background: var(--bg2); color: var(--text);
 }
-:root[data-theme="dark"] .comment-ta { background: #0f1629 }
 
 .hr { height: 1px; background: var(--border); border: 0; margin: 12px 0 }
 .shadow { box-shadow: var(--shadow) }

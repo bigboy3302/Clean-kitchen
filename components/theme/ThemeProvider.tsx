@@ -55,6 +55,7 @@ function applyCssVars(p: Palette, dataTheme?: "light" | "dark" | "custom") {
   el.style.setProperty("--primary-contrast", p.primaryContrast);
   el.style.setProperty("--bg", p.bg);
   el.style.setProperty("--bg2", p.bg2);
+  el.style.setProperty("--bg-raised", p.bg2);
   el.style.setProperty("--text", p.text);
   el.style.setProperty("--muted", p.muted);
   el.style.setProperty("--border", p.border);
