@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -578,7 +577,7 @@ export default function RecipesPage() {
     } catch (e: any) {
       setErr(e?.message || "Pantry search failed.");
     } finally {
-      setBusySearch(false);
+           setBusySearch(false);
     }
   }
 
@@ -760,6 +759,7 @@ export default function RecipesPage() {
           recipe={openModal}
           onClose={() => setOpenModal(null)}
           isFavorite={!!favs[ridFor(openModal)]}
+          /* ↓↓↓ CHANGED: removed explicit param type so inference uses RecipeModal's prop type */
           onToggleFavorite={(r) => toggleFav(r)}
         />
       ) : null}

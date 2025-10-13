@@ -1,356 +1,117 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-
-type Recipe = {
-  id: string;
-  title: string;
-  image?: string | null;
-  url?: string | null;
-  servings?: number | null;
-  readyInMinutes?: number | null;
-  calories?: number | null;
-  instructionsHtml?: string | null;
-  ingredients?: Array<{ name: string; amount?: string | number; unit?: string }>;
-};
-
-type CommonRecipe = {
-  id: string;
-  title: string;
-  image?: string | null;
-  instructions?: string | null;
-  minutes?: number | null;
-  servings?: number | null;
-  ingredients?: Array<{ name: string; measure?: string | null }>;
-  url?: string | null;
-};
+import React from "react";
+import type { CommonRecipe, Ingredient } from "./types";
 
 type Props = {
-  id: string;
+  recipe: CommonRecipe;
+  isFavorite: boolean;
   onClose: () => void;
+  onToggleFavorite: (r: CommonRecipe) => void | Promise<void>;
 };
 
-const ESCAPE_LOOKUP: Record<string, string> = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-  "'": "&#39;",
-};
-
-function escapeHtml(input: string) {
-  return input.replace(/[&<>"']/g, (char) => ESCAPE_LOOKUP[char] || char);
+function ItemRow({ name, measure }: Ingredient) {
+  return (
+    <li className="ir">
+      <span className="nm">{name}</span>
+      {measure ? <span className="msr">{measure}</span> : null}
+      <style jsx>{`
+        .ir { display:flex; justify-content:space-between; gap:12px; padding:6px 0; border-bottom:1px dashed var(--border); }
+        .nm { font-weight:600; color:var(--text); }
+        .msr { color:var(--muted); font-size:13px; }
+      `}</style>
+    </li>
+  );
 }
 
-function paragraphsToHtml(raw?: string | null) {
-  if (!raw) return null;
-  const parts = raw
-    .split(/\r?\n+/)
-    .map((part) => part.trim())
+export default function RecipeModal({ recipe, isFavorite, onToggleFavorite, onClose }: Props) {
+  const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+  const steps = (recipe.instructions ? String(recipe.instructions) : "")
+    .split("\n")
+    .map(s => s.trim())
     .filter(Boolean);
-  if (!parts.length) return null;
-  return parts.map((part) => `<p>${escapeHtml(part)}</p>`).join("");
-}
-
-async function fetchPrimaryRecipe(id: string): Promise<Recipe> {
-  const res = await fetch(`/api/recipes/enrich?id=${encodeURIComponent(id)}`, {
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => null);
-    throw new Error(text || "Recipe not found");
-  }
-  const data = (await res.json()) as Recipe & { error?: string };
-  if ((data as any)?.error) throw new Error((data as any).error || "Recipe not found");
-  return data;
-}
-
-async function fetchFallbackRecipe(id: string): Promise<Recipe> {
-  const res = await fetch(`/api/recipes?id=${encodeURIComponent(id)}`, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error("Recipe not found");
-  }
-  const json = (await res.json()) as { ok?: boolean; error?: string; recipes?: CommonRecipe[] };
-  if (json?.error) throw new Error(json.error);
-  const first = Array.isArray(json?.recipes) ? json.recipes[0] : null;
-  if (!first) throw new Error("Recipe not found");
-  return {
-    id: first.id,
-    title: first.title,
-    image: first.image || null,
-    url: first.url || null,
-    servings: first.servings ?? null,
-    readyInMinutes: first.minutes ?? null,
-    calories: null,
-    ingredients:
-      (first.ingredients || []).map((ing) => ({
-        name: ing.name,
-        amount: ing.measure || null,
-        unit: undefined,
-      })) || [],
-    instructionsHtml: paragraphsToHtml(first.instructions),
-  };
-}
-
-const RecipeModal: React.FC<Props> = ({ id, onClose }) => {
-  const [recipe, setRecipe] = useState<Recipe | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    const original = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = original;
-    };
-  }, []);
-
-  useEffect(() => {
-    let ignore = false;
-    (async () => {
-      try {
-        setLoading(true);
-        setErr(null);
-        setRecipe(null);
-        try {
-          const primary = await fetchPrimaryRecipe(id);
-          if (!ignore) {
-            setRecipe(primary);
-            return;
-          }
-        } catch (primaryError) {
-          try {
-            const fallback = await fetchFallbackRecipe(id);
-            if (!ignore) {
-              setRecipe(fallback);
-              return;
-            }
-          } catch (fallbackError: any) {
-            if (!ignore) {
-              setErr(fallbackError?.message || (primaryError as any)?.message || "Failed to load recipe.");
-            }
-          }
-        }
-      } finally {
-        if (!ignore) setLoading(false);
-      }
-    })();
-    return () => {
-      ignore = true;
-    };
-  }, [id]);
 
   return (
-    <div className="sheet" role="dialog" aria-modal="true" aria-label="Recipe details">
-      <div className="panel">
-        <button className="close" onClick={onClose} aria-label="Close">
-          X
-        </button>
-
-        {loading ? (
-          <div className="muted">Loading...</div>
-        ) : err ? (
-          <div className="error">{err}</div>
-        ) : recipe ? (
-          <article className="wrap">
-            <header className="head">
-              <h2 className="title">{recipe.title}</h2>
-              <div className="meta">
-                {recipe.readyInMinutes ? <span>Time {recipe.readyInMinutes}m</span> : null}
-                {recipe.servings ? <span>Serves {recipe.servings}</span> : null}
-                {recipe.calories ? <span>{Math.round(recipe.calories)} kcal</span> : null}
-              </div>
-            </header>
-
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={recipe.image || "/placeholder.png"}
-              alt={recipe.title}
-              className="hero"
-              loading="lazy"
-            />
-
-            <div className="grid">
-              {recipe.ingredients?.length ? (
-                <div className="block">
-                  <h3 className="h3">Ingredients</h3>
-                  <ul className="list">
-                    {recipe.ingredients.map((ing, i) => (
-                      <li key={i}>
-                        {ing.amount ? <strong>{ing.amount}</strong> : null}{" "}
-                        {ing.unit ? <em>{ing.unit}</em> : null} {ing.name}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              {recipe.instructionsHtml ? (
-                <div className="block">
-                  <h3 className="h3">Preparation</h3>
-                  <div
-                    className="prose"
-                    dangerouslySetInnerHTML={{ __html: recipe.instructionsHtml }}
-                  />
-                </div>
-              ) : null}
+    <div className="ov" role="dialog" aria-modal onClick={onClose}>
+      <div className="box" onClick={(e) => e.stopPropagation()}>
+        <header className="hd">
+          <div className="left">
+            <div className="tt">{recipe.title}</div>
+            <div className="meta">
+              {recipe.area ? <span className="pill">{recipe.area}</span> : null}
+              {recipe.category ? <span className="pill">{recipe.category}</span> : null}
+              <span className="pill src">{recipe.source === "api" ? "API" : "My recipe"}</span>
             </div>
+          </div>
+          <div className="right">
+            <button
+              className={`fav ${isFavorite ? "on" : ""}`}
+              onClick={() => onToggleFavorite(recipe)}
+              aria-pressed={isFavorite}
+              title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+              type="button"
+            >
+              {isFavorite ? "★ Favorited" : "☆ Favorite"}
+            </button>
+            <button className="x" onClick={onClose} aria-label="Close" type="button">✕</button>
+          </div>
+        </header>
 
-            {recipe.url ? (
-              <a className="btn" href={recipe.url} target="_blank" rel="noopener noreferrer">
-                Open source recipe ->
-              </a>
-            ) : null}
-          </article>
+        {recipe.image ? (
+          <div className="imgWrap">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="img" src={recipe.image} alt={recipe.title} />
+          </div>
         ) : null}
+
+        <section className="sec">
+          <h3 className="h">Ingredients</h3>
+          {ingredients.length ? (
+            <ul className="list">
+              {ingredients.map((ing, i) => (
+                <ItemRow key={`${ing.name}-${i}`} name={ing.name || ""} measure={ing.measure || ""} />
+              ))}
+            </ul>
+          ) : (
+            <p className="muted">No ingredients provided.</p>
+          )}
+        </section>
+
+        <section className="sec">
+          <h3 className="h">Instructions</h3>
+          {steps.length ? (
+            <ol className="steps">
+              {steps.map((s, i) => <li key={i} className="step">{s}</li>)}
+            </ol>
+          ) : (
+            <p className="muted">No instructions provided.</p>
+          )}
+        </section>
       </div>
 
       <style jsx>{`
-        .sheet {
-          position: fixed;
-          inset: 0;
-          background: color-mix(in oklab, #000 55%, transparent);
-          display: flex;
-          justify-content: center;
-          align-items: flex-end;
-          padding: 16px;
-          z-index: 60;
-          overflow-y: auto;
-          overscroll-behavior: contain;
-        }
-        @media (min-width: 640px) {
-          .sheet {
-            align-items: center;
-            padding: 24px;
-          }
-        }
-        .panel {
-          position: relative;
-          width: 100%;
-          max-width: 720px;
-          max-height: calc(100vh - 32px);
-          overflow-y: auto;
-          background: var(--card-bg);
-          border-radius: 18px 18px 0 0;
-          box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-          padding: 18px;
-          border: 1px solid var(--border);
-          scrollbar-gutter: stable;
-        }
-        @media (min-width: 640px) {
-          .panel {
-            border-radius: 18px;
-            max-height: calc(100vh - 60px);
-          }
-        }
-        .panel::-webkit-scrollbar {
-          width: 8px;
-        }
-        .panel::-webkit-scrollbar-thumb {
-          background: color-mix(in oklab, var(--border) 75%, var(--primary) 25%);
-          border-radius: 999px;
-        }
-        .close {
-          border: none;
-          background: transparent;
-          font-size: 18px;
-          line-height: 1;
-          padding: 6px 8px;
-          border-radius: 10px;
-          position: absolute;
-          right: 14px;
-          top: 10px;
-          color: var(--text);
-          cursor: pointer;
-        }
-        .wrap {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-        .head {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-        .title {
-          margin: 0;
-          font-size: 20px;
-          font-weight: 900;
-          color: var(--text);
-        }
-        .meta {
-          display: flex;
-          gap: 10px;
-          color: var(--muted);
-          flex-wrap: wrap;
-        }
-        .hero {
-          width: 100%;
-          border-radius: 14px;
-          border: 1px solid var(--border);
-          object-fit: cover;
-          max-height: 320px;
-        }
-        .grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 12px;
-        }
-        @media (min-width: 720px) {
-          .grid {
-            grid-template-columns: 1fr 1fr;
-          }
-        }
-        .block {
-          border: 1px solid var(--border);
-          border-radius: 12px;
-          padding: 12px;
-          background: var(--bg2);
-          display: grid;
-          gap: 10px;
-        }
-        .h3 {
-          margin: 0;
-          font-size: 16px;
-          font-weight: 800;
-          color: var(--text);
-        }
-        .list {
-          margin: 0;
-          padding-left: 18px;
-          display: grid;
-          gap: 6px;
-        }
-        .prose :global(p) {
-          margin: 0 0 8px;
-          line-height: 1.6;
-        }
-        .btn {
-          display: inline-block;
-          border: 1px solid var(--border);
-          background: var(--primary);
-          color: var(--primary-contrast);
-          border-radius: 999px;
-          padding: 10px 16px;
-          font-weight: 800;
-          text-decoration: none;
-          width: fit-content;
-        }
-        .muted {
-          color: var(--muted);
-        }
-        .error {
-          background: color-mix(in oklab, #ef4444 16%, var(--card-bg));
-          border: 1px solid color-mix(in oklab, #ef4444 36%, var(--border));
-          color: #7f1d1d;
-          padding: 10px 12px;
-          border-radius: 12px;
-          font-size: 0.95rem;
-        }
+        .ov{position:fixed; inset:0; background:rgba(2,6,23,.55); display:grid; place-items:center; padding:16px; z-index:1600}
+        .box{width:100%; max-width:900px; max-height:90vh; overflow:auto; background:var(--card-bg);
+             border:1px solid var(--border); border-radius:16px; box-shadow:0 24px 80px rgba(2,6,23,.25)}
+        .hd{display:flex; align-items:center; justify-content:space-between; padding:12px 14px;
+            border-bottom:1px solid var(--border); background:color-mix(in oklab, var(--card-bg) 92%, #fff)}
+        .tt{font-weight:800; font-size:20px; color:var(--text)}
+        .meta{display:flex; gap:6px; margin-top:4px}
+        .pill{border:1px solid var(--border); border-radius:999px; padding:2px 8px; font-size:12px; color:var(--muted)}
+        .pill.src{background:var(--bg2)}
+        .right{display:flex; gap:8px; align-items:center}
+        .x{border:none; background:var(--bg2); color:var(--text); border-radius:10px; padding:6px 10px; cursor:pointer}
+        .fav{border:1px solid var(--border); background:var(--bg2); color:var(--text); border-radius:10px; padding:6px 10px; cursor:pointer; font-weight:700}
+        .fav.on{background:#fde68a; border-color:#f59e0b}
+        .imgWrap{width:100%; aspect-ratio: 16/7; background:#f1f5f9; overflow:hidden}
+        .img{width:100%; height:100%; object-fit:cover}
+        .sec{padding:12px 14px; border-top:1px solid var(--border)}
+        .h{margin:0 0 8px; color:var(--text)}
+        .list{list-style:none; margin:0; padding:0}
+        .steps{margin:0; padding-left:20px}
+        .step{padding:6px 0; border-bottom:1px dashed var(--border)}
+        .muted{color:var(--muted)}
       `}</style>
     </div>
   );
-};
-
-export default RecipeModal;
+}
