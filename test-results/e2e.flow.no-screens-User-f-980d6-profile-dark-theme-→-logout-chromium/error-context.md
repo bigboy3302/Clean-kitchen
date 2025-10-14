@@ -1,0 +1,49 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - navigation "Main" [ref=e4]:
+        - button "Open navigation" [ref=e5] [cursor=pointer]
+      - generic [ref=e10]:
+        - button "No expiring items" [ref=e11] [cursor=pointer]:
+          - img [ref=e12]
+        - dialog:
+          - banner:
+            - img
+            - generic: Everything fresh
+          - generic:
+            - paragraph: Everything in your fridge looks good.
+          - contentinfo:
+            - link "Manage pantry":
+              - /url: /pantry
+  - main [ref=e17]:
+    - main [ref=e18]:
+      - generic [ref=e19]:
+        - generic [ref=e20]:
+          - heading "Welcome back" [level=1] [ref=e21]
+          - paragraph [ref=e22]: Sign in to access your pantry and recipes
+        - generic [ref=e23]:
+          - generic [ref=e24]:
+            - generic [ref=e25]:
+              - generic [ref=e26]: Email
+              - textbox "Email" [ref=e27]:
+                - /placeholder: you@email.com
+            - generic [ref=e28]:
+              - generic [ref=e29]: Password
+              - textbox "Password" [ref=e30]:
+                - /placeholder: ••••••••
+            - button "Sign in" [ref=e31] [cursor=pointer]
+          - generic [ref=e32]: or
+          - button "Continue with Google" [ref=e33] [cursor=pointer]:
+            - generic [ref=e34]:
+              - img [ref=e35]
+              - text: Continue with Google
+        - generic [ref=e41]:
+          - text: Nav konta?
+          - link "Izveidot kontu" [ref=e42] [cursor=pointer]:
+            - /url: /auth/register
+  - contentinfo [ref=e43]
+  - alert [ref=e45]
+```

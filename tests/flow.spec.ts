@@ -1,17 +1,21 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 
 const EMAIL = process.env.TEST_EMAIL!;
 const PASSWORD = process.env.TEST_PASSWORD!;
 
-async function settle(page, selector?: string, ms = Number(process.env.SNAPSHOT_DELAY_MS ?? 1200)) {
+// Tunable delay (ms) before screenshots, e.g. SNAPSHOT_DELAY_MS=2500
+const SNAP_DELAY = Number(process.env.SNAPSHOT_DELAY_MS ?? 1500);
+
+// ---------- helpers ----------
+async function settle(page: Page, selector?: string, extra = SNAP_DELAY) {
   await page.waitForLoadState('domcontentloaded');
   if (selector) {
     await page.locator(selector).first().waitFor({ state: 'visible', timeout: 20_000 }).catch(() => {});
   }
-  await page.waitForTimeout(ms);
+  await page.waitForTimeout(extra);
 }
 
-async function clearClientAuth(page) {
+async function clearClientAuth(page: Page) {
   await page.goto('about:blank');
   await page.evaluate(() => {
     try { localStorage.clear(); } catch {}
@@ -20,79 +24,128 @@ async function clearClientAuth(page) {
   });
 }
 
-async function isLoginVisible(page) {
+async function dismissFreshToast(page: Page) {
+  const toast = page.getByText(/everything fresh/i);
+  if (await toast.first().isVisible().catch(() => false)) {
+    await page.getByRole('button', { name: /close/i }).first().click().catch(() => {});
+  }
+}
+
+async function scrollThrough(page: Page) {
+  await page.evaluate(async () => {
+    const step = Math.max(300, Math.floor(window.innerHeight * 0.75));
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+    for (let y = 0; y < document.body.scrollHeight; y += step) {
+      window.scrollTo(0, y);
+      await sleep(150);
+    }
+    window.scrollTo(0, 0);
+  });
+}
+
+async function gotoLogin(page: Page) {
+  const paths = ['/auth', '/profile', '/login', '/signin'];
+  for (const p of paths) {
+    await page.goto(p, { waitUntil: 'domcontentloaded' }).catch(() => {});
+    const email = page.getByPlaceholder(/you@email\.com/i).or(page.locator('input[type="email"]'));
+    const pass  = page.getByLabel(/^password$/i).or(page.locator('input[type="password"]'));
+    const btn   = page.getByRole('button', { name: /^sign in$/i });
+    if (
+      await email.first().isVisible().catch(() => false) &&
+      await pass.first().isVisible().catch(() => false) &&
+      await btn.first().isVisible().catch(() => false)
+    ) return;
+  }
+}
+
+async function performLogin(page: Page) {
   const email = page.getByPlaceholder(/you@email\.com/i).or(page.locator('input[type="email"]'));
   const pass  = page.getByLabel(/^password$/i).or(page.locator('input[type="password"]'));
   const btn   = page.getByRole('button', { name: /^sign in$/i });
-  const ok =
-    (await email.first().isVisible().catch(() => false)) &&
-    (await pass.first().isVisible().catch(() => false)) &&
-    (await btn.first().isVisible().catch(() => false));
-  return ok;
+
+  await expect(email).toBeVisible({ timeout: 20_000 });
+  await expect(pass).toBeVisible();
+  await expect(btn).toBeVisible();
+
+  await settle(page, 'form'); // give the form a moment
+  await email.fill(EMAIL);
+  await pass.fill(PASSWORD);
+
+  await Promise.all([
+    btn.click(),
+    page.waitForURL(/\/(recipes|dashboard|)$/i, { timeout: 30_000 }).catch(() => {}),
+  ]);
+
+  await settle(page, 'main');
 }
 
-async function isRecipesVisible(page) {
-  return await page.getByRole('heading', { name: /recipes/i })
-                   .first().isVisible().catch(() => false);
-}
-
-test('01 login -> 02 recipes -> 03 dashboard -> 04 pantry -> 05 fitness -> 06 profile (screenshots)', async ({ page }) => {
-  test.setTimeout(240_000);
-
-  // 0) Always start logged out (so we see a real login at least once)
+async function loginThenSnap(page: Page, targetPath: string, headingRegex: RegExp, outPath: string) {
   await clearClientAuth(page);
+  await page.goto(targetPath, { waitUntil: 'domcontentloaded' }).catch(() => {});
+  await gotoLogin(page);
+  await performLogin(page);
 
-  // 1) Try to reach login directly; otherwise use a protected route to trigger it
-  for (const path of ['/auth', '/profile', '/login', '/signin']) {
-    await page.goto(path, { waitUntil: 'domcontentloaded' }).catch(() => {});
-    await settle(page);
-    if (await isLoginVisible(page) || await isRecipesVisible(page)) break;
-  }
-
-  // 01) LOGIN PAGE screenshot (or whatever we see right now, for traceability)
-  await page.screenshot({ path: 'tests-artifacts/01-login.png', fullPage: true });
-
-  // 2) If login form is present → actually sign in. Otherwise, assume we’re already in.
-  if (await isLoginVisible(page)) {
-    const emailInput = page.getByPlaceholder(/you@email\.com/i).or(page.locator('input[type="email"]'));
-    const passInput  = page.getByLabel(/^password$/i).or(page.locator('input[type="password"]'));
-    const signInBtn  = page.getByRole('button', { name: /^sign in$/i });
-
-    await emailInput.fill(EMAIL);
-    await passInput.fill(PASSWORD);
-
-    await Promise.all([
-      signInBtn.click(),
-      // your app typically lands on recipes after login
-      page.waitForURL(/\/(recipes|dashboard|)$/i, { timeout: 30_000 }).catch(() => {}),
-    ]);
-  }
-
-  // 02) RECIPES (post-login landing)
-  if (!(await isRecipesVisible(page))) {
-    // be explicit if we aren’t on it yet
-    await page.goto('/recipes', { waitUntil: 'domcontentloaded' }).catch(() => {});
-  }
+  // Ensure we are on the target page (app might land on /recipes).
+  await page.goto(targetPath, { waitUntil: 'domcontentloaded' }).catch(() => {});
+  await dismissFreshToast(page);
+  await page.getByRole('heading', { name: headingRegex }).first()
+    .waitFor({ state: 'visible', timeout: 20_000 }).catch(() => {});
   await settle(page, 'main');
-  await page.screenshot({ path: 'tests-artifacts/02-recipes.png', fullPage: true });
+  await scrollThrough(page);
+  await dismissFreshToast(page);
+  await page.screenshot({ path: outPath, fullPage: true });
+  console.log(`✅ Screenshot saved → ${outPath}`);
+}
 
-  // 03) DASHBOARD
-  await page.goto('/dashboard', { waitUntil: 'domcontentloaded' }).catch(() => {});
-  await settle(page, 'main'); // ok even if it shows “Preparing your dashboard…”
-  await page.screenshot({ path: 'tests-artifacts/03-dashboard.png', fullPage: true });
+// ---------- tests (one by one) ----------
+test.describe.serial('End-to-end flow (one by one)', () => {
+  test.setTimeout(360_000);
 
-  // 04) PANTRY
-  await page.goto('/pantry', { waitUntil: 'domcontentloaded' }).catch(() => {});
-  await settle(page, 'main');
-  await page.screenshot({ path: 'tests-artifacts/04-pantry.png', fullPage: true });
+  test('01) Login page is visible (screenshot)', async ({ page }) => {
+    await clearClientAuth(page);
+    await gotoLogin(page);
 
-  // 05) FITNESS
-  await page.goto('/fitness', { waitUntil: 'domcontentloaded' }).catch(() => {});
-  await settle(page, 'main');
-  await page.screenshot({ path: 'tests-artifacts/05-fitness.png', fullPage: true });
+    const email = page.getByPlaceholder(/you@email\.com/i).or(page.locator('input[type="email"]'));
+    const pass  = page.getByLabel(/^password$/i).or(page.locator('input[type="password"]'));
+    const btn   = page.getByRole('button', { name: /^sign in$/i });
 
-  // 06) PROFILE
-  await page.goto('/profile', { waitUntil: 'domcontentloaded' }).catch(() => {});
-  await settle(page, 'main');
-  await page.screenshot({ path: 'tests-artifacts/06-profile.png', fullPage: true });
+    await expect(email).toBeVisible({ timeout: 20_000 });
+    await expect(pass).toBeVisible();
+    await expect(btn).toBeVisible();
+
+    await settle(page, 'form');
+    await page.screenshot({ path: 'tests-artifacts/01-login.png', fullPage: true });
+    console.log('✅ 01 Login page shows correctly');
+  });
+
+  test('02) Login succeeds and lands on Recipes (screenshot)', async ({ page }) => {
+    await clearClientAuth(page);
+    await gotoLogin(page);
+    await performLogin(page);
+    // Ensure Recipes
+    if (!(await page.getByRole('heading', { name: /recipes/i }).first().isVisible().catch(() => false))) {
+      await page.goto('/recipes', { waitUntil: 'domcontentloaded' }).catch(() => {});
+    }
+    await dismissFreshToast(page);
+    await settle(page, 'main');
+    await scrollThrough(page);
+    await page.screenshot({ path: 'tests-artifacts/02-recipes.png', fullPage: true });
+    console.log('✅ 02 Login works and Recipes loaded');
+  });
+
+  test('03) Dashboard renders (fresh login + screenshot)', async ({ page }) => {
+    await loginThenSnap(page, '/dashboard', /dashboard|preparing your dashboard/i, 'tests-artifacts/03-dashboard.png');
+  });
+
+  test('04) Pantry renders (fresh login + screenshot)', async ({ page }) => {
+    await loginThenSnap(page, '/pantry', /pantry/i, 'tests-artifacts/04-pantry.png');
+  });
+
+  test('05) Fitness renders full page (fresh login + screenshot)', async ({ page }) => {
+    await loginThenSnap(page, '/fitness', /fitness/i, 'tests-artifacts/05-fitness.png');
+  });
+
+  test('06) Profile renders (fresh login + screenshot)', async ({ page }) => {
+    await loginThenSnap(page, '/profile', /profile|account/i, 'tests-artifacts/06-profile.png');
+  });
 });
