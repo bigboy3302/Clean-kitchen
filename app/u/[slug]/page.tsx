@@ -1,4 +1,4 @@
-﻿"use client";
+﻿﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
@@ -348,8 +348,3 @@ const styles = `
   .thumb{ width:64px; height:64px; }
 }
 `;
-
-
-
-
-

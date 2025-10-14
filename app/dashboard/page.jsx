@@ -23,7 +23,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { auth, db, storage } from "@/lib/firebase";
 import PostCard from "@/components/posts/PostCard";
 
-/** ---------- helpers for media (no TS types) ---------- */
+
 function getImageDims(file) {
   return new Promise((res, rej) => {
     const img = new Image();
@@ -44,20 +44,8 @@ function getVideoDims(file) {
     v.src = URL.createObjectURL(file);
   });
 }
-
-/** Send metadata.contentType so your Storage rules (isImage/isVideo) pass */
 async function uploadWithProgress(storageRef, file) {
-  // Validate client-side to match your Storage limits/rules
-  const isVideo = file.type.startsWith("video/");
-  const isImage = file.type.startsWith("image/");
-  if (!isImage && !isVideo) throw new Error("Only images/videos allowed");
-  if (isImage && file.size > 20 * 1024 * 1024) throw new Error("Image max 20MB");
-  if (isVideo && file.size > 100 * 1024 * 1024) throw new Error("Video max 100MB");
-
-  const task = uploadBytesResumable(storageRef, file, {
-    contentType: file.type, // <-- REQUIRED by your rules
-    cacheControl: "public, max-age=3600",
-  });
+  const task = uploadBytesResumable(storageRef, file);
   return new Promise((resolve, reject) => {
     task.on(
       "state_changed",
@@ -104,6 +92,7 @@ export default function DashboardPage() {
       .map(({ post }) => post);
   }, [trending, trendingReposts]);
 
+ 
   const [openComposer, setOpenComposer] = useState(false);
   const [postText, setPostText] = useState("");
   const [postFiles, setPostFiles] = useState([]);
@@ -112,7 +101,6 @@ export default function DashboardPage() {
   const [errPost, setErrPost] = useState(null);
   const fileRef = useRef(null);
 
-  /** auth gate */
   useEffect(() => {
     const stop = onAuthStateChanged(auth, (u) => {
       if (!u) {
@@ -125,29 +113,28 @@ export default function DashboardPage() {
     return () => stop();
   }, [router]);
 
-  /** feed: public posts are allowed by your rules */
   useEffect(() => {
-    const qy = query(collection(db, "posts"), orderBy("createdAt", "desc"), fsLimit(50));
-    const stop = onSnapshot(
-      qy,
-      (snap) => {
-        const list = snap.docs
-          .map((d) => ({ id: d.id, ...(d.data() || {}) }))
-          .filter((p) => p.isRepost !== true);
-        setRecentPosts(list);
-      },
-      (e) => console.error("[recentPosts] onSnapshot error:", e)
+    const qy = query(
+      collection(db, "posts"),
+      orderBy("createdAt", "desc"),
+      fsLimit(50)
     );
+    const stop = onSnapshot(qy, (snap) => {
+      const list = snap.docs
+        .map((d) => ({ id: d.id, ...(d.data() || {}) }))
+        .filter((p) => p.isRepost !== true);
+      setRecentPosts(list);
+    });
     return () => stop();
   }, []);
 
-  /** live repost counts per trending id (reads are allowed by your rules) */
   useEffect(() => {
     const ids = trending.map((p) => p.id).filter(Boolean);
     if (ids.length === 0) {
       setTrendingReposts({});
       return;
     }
+
     setTrendingReposts((prev) => {
       const next = {};
       ids.forEach((id) => {
@@ -155,38 +142,34 @@ export default function DashboardPage() {
       });
       return next;
     });
+
     const unsubs = ids.map((id) =>
-      onSnapshot(
-        collection(db, "posts", id, "reposts"),
-        (snap) => {
-          setTrendingReposts((prev) => {
-            const count = snap.size;
-            if (prev[id] === count) return prev;
-            return { ...prev, [id]: count };
-          });
-        },
-        (e) => console.error("[reposts count] error for", id, e)
-      )
+      onSnapshot(collection(db, "posts", id, "reposts"), (snap) => {
+        setTrendingReposts((prev) => {
+          const count = snap.size;
+          if (prev[id] === count) return prev;
+          return { ...prev, [id]: count };
+        });
+      })
     );
+
     return () => {
       unsubs.forEach((fn) => fn());
     };
   }, [trending]);
 
-  /** trending list (just recents for now) */
   useEffect(() => {
-    const tQ = query(collection(db, "posts"), orderBy("createdAt", "desc"), fsLimit(5));
-    const stop = onSnapshot(
-      tQ,
-      (snap) => {
-        setTrending(snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) })));
-      },
-      (e) => console.error("[trending] onSnapshot error:", e)
+    const tQ = query(
+      collection(db, "posts"),
+      orderBy("createdAt", "desc"),
+      fsLimit(5)
     );
+    const stop = onSnapshot(tQ, (snap) => {
+      setTrending(snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) })));
+    });
     return () => stop();
   }, []);
 
-  /** likes — allowed publicly as long as doc id equals auth uid (your rules) */
   async function handleToggleLike(post, liked) {
     const curUid = auth.currentUser?.uid || null;
     if (!curUid) {
@@ -198,6 +181,7 @@ export default function DashboardPage() {
     const likeRef = doc(db, "posts", post.id, "likes", curUid);
     try {
       const snap = await getDoc(likeRef);
+      console.log("[like] path:", likeRef.path, "auth:", curUid, "liked:", liked, "exists:", snap.exists());
       if (liked) {
         if (!snap.exists()) {
           await setDoc(likeRef, { uid: curUid, createdAt: serverTimestamp() });
@@ -209,15 +193,10 @@ export default function DashboardPage() {
       }
     } catch (e) {
       console.error("[like] failed", { path: likeRef.path, auth: curUid, postId: post.id }, e);
-      const msg = String(e?.message || e);
-      if (/permission|denied|insufficient/i.test(msg)) {
-        throw new Error("Permission denied (likes). Are you signed in?");
-      }
-      throw e;
+      throw e; 
     }
   }
 
-  /** reposts — reads public, writes allowed with docId == auth uid (your rules) */
   async function handleToggleRepost(post, next) {
     if (!uid || !post?.id) return;
     const rRef = doc(db, "posts", post.id, "reposts", uid);
@@ -229,24 +208,13 @@ export default function DashboardPage() {
     }
   }
 
-  /** edits — only allowed if you own the post per your rules */
   async function handleEdit(post, nextText) {
     if (!uid || !post?.id) return;
-    if (post.uid !== uid) {
-      console.warn("[edit] blocked: not owner", { postId: post.id, postUid: post.uid, me: uid });
-      throw new Error("You can only edit your own posts.");
-    }
     await setDoc(doc(db, "posts", post.id), { text: nextText || null }, { merge: true });
   }
 
-  /** add media — Storage path must use your auth uid; also only allowed for your own post */
   async function handleAddMedia(post, files) {
     if (!uid || !post?.id || !files?.length) return;
-    if (post.uid !== uid) {
-      console.warn("[addMedia] blocked: not owner", { postId: post.id, postUid: post.uid, me: uid });
-      throw new Error("You can only add media to your own posts.");
-    }
-
     const uploaded = [];
     for (const file of files.slice(0, 4)) {
       const isVideo = file.type.startsWith("video");
@@ -260,12 +228,9 @@ export default function DashboardPage() {
           w = d.w; h = d.h;
         }
       } catch {}
-
       const safeName = `${Date.now()}-${file.name}`.replace(/\s+/g, "_");
-      // IMPORTANT: path uses your uid (matches your Storage rule posts/{uid}/{postId}/{filename})
       const storagePath = `posts/${uid}/${post.id}/${safeName}`;
       const url = await uploadWithProgress(ref(storage, storagePath), file);
-
       uploaded.push({
         mid: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         type: isVideo ? "video" : "image",
@@ -276,7 +241,6 @@ export default function DashboardPage() {
         ...(isVideo ? { duration } : {}),
       });
     }
-
     if (uploaded.length) {
       await setDoc(
         doc(db, "posts", post.id),
@@ -286,13 +250,8 @@ export default function DashboardPage() {
     }
   }
 
-  /** deletions — only your own post per your rules */
   async function handleDelete(post) {
     if (!uid || !post?.id) return;
-    if (post.uid !== uid) {
-      console.warn("[delete] blocked: not owner", { postId: post.id, postUid: post.uid, me: uid });
-      throw new Error("You can only delete your own posts.");
-    }
     await deleteDoc(doc(db, "posts", post.id));
   }
 
@@ -305,7 +264,6 @@ export default function DashboardPage() {
   }
 
   async function handleComment() {
-    // implement as needed; reads are public, writes require auth and textOk() per your rules
   }
 
   function onPick(e) {
@@ -319,7 +277,6 @@ export default function DashboardPage() {
     );
   }
 
-  /** create post — allowed if request.resource.data.uid == auth.uid and text is clean (your rules) */
   async function createPost() {
     if (!uid) return;
     const text = postText.trim();
@@ -328,36 +285,33 @@ export default function DashboardPage() {
     setBusyPost(true);
     setErrPost(null);
     try {
-      // build author facade from your own users/{uid} doc
+    
       let author = { username: null, displayName: null, avatarURL: null };
       try {
-        const uSnap = await getDoc(doc(db, "users", uid)); // allowed: your own doc
+        const uSnap = await getDoc(doc(db, "users", uid));
         if (uSnap.exists()) {
           const u = uSnap.data() || {};
           author = {
-            username: u?.username || null,
-            displayName: u?.firstName
+            username: u.username || null,
+            displayName: u.firstName
               ? `${u.firstName}${u.lastName ? " " + u.lastName : ""}`
-              : u?.displayName || null,
-            avatarURL: u?.photoURL || null,
+              : u.displayName || null,
+            avatarURL: u.photoURL || null,
           };
         }
-      } catch (e) {
-        console.warn("[createPost] could not read users doc:", e);
-      }
+      } catch {}
 
-      // Create post (rules: isSignedIn && request.resource.data.uid == auth.uid && cleanOptional('text'))
+ 
       const postRef = await addDoc(collection(db, "posts"), {
         uid,
         text: text || null,
         media: [],
-        likes: 0,      // counters can be bumped later by your update rule (with constraints)
-        reposts: 0,
+        likes: 0,     
+        reposts: 0,   
         createdAt: serverTimestamp(),
         author,
       });
 
-      // Upload media (Storage rule: posts/{uid}/{postId}/{filename} with contentType)
       if (postFiles.length) {
         const uploaded = [];
         for (const file of postFiles) {
@@ -372,7 +326,6 @@ export default function DashboardPage() {
               w = d.w; h = d.h;
             }
           } catch {}
-
           const safeName = `${Date.now()}-${file.name}`.replace(/\s+/g, "_");
           const storagePath = `posts/${uid}/${postRef.id}/${safeName}`;
           const url = await uploadWithProgress(ref(storage, storagePath), file);
@@ -389,17 +342,16 @@ export default function DashboardPage() {
         await updateDoc(postRef, { media: uploaded });
       }
 
-      // reset UI
+
       setPostText("");
       setPostFiles([]);
       setPreviews([]);
       if (fileRef.current) fileRef.current.value = "";
       setOpenComposer(false);
     } catch (e) {
-      console.error("[createPost] failed:", e);
       const msg = String(e?.message || e);
       setErrPost(/permission|insufficient|denied/i.test(msg)
-        ? "Permission denied. Check that you’re signed in and your rules are satisfied."
+        ? "Permission denied. Check auth and rules."
         : msg);
     } finally {
       setBusyPost(false);
@@ -484,6 +436,7 @@ export default function DashboardPage() {
         </aside>
       </div>
 
+     
       {openComposer && (
         <div className="backdrop" onClick={() => setOpenComposer(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -557,12 +510,15 @@ export default function DashboardPage() {
             --shadow: 0 10px 30px rgba(2,6,23,.06);
           }
         }
+
+
         .page { color: var(--text); padding-bottom: 80px; }
         .container { max-width: 1120px; margin: 0 auto; padding: 16px; }
         .top { display:flex; align-items:center; justify-content:space-between; }
         .hgroup { display:grid; gap:4px; }
         h1 { margin:0; font-weight:900; font-size: clamp(22px, 3.4vw, 30px); letter-spacing:-.02em; }
         .sub { margin:0; color: var(--muted); }
+
         .grid {
           display:grid; gap: 18px;
           grid-template-columns: minmax(0, 1fr) 320px;
@@ -572,6 +528,8 @@ export default function DashboardPage() {
           .grid { grid-template-columns: 1fr; }
           .side { order: -1; }
         }
+
+
         .btn {
           border: 1px solid var(--border);
           background: var(--card);
@@ -603,10 +561,12 @@ export default function DashboardPage() {
           box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 20%, transparent);
         }
 
+     
         .feed { display:grid; gap: 14px; }
         :global(.feed > *) { max-width: 720px; width: 100%; margin: 0 auto; }
         .empty { color: var(--muted); text-align:center; padding: 18px; }
 
+      
         .panel {
           position: sticky; top: 16px;
           background: var(--card);

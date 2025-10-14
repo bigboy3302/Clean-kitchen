@@ -7,7 +7,7 @@ import FabNav from "@/components/nav/FabNav";
 import ExpiryBell from "@/components/nav/ExpiryBell";
 import EnsureUserDoc from "@/components/auth/EnsureUserDoc";
 import BottomNav from "@/components/nav/BottomNav";
-import "@/lib/firestoreDebug";
+
 export const metadata: Metadata = {
   title: "Clean Kitchen",
   description: "Plan, cook, and enjoy.",

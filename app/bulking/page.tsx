@@ -1,4 +1,4 @@
-﻿"use client";
+﻿﻿"use client";
 
 import RequireAuth from "@/components/auth/RequireAuth";
 import { useEffect, useState } from "react";
