@@ -11,7 +11,6 @@ export default function AuthWall({
   description?: string;
 }) {
   const [open, setOpen] = useState(true);
-
   if (!open) return null;
 
   return (

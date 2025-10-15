@@ -2,7 +2,6 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-
     /* helpers */
     function isSignedIn() { return request.auth != null; }
     function isImage()    { return request.resource.contentType.matches('image/.*'); }
@@ -36,23 +35,23 @@ service firebase.storage {
       allow create: if isSignedIn()
                     && isImage()
                     && sizeUnder(15 * 1024 * 1024)
-                    && exists(/databases/$(database)/documents/posts/$(postId)/comments/$(commentId))
-                    && get(/databases/$(database)/documents/posts/$(postId)/comments/$(commentId)).data.uid == request.auth.uid;
+                    && exists(/databases/(default)/documents/posts/$(postId)/comments/$(commentId))
+                    && get(/databases/(default)/documents/posts/$(postId)/comments/$(commentId)).data.uid == request.auth.uid;
 
       // Delete by comment author OR original post author
       allow delete: if isSignedIn()
-                    && exists(/databases/$(database)/documents/posts/$(postId)/comments/$(commentId))
+                    && exists(/databases/(default)/documents/posts/$(postId)/comments/$(commentId))
                     && (
-                         get(/databases/$(database)/documents/posts/$(postId)/comments/$(commentId)).data.uid == request.auth.uid ||
-                         get(/databases/$(database)/documents/posts/$(postId)).data.uid == request.auth.uid
+                         get(/databases/(default)/documents/posts/$(postId)/comments/$(commentId)).data.uid == request.auth.uid ||
+                         get(/databases/(default)/documents/posts/$(postId)).data.uid == request.auth.uid
                        );
 
       allow update: if false;
     }
 
-    /* recipe images */
+    /* recipe images — set to public reads so signed-out pages can render */
     match /recipeImages/{uid}/{recipeId}/{fileId=**} {
-      allow read: if isSignedIn();
+      allow read: if true;  // <-- make private by switching back to isSignedIn()
       allow write, delete, list: if isSignedIn() && request.auth.uid == uid;
     }
 

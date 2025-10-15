@@ -7,6 +7,7 @@ import FabNav from "@/components/nav/FabNav";
 import ExpiryBell from "@/components/nav/ExpiryBell";
 import EnsureUserDoc from "@/components/auth/EnsureUserDoc";
 import BottomNav from "@/components/nav/BottomNav";
+import AuthGate from "@/components/auth/AuthGate";
 
 export const metadata: Metadata = {
   title: "Clean Kitchen",
@@ -28,22 +29,24 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body suppressHydrationWarning>
         <ThemeProvider>
-          <EnsureUserDoc />
-          <header className="ck-navbar">
-            <div className="ck-navbar-inner">
-              {/* Put nav first (left) */}
-              <FabNav />
-              {/* Put bell second (right) */}
-              <ExpiryBell className="ck-bell-right" />
-            </div>
-          </header>
+          {/* Wait for auth so client SDK calls don't race before user state is known */}
+          <AuthGate>
+            <EnsureUserDoc />
 
-          <main className="container section">{children}</main>
+            <header className="ck-navbar">
+              <div className="ck-navbar-inner">
+                <FabNav />
+                <ExpiryBell className="ck-bell-right" />
+              </div>
+            </header>
 
-          <footer className="section">
-            <div className="container muted" style={{ fontSize: 12 }} />
-          </footer>
-          <BottomNav />
+            <main className="container section">{children}</main>
+
+            <footer className="section">
+              <div className="container muted" style={{ fontSize: 12 }} />
+            </footer>
+            <BottomNav />
+          </AuthGate>
         </ThemeProvider>
       </body>
     </html>
