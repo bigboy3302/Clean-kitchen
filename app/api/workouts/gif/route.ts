@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
-
+// app/api/workouts/gif/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+import { NextResponse } from "next/server";
 
 function normalizeUrl(raw: string | null): URL | null {
   try {
@@ -28,10 +29,7 @@ function cloudfrontUrlFromId(idRaw: string): string | null {
 async function pipe(upstream: Response) {
   if (!upstream.ok || !upstream.body) {
     const text = await upstream.text().catch(() => "");
-    return NextResponse.json(
-      { error: text || `upstream-${upstream.status}` },
-      { status: upstream.status || 502 }
-    );
+    return NextResponse.json({ error: text || `upstream-${upstream.status}` }, { status: upstream.status || 502 });
   }
   const ct = upstream.headers.get("content-type") || "image/gif";
   return new NextResponse(upstream.body, {
@@ -55,8 +53,7 @@ export async function GET(req: Request) {
       const res = await fetch(url.toString(), {
         headers: {
           Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari",
+          "User-Agent": "Mozilla/5.0 Chrome Safari",
         },
         redirect: "follow",
         cache: "no-store",
@@ -70,8 +67,7 @@ export async function GET(req: Request) {
       const res = await fetch(cloud, {
         headers: {
           Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari",
+          "User-Agent": "Mozilla/5.0 Chrome Safari",
         },
         redirect: "follow",
         cache: "no-store",
@@ -81,9 +77,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ error: "missing-id-or-src" }, { status: 400 });
   } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message || "proxy-error" },
-      { status: 500 }
-    );
+    console.error("GET /api/workouts/gif failed:", e);
+    return NextResponse.json({ error: e?.message || "proxy-error" }, { status: 500 });
   }
 }

@@ -49,9 +49,9 @@ service firebase.storage {
       allow update: if false;
     }
 
-    /* recipe images — set to public reads so signed-out pages can render */
+    /* recipe images — public reads so signed-out pages can render */
     match /recipeImages/{uid}/{recipeId}/{fileId=**} {
-      allow read: if true;  // <-- make private by switching back to isSignedIn()
+      allow read: if true; // change to isSignedIn() if these should be private
       allow write, delete, list: if isSignedIn() && request.auth.uid == uid;
     }
 
