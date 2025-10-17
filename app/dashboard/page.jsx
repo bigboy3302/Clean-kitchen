@@ -56,6 +56,45 @@ async function uploadWithProgress(storageRef, file) {
   });
 }
 
+function valueToMillis(value) {
+  if (!value) return 0;
+  if (typeof value === "number") {
+    return value > 1e12 ? value : value * 1000;
+  }
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "object") {
+    const seconds = value?.seconds;
+    if (typeof seconds === "number") return seconds * 1000;
+    const milliseconds = value?.milliseconds;
+    if (typeof milliseconds === "number") return milliseconds;
+  }
+  return 0;
+}
+
+function formatRelativeFromMs(ms) {
+  if (!ms) return "";
+  const diffSeconds = Math.max(1, Math.floor((Date.now() - ms) / 1000));
+  const steps = [
+    [60, "s"],
+    [60, "m"],
+    [24, "h"],
+    [7, "d"],
+    [4.345, "w"],
+    [12, "mo"],
+    [Number.MAX_SAFE_INTEGER, "y"],
+  ];
+  let value = diffSeconds;
+  let idx = 0;
+  for (; idx < steps.length - 1 && value >= steps[idx][0]; idx++) {
+    value = Math.floor(value / steps[idx][0]);
+  }
+  return `${value}${steps[idx][1]}`;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [uid, setUid] = useState(null);
@@ -92,7 +131,32 @@ export default function DashboardPage() {
       .map(({ post }) => post);
   }, [trending, trendingReposts]);
 
- 
+  const myPosts = useMemo(
+    () => (uid ? recentPosts.filter((p) => p?.uid === uid) : []),
+    [recentPosts, uid]
+  );
+  const myMediaCount = useMemo(
+    () =>
+      myPosts.reduce(
+        (acc, item) => acc + (Array.isArray(item?.media) ? item.media.length : 0),
+        0
+      ),
+    [myPosts]
+  );
+  const lastPostMs = useMemo(() => {
+    if (!myPosts.length) return 0;
+    return myPosts.reduce((latest, item) => {
+      const ts = valueToMillis(item?.createdAt);
+      return ts > latest ? ts : latest;
+    }, 0);
+  }, [myPosts]);
+  const lastPostLabel = useMemo(() => {
+    if (!myPosts.length) return "Share your first post";
+    const ago = formatRelativeFromMs(lastPostMs);
+    return ago ? `Last post · ${ago} ago` : "Last post";
+  }, [myPosts.length, lastPostMs]);
+
+
   const [openComposer, setOpenComposer] = useState(false);
   const [postText, setPostText] = useState("");
   const [postFiles, setPostFiles] = useState([]);
@@ -362,18 +426,52 @@ export default function DashboardPage() {
 
   return (
     <div className="page">
-      <header className="top container">
-        <div className="hgroup">
-          <h1>Dashboard</h1>
-          <p className="sub">Your posts, plus what’s trending</p>
+      <section className="hero container">
+        <div className="hero-card">
+          <div className="hero-content">
+            <p className="hero-eyebrow">Creator hub</p>
+            <h1 className="hero-title">Your Clean Kitchen dashboard</h1>
+            <p className="hero-copy">
+              Share pantry, fitness progress, and kitchen inspiration with the community.
+            </p>
+            <div className="hero-actions">
+              <button className="hero-primary" onClick={() => setOpenComposer(true)}>
+                Create post
+              </button>
+              <Link href="/profile" className="hero-secondary">
+                View profile
+              </Link>
+            </div>
+          </div>
+          <div className="hero-stats">
+            <div className="stat-pill">
+              <span className="stat-value">{myPosts.length}</span>
+              <span className="stat-label">Live posts</span>
+            </div>
+            <div className="stat-pill">
+              <span className="stat-value">{myMediaCount}</span>
+              <span className="stat-label">Media attachments</span>
+            </div>
+            <div className="stat-pill">
+              <span className="stat-value">{trendingSorted.length}</span>
+              <span className="stat-label">Trending now</span>
+              <span className="stat-sub">{lastPostLabel}</span>
+            </div>
+          </div>
         </div>
-        <button className="btn btn-primary" onClick={() => setOpenComposer(true)}>
-          New Post
-        </button>
-      </header>
+      </section>
 
-      <div className="container grid">
-        <section className="main">
+      <div className="container layout">
+        <section className="stream">
+          <div className="stream-head">
+            <div>
+              <h2>Community feed</h2>
+              <p>Fresh updates from the people keeping their kitchens on track.</p>
+            </div>
+            <button className="stream-new" onClick={() => setOpenComposer(true)}>
+              New post
+            </button>
+          </div>
           <div className="feed">
             {recentPosts.map((p) => (
               <PostCard
@@ -393,38 +491,46 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <aside className="side">
-          <div className="panel">
-            <div className="panelHead">
-              <span className="dot" /> Trending
+        <aside className="sidebar">
+          <div className="trend-card">
+            <div className="trend-head">
+              <div>
+                <h2>Trending now</h2>
+                <p>See what everyone is reposting today.</p>
+              </div>
+              <span className="trend-dot" aria-hidden />
             </div>
-            {trending.length === 0 ? (
-              <p className="muted">No trending posts yet.</p>
+            {trendingSorted.length === 0 ? (
+              <p className="trend-empty">No trending posts yet.</p>
             ) : (
-              <ul className="trend">
+              <ul className="trend-list">
                 {trendingSorted.map((p, i) => {
                   const thumb = Array.isArray(p.media) && p.media[0]?.url ? p.media[0] : null;
                   const repostCount = trendingReposts[p.id] ?? p.reposts ?? 0;
                   return (
-                    <li key={p.id} className="tr">
-                      <span className="rank">{i + 1}</span>
-                      <Link href={`/posts/${p.id}`} className="trLink">
-                        {thumb ? (
-                          <div className="mini">
-                            {thumb.type === "video" ? (
+                    <li key={p.id} className="trend-item">
+                      <Link href={`/posts/${p.id}`} className="trend-link">
+                        <div className="trend-thumb">
+                          {thumb ? (
+                            thumb.type === "video" ? (
                               <video src={thumb.url} muted playsInline preload="metadata" />
                             ) : (
                               <img src={thumb.url} alt="" />
-                            )}
+                            )
+                          ) : (
+                            <span>#{i + 1}</span>
+                          )}
+                        </div>
+                        <div className="trend-body">
+                          <div className="trend-row">
+                            <span className="trend-rank">#{i + 1}</span>
+                            <span className="trend-title">
+                              {(p.text || p.description || p.title || "Untitled").slice(0, 80)}
+                            </span>
                           </div>
-                        ) : (
-                          <div className="mini ph" />
-                        )}
-                        <div className="trBody">
-                          <div className="trTitle">{(p.text || p.description || p.title || "Untitled").slice(0, 80)}</div>
-                          <div className="trMeta">
+                          <span className="trend-meta">
                             {repostCount} {repostCount === 1 ? "repost" : "reposts"}
-                          </div>
+                          </span>
                         </div>
                       </Link>
                     </li>
@@ -487,167 +593,504 @@ export default function DashboardPage() {
       )}
 
       <style jsx>{`
-        :root {
-          --bg: #0b0c10;
-          --bg-soft: #0f1117;
-          --card: #0f1320;
-          --border: #1c2336;
-          --text: #e7ecf3;
-          --muted: #a3adbb;
-          --primary: #6d5dfc;
-          --primary-contrast: #fff;
-          --shadow: 0 10px 30px rgba(0,0,0,.35);
+        .page {
+          display: flex;
+          flex-direction: column;
+          gap: 40px;
+          padding-bottom: 96px;
         }
-        @media (prefers-color-scheme: light) {
-          :root {
-            --bg: #f6f7fb;
-            --bg-soft: #f1f5f9;
-            --card: #ffffff;
-            --border: #e5e7eb;
-            --text: #0f172a;
-            --muted: #6b7280;
-            --primary: #4f46e5;
-            --shadow: 0 10px 30px rgba(2,6,23,.06);
+        .container {
+          width: min(1120px, 100%);
+          margin: 0 auto;
+          padding: 0 16px;
+        }
+        .hero {
+          margin-top: 20px;
+        }
+        .hero-card {
+          position: relative;
+          isolation: isolate;
+          overflow: hidden;
+          border-radius: var(--radius-card);
+          padding: clamp(28px, 6vw, 44px);
+          background: linear-gradient(
+            135deg,
+            color-mix(in oklab, var(--primary) 78%, #4338ca) 0%,
+            color-mix(in oklab, var(--primary) 52%, #14b8a6) 100%
+          );
+          color: #fff;
+          display: grid;
+          gap: clamp(24px, 4vw, 40px);
+        }
+        .hero-card::before,
+        .hero-card::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          opacity: 0.55;
+          mix-blend-mode: screen;
+        }
+        .hero-card::before {
+          background: radial-gradient(
+            circle at 18% 18%,
+            rgba(255, 255, 255, 0.28) 0%,
+            transparent 52%
+          );
+        }
+        .hero-card::after {
+          background: radial-gradient(
+            circle at 82% 0%,
+            rgba(255, 255, 255, 0.26) 0%,
+            transparent 45%
+          );
+        }
+        .hero-content {
+          position: relative;
+          display: grid;
+          gap: 16px;
+          max-width: 520px;
+        }
+        .hero-eyebrow {
+          margin: 0;
+          text-transform: uppercase;
+          letter-spacing: 0.16em;
+          font-size: 11px;
+          font-weight: 700;
+          opacity: 0.82;
+        }
+        .hero-title {
+          margin: 0;
+          font-size: clamp(28px, 5vw, 40px);
+          font-weight: 800;
+          line-height: 1.05;
+        }
+        .hero-copy {
+          margin: 0;
+          font-size: 15px;
+          line-height: 1.6;
+          color: rgba(255, 255, 255, 0.76);
+        }
+        .hero-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+        }
+        .hero-primary {
+          border: 0;
+          border-radius: var(--radius-button);
+          padding: 12px 20px;
+          background: #fff;
+          color: var(--primary);
+          font-weight: 700;
+          cursor: pointer;
+          box-shadow: 0 16px 32px rgba(15, 23, 42, 0.28);
+          transition: transform 0.12s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+        }
+        .hero-primary:active {
+          transform: translateY(1px);
+          box-shadow: 0 8px 18px rgba(15, 23, 42, 0.22);
+        }
+        .hero-secondary {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 12px 18px;
+          border-radius: var(--radius-button);
+          border: 1px solid rgba(255, 255, 255, 0.3);
+          background: rgba(15, 23, 42, 0.18);
+          color: #fff;
+          font-weight: 700;
+          text-decoration: none;
+          backdrop-filter: blur(12px);
+        }
+        .hero-secondary:hover {
+          background: rgba(15, 23, 42, 0.28);
+          text-decoration: none;
+        }
+        .hero-stats {
+          position: relative;
+          display: grid;
+          gap: 18px;
+          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        }
+        .stat-pill {
+          position: relative;
+          padding: 16px;
+          border-radius: var(--radius-card);
+          background: rgba(15, 23, 42, 0.2);
+          border: 1px solid rgba(255, 255, 255, 0.28);
+          backdrop-filter: blur(14px);
+          display: grid;
+          gap: 6px;
+          min-height: 116px;
+        }
+        .stat-value {
+          font-size: 30px;
+          font-weight: 800;
+          line-height: 1;
+          color: #fff;
+        }
+        .stat-label {
+          font-size: 13px;
+          font-weight: 600;
+          color: rgba(255, 255, 255, 0.78);
+        }
+        .stat-sub {
+          font-size: 12px;
+          color: rgba(255, 255, 255, 0.7);
+        }
+        @media (max-width: 720px) {
+          .hero-card {
+            padding: 26px;
+          }
+          .stat-pill {
+            min-height: 104px;
           }
         }
-
-
-        .page { color: var(--text); padding-bottom: 80px; }
-        .container { max-width: 1120px; margin: 0 auto; padding: 16px; }
-        .top { display:flex; align-items:center; justify-content:space-between; }
-        .hgroup { display:grid; gap:4px; }
-        h1 { margin:0; font-weight:900; font-size: clamp(22px, 3.4vw, 30px); letter-spacing:-.02em; }
-        .sub { margin:0; color: var(--muted); }
-
-        .grid {
-          display:grid; gap: 18px;
-          grid-template-columns: minmax(0, 1fr) 320px;
-          align-items:start;
+        .layout {
+          display: grid;
+          gap: 32px;
+          grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+          align-items: start;
         }
-        @media (max-width: 1024px) {
-          .grid { grid-template-columns: 1fr; }
-          .side { order: -1; }
+        @media (max-width: 1080px) {
+          .layout {
+            grid-template-columns: 1fr;
+          }
+          .sidebar {
+            order: -1;
+          }
         }
-
-
-        .btn {
-          border: 1px solid var(--border);
-          background: var(--card);
-          color: var(--text);
-          border-radius: 12px;
-          padding: 10px 14px;
+        .stream {
+          display: grid;
+          gap: 20px;
+        }
+        .stream-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 0 4px;
+        }
+        .stream-head h2 {
+          margin: 0;
+          font-size: 22px;
           font-weight: 800;
-          cursor: pointer;
-          transition: background .15s ease, transform .06s ease, box-shadow .2s ease, border-color .2s ease;
         }
-        .btn:hover { background: color-mix(in oklab, var(--card) 80%, var(--bg)); }
-        .btn:active { transform: translateY(1px); }
-        .btn-primary {
-          background: var(--primary);
-          color: var(--primary-contrast);
-          border-color: color-mix(in oklab, var(--primary) 50%, var(--border));
-          box-shadow: 0 8px 18px color-mix(in oklab, var(--primary) 25%, transparent);
+        .stream-head p {
+          margin: 4px 0 0;
+          color: var(--muted);
+          font-size: 14px;
         }
-        .ghost { background: transparent; }
-
-        textarea, input[type="text"], input[type="file"] {
-          width:100%; border:1px solid var(--border); border-radius:12px;
-          background: var(--bg-soft); color: var(--text);
-          padding: 12px 14px;
-        }
-        textarea:focus, input:focus {
-          outline:none;
-          border-color: color-mix(in oklab, var(--primary) 40%, var(--border));
-          box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 20%, transparent);
-        }
-
-     
-        .feed { display:grid; gap: 14px; }
-        :global(.feed > *) { max-width: 720px; width: 100%; margin: 0 auto; }
-        .empty { color: var(--muted); text-align:center; padding: 18px; }
-
-      
-        .panel {
-          position: sticky; top: 16px;
-          background: var(--card);
-          border: 1px solid var(--border);
-          border-radius: 16px;
-          box-shadow: var(--shadow);
-          padding: 12px;
-        }
-        .panelHead {
-          display:flex; align-items:center; gap:8px;
-          font-weight:900; letter-spacing:-.01em; margin-bottom:8px;
-        }
-        .dot { width:10px; height:10px; border-radius:999px; background: var(--primary); box-shadow: 0 0 12px color-mix(in oklab, var(--primary) 60%, transparent); }
-
-        .trend { list-style:none; margin:0; padding:0; display:grid; gap:8px; }
-        .tr {
-          display:grid;
-          grid-template-columns: 28px 1fr;
+        .stream-new {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
           gap: 8px;
-          align-items:center;
+          padding: 10px 16px;
+          border-radius: var(--radius-button);
+          border: 1px solid color-mix(in oklab, var(--primary) 32%, var(--border));
+          background: color-mix(in oklab, var(--primary) 12%, transparent);
+          color: var(--primary);
+          font-weight: 700;
+          cursor: pointer;
+          transition: transform 0.12s ease, background 0.18s ease, border-color 0.18s ease;
         }
-        .rank {
-          width: 28px; height: 28px; border-radius: 10px;
-          display:grid; place-items:center;
-          border:1px solid var(--border); background: var(--bg-soft);
-          font-size: 12px; font-weight:900;
+        .stream-new:hover {
+          background: color-mix(in oklab, var(--primary) 22%, transparent);
         }
-        .trLink {
-          display:grid; grid-template-columns: 56px 1fr; gap:10px;
-          text-decoration:none; color: inherit; align-items:center;
-          padding: 8px; border-radius: 12px; border:1px dashed transparent;
-          transition: background .15s ease, border-color .15s ease;
+        .stream-new:active {
+          transform: translateY(1px);
         }
-        .trLink:hover {
-          background: color-mix(in oklab, var(--primary) 10%, transparent);
-          border-color: color-mix(in oklab, var(--primary) 35%, var(--border));
+        .feed {
+          display: grid;
+          gap: 18px;
         }
-        .mini {
-          width:56px; height:42px; border-radius:10px; overflow:hidden; background:#000; border:1px solid var(--border);
+        :global(.feed > *) {
+          max-width: 720px;
+          width: 100%;
+          margin: 0 auto;
         }
-        .mini img, .mini video { width:100%; height:100%; object-fit:cover; display:block; }
-        .mini.ph { background: var(--bg-soft); }
-        .trBody { display:grid; gap:2px; min-width:0; }
-        .trTitle { font-weight:800; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .trMeta  { color: var(--muted); font-size:12px; }
-
+        .empty {
+          text-align: center;
+          padding: 28px;
+          border-radius: var(--radius-card);
+          background: var(--bg-raised);
+          border: 1px dashed color-mix(in oklab, var(--primary) 24%, var(--border));
+          color: var(--muted);
+        }
+        .sidebar {
+          display: grid;
+          gap: 20px;
+        }
+        .trend-card {
+          position: sticky;
+          top: 20px;
+          display: grid;
+          gap: 18px;
+          padding: 22px;
+          border-radius: var(--radius-card);
+          background: var(--bg-raised);
+          border: 1px solid var(--border);
+          box-shadow: var(--shadow);
+        }
+        .trend-head {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 16px;
+        }
+        .trend-head h2 {
+          margin: 0;
+          font-size: 20px;
+          font-weight: 800;
+        }
+        .trend-head p {
+          margin: 4px 0 0;
+          color: var(--muted);
+          font-size: 13px;
+        }
+        .trend-dot {
+          width: 14px;
+          height: 14px;
+          border-radius: 999px;
+          background: var(--primary);
+          box-shadow: 0 0 0 8px color-mix(in oklab, var(--primary) 18%, transparent);
+        }
+        .trend-list {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: grid;
+          gap: 12px;
+        }
+        .trend-item {
+          border-radius: var(--radius-button);
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          background: color-mix(in oklab, var(--bg-raised) 92%, transparent);
+          transition: border-color 0.18s ease, transform 0.14s ease, background 0.18s ease;
+        }
+        .trend-item:hover {
+          background: color-mix(in oklab, var(--primary) 10%, var(--bg-raised));
+          border-color: color-mix(in oklab, var(--primary) 26%, var(--border));
+          transform: translateY(-2px);
+        }
+        .trend-link {
+          display: grid;
+          grid-template-columns: 56px 1fr;
+          gap: 14px;
+          align-items: center;
+          padding: 12px;
+          text-decoration: none;
+          color: inherit;
+        }
+        .trend-thumb {
+          width: 56px;
+          height: 56px;
+          border-radius: 14px;
+          overflow: hidden;
+          border: 1px solid var(--border);
+          background: var(--bg);
+          display: grid;
+          place-items: center;
+          font-weight: 800;
+          color: var(--muted);
+        }
+        .trend-thumb img,
+        .trend-thumb video {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+        .trend-body {
+          min-width: 0;
+          display: grid;
+          gap: 6px;
+        }
+        .trend-row {
+          display: flex;
+          align-items: baseline;
+          gap: 10px;
+          min-width: 0;
+        }
+        .trend-rank {
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--muted);
+        }
+        .trend-title {
+          font-size: 14px;
+          font-weight: 700;
+          color: var(--text);
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .trend-meta {
+          font-size: 12px;
+          color: var(--muted);
+        }
+        .trend-empty {
+          color: var(--muted);
+          font-size: 13px;
+        }
         .backdrop {
-          position: fixed; inset: 0;
-          background: color-mix(in oklab, #000 55%, transparent);
-          backdrop-filter: blur(4px);
-          display:grid; place-items:center;
+          position: fixed;
+          inset: 0;
+          background: color-mix(in oklab, #000 58%, transparent);
+          backdrop-filter: blur(6px);
+          display: grid;
+          place-items: center;
           z-index: 1000;
         }
         .modal {
-          width:min(760px, calc(100vw - 24px));
-          background: var(--card);
-          border:1px solid var(--border);
-          border-radius:16px;
-          overflow:hidden;
-          box-shadow: 0 24px 60px rgba(0,0,0,.35);
+          width: min(760px, calc(100vw - 32px));
+          background: var(--bg-raised);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-card);
+          box-shadow: 0 28px 68px rgba(15, 23, 42, 0.42);
+          overflow: hidden;
         }
-        .mHead { display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid var(--border); }
-        .mTitle { font-weight:900; }
-        .x { background:transparent; border:0; color: var(--muted); cursor:pointer; font-size:18px; border-radius:10px; }
-        .x:hover { color: var(--text); background: color-mix(in oklab, var(--primary) 10%, transparent); }
-        .mBody { padding: 14px; display:grid; gap:10px; }
-        .lab { font-size:12px; color: var(--muted); font-weight:700; }
-        .preview { display:grid; gap:10px; margin-top:4px; }
-        .preview.grid-1 { grid-template-columns: 1fr; }
-        .preview.grid-2 { grid-template-columns: 1fr 1fr; }
-        .pCell { border:1px solid var(--border); border-radius:12px; overflow:hidden; background:#000; aspect-ratio: 16/10; }
-        .pCell img, .pCell video { width:100%; height:100%; object-fit:cover; display:block; }
-        .mFoot { padding:12px 14px; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--border); }
-
+        .mHead {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 16px 20px;
+          border-bottom: 1px solid var(--border);
+        }
+        .mTitle {
+          font-weight: 800;
+          font-size: 18px;
+        }
+        .x {
+          border: 0;
+          background: transparent;
+          color: var(--muted);
+          cursor: pointer;
+          font-size: 18px;
+          border-radius: var(--radius-button);
+          width: 32px;
+          height: 32px;
+          display: grid;
+          place-items: center;
+        }
+        .x:hover {
+          color: var(--text);
+          background: color-mix(in oklab, var(--primary) 12%, transparent);
+        }
+        .mBody {
+          padding: 20px;
+          display: grid;
+          gap: 14px;
+        }
+        .lab {
+          font-size: 12px;
+          font-weight: 700;
+          color: var(--muted);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+        }
+        textarea,
+        input[type="text"],
+        input[type="file"] {
+          width: 100%;
+          border: 1px solid var(--border);
+          border-radius: var(--radius-button);
+          background: var(--bg);
+          color: var(--text);
+          padding: 12px 14px;
+          font: inherit;
+        }
+        textarea:focus,
+        input[type="text"]:focus,
+        input[type="file"]:focus {
+          outline: none;
+          border-color: color-mix(in oklab, var(--primary) 42%, var(--border));
+          box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 18%, transparent);
+        }
+        textarea {
+          min-height: 120px;
+          resize: vertical;
+        }
+        .preview {
+          display: grid;
+          gap: 12px;
+        }
+        .preview.grid-1 {
+          grid-template-columns: 1fr;
+        }
+        .preview.grid-2 {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .pCell {
+          border: 1px solid var(--border);
+          border-radius: var(--radius-button);
+          overflow: hidden;
+          background: #000;
+          aspect-ratio: 16 / 10;
+        }
+        .pCell img,
+        .pCell video {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+        .mFoot {
+          display: flex;
+          justify-content: flex-end;
+          gap: 12px;
+          padding: 16px 20px;
+          border-top: 1px solid var(--border);
+        }
+        .btn {
+          border: 1px solid var(--border);
+          background: var(--bg);
+          color: var(--text);
+          border-radius: var(--radius-button);
+          padding: 10px 16px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: transform 0.12s ease, background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+        }
+        .btn:hover {
+          background: color-mix(in oklab, var(--bg) 80%, var(--primary) 10%);
+        }
+        .btn:active {
+          transform: translateY(1px);
+        }
+        .btn-primary {
+          background: var(--primary);
+          color: var(--primary-contrast);
+          border-color: color-mix(in oklab, var(--primary) 55%, var(--border));
+          box-shadow: 0 14px 32px color-mix(in oklab, var(--primary) 28%, transparent);
+        }
+        .btn-primary:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+          transform: none;
+          box-shadow: none;
+        }
+        .ghost {
+          background: transparent;
+        }
         .bad {
+          margin: 0;
+          padding: 10px 12px;
+          border-radius: var(--radius-button);
+          border: 1px solid rgba(239, 68, 68, 0.26);
+          background: rgba(239, 68, 68, 0.12);
           color: #7f1d1d;
-          background: rgba(239,68,68,.12);
-          border: 1px solid rgba(239,68,68,.28);
-          border-radius: 10px; padding: 8px 10px; font-size: 12px; margin:0;
+          font-size: 13px;
         }
-        .muted { color: var(--muted); }
+        .muted {
+          color: var(--muted);
+        }
       `}</style>
     </div>
   );

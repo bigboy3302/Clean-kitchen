@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot, query } from "firebase/firestore";
 import Avatar from "@/components/ui/Avatar";
@@ -61,11 +62,17 @@ export default function PostCard({
   const [liked, setLiked] = useState<boolean>(false);
   const [hasReposted, setHasReposted] = useState<boolean>(false);
 
-  const [saved, setSaved] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(text || "");
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [justSaved, setJustSaved] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const likeBurstRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const editFieldRef = useRef<HTMLTextAreaElement | null>(null);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!post?.id) return;
@@ -81,6 +88,35 @@ export default function PostCard({
     });
     return () => { stopLikes(); stopReposts(); };
   }, [post?.id, meUid]);
+
+  useEffect(() => {
+    if (!editing) setDraft(text || "");
+  }, [text, editing]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleClick(event: MouseEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [menuOpen]);
+
+  useEffect(
+    () => () => {
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    },
+    []
+  );
 
   function ensureCanLike(): boolean {
     if (!meUid) { alert("Please sign in to like posts."); return false; }
@@ -117,9 +153,79 @@ export default function PostCard({
     catch { setHasReposted(!next); setReposts(n => (!next ? n + 1 : Math.max(0, n - 1))); }
   }
 
+  function startEdit() {
+    setMenuOpen(false);
+    setEditError("");
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    setJustSaved(false);
+    setDraft(text || "");
+    setEditing(true);
+    requestAnimationFrame(() => {
+      editFieldRef.current?.focus();
+      editFieldRef.current?.setSelectionRange(
+        editFieldRef.current.value.length,
+        editFieldRef.current.value.length
+      );
+    });
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+    setEditError("");
+    setDraft(text || "");
+  }
+
+  async function saveEdit() {
+    if (!onEdit) {
+      setEditing(false);
+      return;
+    }
+    const next = draft.replace(/\r/g, "");
+    const trimmed = next.trim();
+    const current = (text || "").trim();
+    if (trimmed === current) {
+      setEditing(false);
+      return;
+    }
+    setEditBusy(true);
+    setEditError("");
+    try {
+      await onEdit(post, trimmed);
+      setEditing(false);
+      setDraft(trimmed);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      setJustSaved(true);
+      savedTimerRef.current = setTimeout(() => {
+        setJustSaved(false);
+      }, 2200);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : typeof err === "string"
+          ? err
+          : "Unable to update post.";
+      setEditError(message);
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
+  function handleEditKeyDown(e: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      saveEdit();
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      cancelEdit();
+    }
+  }
+
   const displayName = author?.displayName || author?.username || "User";
   const profileHref = `/u/${author?.username || post.uid || ""}`;
   const threadHref = `/posts/${post.id}`;
+  const displayText = editing ? draft : justSaved ? draft : text || "";
 
   return (
     <>
@@ -143,14 +249,44 @@ export default function PostCard({
               <div className="menu" role="menu">
                 {isOwner ? (
                   <>
-                    <button className="mi" role="menuitem" onClick={() => {/* open edit elsewhere */}}>Edit post</button>
-                    <button className="mi" role="menuitem" onClick={() => fileInputRef.current?.click()}>Add media</button>
+                    <button type="button" className="mi" role="menuitem" onClick={startEdit}>Edit post</button>
+                    <button
+                      type="button"
+                      className="mi"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        fileInputRef.current?.click();
+                      }}
+                    >
+                      Add media
+                    </button>
                     <hr className="sep" aria-hidden />
-                    <button className="mi danger" role="menuitem" onClick={() => onDelete?.(post)}>Delete</button>
+                    <button
+                      type="button"
+                      className="mi danger"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onDelete?.(post);
+                      }}
+                    >
+                      Delete
+                    </button>
                   </>
                 ) : (
                   <>
-                    <button className="mi" role="menuitem" onClick={() => onReport?.(post)}></button>
+                    <button
+                      type="button"
+                      className="mi"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onReport?.(post);
+                      }}
+                    >
+                      Report post
+                    </button>
                   </>
                 )}
               </div>
@@ -174,9 +310,52 @@ export default function PostCard({
           </div>
         ) : null}
 
-        <div className="pc-info">
-          {hasMedia && text ? <p className="caption">{text}</p> : null}
-          {createdAtLabel ? <button className="timestamp" aria-label={`Posted ${createdAtLabel} ago`}>{createdAtLabel}</button> : null}
+        <div className="pc-body">
+          {editing ? (
+            <div className="edit">
+              <textarea
+                ref={editFieldRef}
+                className="edit-area"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={handleEditKeyDown}
+                placeholder="Say something new..."
+                disabled={editBusy}
+              />
+              {editError ? <p className="edit-error">{editError}</p> : null}
+              <div className="edit-actions">
+                <button
+                  type="button"
+                  className="edit-btn edit-ghost"
+                  onClick={cancelEdit}
+                  disabled={editBusy}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="edit-btn edit-primary"
+                  onClick={saveEdit}
+                  disabled={editBusy}
+                >
+                  {editBusy ? "Saving..." : "Save changes"}
+                </button>
+              </div>
+            </div>
+          ) : displayText ? (
+            <p className="pc-text">{displayText}</p>
+          ) : null}
+
+          {(createdAtLabel || (!editing && justSaved)) ? (
+            <div className="meta-row">
+              {createdAtLabel ? (
+                <button className="timestamp" aria-label={`Posted ${createdAtLabel} ago`}>
+                  {createdAtLabel}
+                </button>
+              ) : null}
+              {!editing && justSaved ? <span className="chip">Updated</span> : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="pc-actions">
@@ -209,55 +388,360 @@ export default function PostCard({
       </article>
 
       <style jsx>{`
-        .pc{ position:relative; background:var(--card-bg); border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:var(--shadow) }
-        .pc-head{ display:flex; align-items:center; justify-content:space-between; padding:8px 10px }
-        .pc-left{ display:flex; align-items:center; gap:10px }
-        .avatar-wrap{ display:block; line-height:0 }
-
-        .pc-meta{ display:flex; flex-direction:column; line-height:1.05 }
-        .pc-name{ font-weight:700; font-size:14px }
-        .pc-link{ color: var(--text); text-decoration:none }
-        .pc-link:hover{ text-decoration:underline }
-        .pc-time{ font-size:11px; color: var(--muted); margin-top:1px }
-
-        .pc-menu{ position:relative; z-index:50 }
-        .menu-btn{ background:transparent; border:0; color:var(--muted); cursor:pointer; border-radius:8px; width:28px; height:28px; display:grid; place-items:center }
-        .menu{ position:absolute; top:calc(100% + 8px); right:0; min-width:180px; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); padding:6px; z-index:70 }
-        .mi{ width:100%; text-align:left; background:transparent; border:0; color: var(--text); padding:8px 10px; border-radius:8px; cursor:pointer }
-        .mi:hover{ background: rgba(2,6,23,.06) } :root[data-theme="dark"] .mi:hover{ background: rgba(255,255,255,.08) }
-        .mi.danger{ color:#e11d48 }
-        .sep{ height:1px; background: var(--border); border:0; margin:6px }
-
-        .pc-media{ position:relative; }
-        .rail{ display:flex; gap:6px; overflow:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; padding:0 6px 8px }
-        .cell{
-          position:relative; flex: 0 0 80%;
-          scroll-snap-align:center; border-radius:12px; overflow:hidden;
-          border:1px solid var(--border); background:#000;
-          aspect-ratio: 4/5; max-height: 260px;
+        .pc {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          background: var(--bg-raised);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-card);
+          box-shadow: var(--shadow);
+          overflow: hidden;
         }
-        @media (min-width: 720px){
-          .cell{ flex: 0 0 60%; aspect-ratio: 4/3; max-height: 280px; }
+        .pc-head {
+          padding: 20px 22px 8px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
         }
-        .pc-media img, .pc-media video{ width:100%; height:100%; object-fit:cover; display:block }
-
-        .burst{ position:absolute; inset:0; display:grid; place-items:center; color:#ef4444; opacity:0; transform: scale(.6); pointer-events:none }
-        .burst.go{ animation: pop .45s ease forwards }
-        @keyframes pop{ 0%{opacity:0; transform:scale(.6)} 70%{opacity:.9; transform:scale(1)} 100%{opacity:0; transform:scale(1.1)} }
-
-        .pc-info{ padding: 6px 10px 0 }
-        .caption{ margin:4px 0 0; color: var(--text); text-align:left; white-space:pre-wrap; font-size:14px }
-        .timestamp{ background: transparent; border: 0; color: var(--muted); font-size: 11px; margin: 4px 0 0; padding: 0; display:block; text-align:left }
-
-        .pc-actions{ display:flex; align-items:center; justify-content:space-between; padding: 4px 6px 8px }
-        .pc-actions .left{ display:flex; gap:4px; align-items:center }
-        .miniCount{ font-size:11px; color: var(--muted); padding-right:4px }
-        .icon{ width:32px; height:32px; display:grid; place-items:center; border-radius:999px; background: transparent; border: 0; color: var(--text); cursor: pointer; transition: background .12s ease, opacity .12s ease, transform .06s ease; }
-        .icon:hover{ background: rgba(2,6,23,.06) }
-        :root[data-theme="dark"] .icon:hover{ background: rgba(255,255,255,.08) }
-        .icon:active{ transform: translateY(1px) }
-        .icon.active{ color:#ef4444 }
+        .pc-left {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          min-width: 0;
+        }
+        .avatar-wrap {
+          display: block;
+          line-height: 0;
+        }
+        .pc-meta {
+          display: grid;
+          gap: 4px;
+          min-width: 0;
+        }
+        .pc-name {
+          margin: 0;
+          font-weight: 700;
+          font-size: 15px;
+          color: var(--text);
+        }
+        .pc-link {
+          color: inherit;
+          text-decoration: none;
+        }
+        .pc-link:hover {
+          text-decoration: underline;
+        }
+        .pc-time {
+          font-size: 12px;
+          color: var(--muted);
+        }
+        .pc-menu {
+          position: relative;
+          z-index: 10;
+        }
+        .menu-btn {
+          width: 34px;
+          height: 34px;
+          display: grid;
+          place-items: center;
+          border-radius: var(--radius-button);
+          border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+          background: color-mix(in oklab, var(--bg-raised) 92%, transparent);
+          color: var(--muted);
+          cursor: pointer;
+          transition: transform 0.12s ease, background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+        }
+        .menu-btn:hover {
+          background: color-mix(in oklab, var(--primary) 12%, var(--bg-raised));
+          border-color: color-mix(in oklab, var(--primary) 20%, var(--border));
+          color: var(--text);
+        }
+        .menu-btn:active {
+          transform: translateY(1px);
+        }
+        .menu {
+          position: absolute;
+          top: calc(100% + 12px);
+          right: 0;
+          min-width: 220px;
+          padding: 10px;
+          display: grid;
+          gap: 6px;
+          border-radius: var(--radius-card);
+          background: var(--bg-raised);
+          border: 1px solid var(--border);
+          box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16);
+        }
+        .mi {
+          width: 100%;
+          border: 0;
+          background: transparent;
+          color: var(--text);
+          font-size: 14px;
+          font-weight: 600;
+          padding: 10px 12px;
+          border-radius: var(--radius-button);
+          text-align: left;
+          cursor: pointer;
+          transition: background 0.16s ease, color 0.16s ease;
+        }
+        .mi:hover {
+          background: color-mix(in oklab, var(--primary) 12%, transparent);
+        }
+        .mi.danger {
+          color: #e11d48;
+        }
+        .mi.danger:hover {
+          background: rgba(225, 29, 72, 0.14);
+          color: #be123c;
+        }
+        .sep {
+          height: 1px;
+          border: 0;
+          background: var(--border);
+          margin: 4px 0;
+        }
+        .pc-media {
+          position: relative;
+          margin-top: 6px;
+        }
+        .rail {
+          display: flex;
+          gap: 10px;
+          overflow-x: auto;
+          scroll-snap-type: x mandatory;
+          -webkit-overflow-scrolling: touch;
+          padding: 0 22px 16px;
+          margin: 0;
+          scroll-padding-inline: 22px;
+        }
+        .rail::-webkit-scrollbar {
+          height: 6px;
+        }
+        .rail::-webkit-scrollbar-thumb {
+          background: color-mix(in oklab, var(--primary) 24%, var(--border));
+          border-radius: 999px;
+        }
+        .cell {
+          position: relative;
+          flex: 0 0 82%;
+          scroll-snap-align: center;
+          border-radius: var(--radius-card);
+          overflow: hidden;
+          border: 1px solid var(--border);
+          background: #000;
+          aspect-ratio: 4 / 5;
+          max-height: 320px;
+        }
+        @media (min-width: 720px) {
+          .cell {
+            flex: 0 0 60%;
+            aspect-ratio: 4 / 3;
+            max-height: 360px;
+          }
+        }
+        .pc-media img,
+        .pc-media video {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+        .burst {
+          position: absolute;
+          inset: 0;
+          display: grid;
+          place-items: center;
+          color: rgba(239, 68, 68, 0.9);
+          opacity: 0;
+          pointer-events: none;
+          transform: scale(0.6);
+        }
+        .burst.go {
+          animation: burst 0.5s ease forwards;
+        }
+        @keyframes burst {
+          0% {
+            opacity: 0;
+            transform: scale(0.6);
+          }
+          60% {
+            opacity: 0.85;
+            transform: scale(1);
+          }
+          100% {
+            opacity: 0;
+            transform: scale(1.1);
+          }
+        }
+        .pc-body {
+          padding: 0 22px 20px;
+          display: grid;
+          gap: 14px;
+        }
+        .pc-text {
+          margin: 0;
+          font-size: 15px;
+          line-height: 1.6;
+          color: var(--text);
+          white-space: pre-wrap;
+          word-break: break-word;
+        }
+        .meta-row {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          font-size: 12px;
+          color: var(--muted);
+        }
+        .timestamp {
+          border: 0;
+          background: transparent;
+          padding: 0;
+          color: inherit;
+          font: inherit;
+          cursor: default;
+        }
+        .chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 4px 10px;
+          border-radius: 999px;
+          border: 1px solid color-mix(in oklab, var(--primary) 35%, var(--border));
+          background: color-mix(in oklab, var(--primary) 18%, transparent);
+          color: var(--primary);
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+        .chip::before {
+          content: "•";
+        }
+        .edit {
+          display: grid;
+          gap: 12px;
+        }
+        .edit-area {
+          width: 100%;
+          min-height: 120px;
+          border-radius: var(--radius-button);
+          border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+          background: var(--bg);
+          color: var(--text);
+          padding: 12px 14px;
+          font: inherit;
+          resize: vertical;
+        }
+        .edit-area:focus {
+          outline: none;
+          border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
+          box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 20%, transparent);
+        }
+        .edit-area:disabled {
+          opacity: 0.65;
+          cursor: not-allowed;
+        }
+        .edit-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .edit-btn {
+          border-radius: var(--radius-button);
+          border: 1px solid var(--border);
+          background: var(--bg);
+          color: var(--text);
+          font-weight: 600;
+          padding: 9px 16px;
+          cursor: pointer;
+          transition: transform 0.12s ease, background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+        }
+        .edit-btn:hover {
+          background: color-mix(in oklab, var(--bg) 82%, var(--primary) 12%);
+        }
+        .edit-btn:active {
+          transform: translateY(1px);
+        }
+        .edit-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+          transform: none;
+        }
+        .edit-primary {
+          background: var(--primary);
+          color: var(--primary-contrast);
+          border-color: color-mix(in oklab, var(--primary) 60%, var(--border));
+          box-shadow: 0 12px 28px color-mix(in oklab, var(--primary) 25%, transparent);
+        }
+        .edit-primary:disabled {
+          box-shadow: none;
+        }
+        .edit-ghost {
+          background: transparent;
+        }
+        .edit-error {
+          margin: 0;
+          font-size: 12px;
+          color: #b91c1c;
+          border-radius: var(--radius-button);
+          border: 1px solid rgba(239, 68, 68, 0.32);
+          background: rgba(239, 68, 68, 0.12);
+          padding: 8px 10px;
+        }
+        .pc-actions {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 18px 18px;
+          gap: 12px;
+        }
+        .pc-actions .left {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .miniCount {
+          font-size: 12px;
+          color: var(--muted);
+          font-weight: 600;
+        }
+        .icon {
+          width: 38px;
+          height: 38px;
+          display: grid;
+          place-items: center;
+          border-radius: 999px;
+          border: 1px solid color-mix(in oklab, var(--border) 65%, transparent);
+          background: color-mix(in oklab, var(--bg-raised) 92%, transparent);
+          color: var(--text);
+          cursor: pointer;
+          transition: transform 0.12s ease, background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+        }
+        .icon:hover {
+          background: color-mix(in oklab, var(--primary) 12%, var(--bg-raised));
+          border-color: color-mix(in oklab, var(--primary) 20%, var(--border));
+          box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
+        }
+        .icon:active {
+          transform: translateY(1px);
+        }
+        .icon[disabled] {
+          opacity: 0.55;
+          cursor: not-allowed;
+          box-shadow: none;
+        }
+        .icon.active {
+          color: #ef4444;
+        }
       `}</style>
     </>
   );
 }
+
+

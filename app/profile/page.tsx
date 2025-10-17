@@ -1,5 +1,4 @@
-﻿﻿
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -266,7 +265,7 @@ export default function ProfilePage() {
     const requestedUsername = slugifyUsername(username);
     const previousUsername = userDoc.username || null;
     const previousDisplayName = fullName(userDoc.firstName, userDoc.lastName);
-    const previousAvatar = userDoc.photoURL ?? null;
+    const previousPhotoURL = userDoc.photoURL ?? null;
     let appliedUsername: string | null = previousUsername;
     try {
       await runTransaction(db, async (trx) => {
@@ -309,14 +308,14 @@ export default function ProfilePage() {
       const displayNameNext = fullName(firstName, lastName);
       await updateProfile(me, { displayName: displayNameNext || undefined });
 
-      const avatarURL = userDoc.photoURL ?? me.photoURL ?? null;
+      const nextPhotoURL = userDoc.photoURL ?? me.photoURL ?? null;
 
       await setDoc(
         doc(db, "usersPublic", me.uid),
         {
           displayName: displayNameNext || null,
           username: appliedUsername,
-          avatarURL,
+          avatarURL: nextPhotoURL,
         },
         { merge: true }
       );
@@ -324,14 +323,19 @@ export default function ProfilePage() {
       const profileChanged =
         appliedUsername !== previousUsername ||
         (displayNameNext || null) !== (previousDisplayName || null) ||
-        avatarURL !== previousAvatar;
+        nextPhotoURL !== previousPhotoURL;
 
       if (profileChanged) {
-        await propagateUserProfile(me.uid, {
+        const propagationPayload = {
           displayName: displayNameNext || null,
-          username: appliedUsername,
-          avatarURL,
-        });
+          photoURL: userDoc?.photoURL ?? nextPhotoURL ?? null,
+          username: slugifyUsername(username) || null,
+        };
+        try {
+          await propagateUserProfile(me.uid, propagationPayload);
+        } catch (propagationError) {
+          console.warn("Failed to propagate profile updates", propagationError);
+        }
       }
 
       setMsg("Profile saved.");
@@ -1016,17 +1020,20 @@ export default function ProfilePage() {
 type AuthorUpdate = {
   displayName: string | null;
   username: string | null;
-  avatarURL: string | null;
+  photoURL: string | null;
+  avatarURL?: string | null;
 };
 
 const PROFILE_BATCH_SIZE = 200;
 
 function buildAuthorPatch(uid: string, info: AuthorUpdate) {
+  const avatar = info.photoURL ?? info.avatarURL ?? null;
   return {
     "author.uid": uid,
     "author.username": info.username ?? null,
     "author.displayName": info.displayName ?? null,
-    "author.avatarURL": info.avatarURL ?? null,
+    "author.avatarURL": avatar,
+    "author.photoURL": avatar,
     "author.name": info.displayName ?? null,
   };
 }

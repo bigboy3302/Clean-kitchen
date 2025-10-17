@@ -40,7 +40,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               </div>
             </header>
 
-            <main className="container section">{children}</main>
+            <main className="container section">
+              <div className="mobileNavBell">
+                <ExpiryBell />
+              </div>
+              {children}
+            </main>
 
             <footer className="section">
               <div className="container muted" style={{ fontSize: 12 }} />

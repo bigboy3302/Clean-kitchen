@@ -14,15 +14,17 @@ export default function WorkoutModal({ exercise, goal, onClose }: Props) {
     return value.length ? value.charAt(0).toUpperCase() + value.slice(1) : value;
   }
 
-  const mediaSrc = exercise.gifUrl
-    ? `/api/workouts/gif?src=${encodeURIComponent(exercise.gifUrl)}`
-    : exercise.imageThumbnailUrl
-    ? `/api/workouts/gif?src=${encodeURIComponent(exercise.imageThumbnailUrl)}`
-    : exercise.imageUrl
-    ? `/api/workouts/gif?src=${encodeURIComponent(exercise.imageUrl)}`
-    : exercise.id
-    ? `/api/workouts/gif?id=${encodeURIComponent(exercise.id)}`
-    : "/placeholder.png";
+  const mediaSrc = (ex: Exercise) =>
+    ex.gifUrl
+      ? `/api/workouts/gif?src=${encodeURIComponent(ex.gifUrl)}`
+      : ex.imageThumbnailUrl
+      ? `/api/workouts/gif?src=${encodeURIComponent(ex.imageThumbnailUrl)}`
+      : ex.imageUrl
+      ? `/api/workouts/gif?src=${encodeURIComponent(ex.imageUrl)}`
+      : ex.id
+      ? `/api/workouts/gif?id=${encodeURIComponent(ex.id)}`
+      : "/placeholder.png";
+  const heroSrc = mediaSrc(exercise);
 
   return (
     <div className="ov" role="dialog" aria-modal="true" onClick={onClose}>
@@ -37,7 +39,7 @@ export default function WorkoutModal({ exercise, goal, onClose }: Props) {
           </button>
         </div>
 
-        <img className="hero" src={mediaSrc} alt={exercise.name} />
+        <img className="hero" src={heroSrc} alt={exercise.name} />
 
         <div className="meta">
           <span className="chip">{cap(exercise.bodyPart)}</span>

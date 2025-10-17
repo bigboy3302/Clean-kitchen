@@ -16,7 +16,7 @@ export default function Button({ variant = "primary", size = "md", className = "
       />
       <style jsx>{`
         .btn{
-          border-radius:12px;
+          border-radius: var(--radius-button);
           cursor:pointer;
           border:1px solid var(--btn-border);
           background: var(--btn-bg);

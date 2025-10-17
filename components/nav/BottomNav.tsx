@@ -41,10 +41,12 @@ export default function BottomNav() {
                 : label
             }
           >
-            <Icon className="ck-tab-ico" strokeWidth={2} aria-hidden />
-            {href === "/pantry" && expiringCount > 0 ? (
-              <span className="ck-badge" aria-hidden>{expiringCount}</span>
-            ) : null}
+            <span className="ck-tab-icoWrap">
+              <Icon className="ck-tab-ico" strokeWidth={2} aria-hidden />
+              {href === "/pantry" && expiringCount > 0 ? (
+                <span className="ck-badge" aria-hidden>{expiringCount}</span>
+              ) : null}
+            </span>
             <span className="ck-tab-label">{label}</span>
           </Link>
         );
@@ -54,10 +56,15 @@ export default function BottomNav() {
         .ck-tab {
           position: relative;
         }
+        .ck-tab-icoWrap {
+          position: relative;
+          display: grid;
+          place-items: center;
+        }
         .ck-badge {
           position: absolute;
-          top: 6px;
-          right: 22px;
+          top: -6px;
+          right: -10px;
           min-width: 18px;
           height: 18px;
           border-radius: 999px;
