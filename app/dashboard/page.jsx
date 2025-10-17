@@ -98,6 +98,7 @@ function formatRelativeFromMs(ms) {
 export default function DashboardPage() {
   const router = useRouter();
   const [uid, setUid] = useState(null);
+  const [userEmail, setUserEmail] = useState("");
   const [ready, setReady] = useState(false);
 
   const [recentPosts, setRecentPosts] = useState([]);
@@ -172,6 +173,7 @@ export default function DashboardPage() {
         return;
       }
       setUid(u.uid);
+      setUserEmail(u.email || "");
       setReady(true);
     });
     return () => stop();
@@ -319,12 +321,44 @@ export default function DashboardPage() {
     await deleteDoc(doc(db, "posts", post.id));
   }
 
-  async function handleReport(post) {
-    if (!uid || !post?.id) return;
+  async function handleReport(post, details) {
+    if (!uid || !post?.id) throw new Error("You must be signed in to report posts.");
+    const reason = typeof details?.reason === "string" ? details.reason.trim() : "";
+    if (!reason) throw new Error("Please describe why you are reporting this post.");
+
     await setDoc(doc(db, "posts", post.id, "reports", uid), {
       uid,
+      reason,
       createdAt: serverTimestamp(),
     });
+
+    try {
+      const response = await fetch("/api/reports", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          postId: post.id,
+          postOwnerUid: post.uid ?? null,
+          postAuthor: post.author ?? null,
+          reporterUid: uid,
+          reporterEmail: userEmail || null,
+          reason,
+          postText: post.text || post.description || "",
+          postUrl: details?.postUrl || null,
+        }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        const message =
+          payload?.error || payload?.message || `Failed to deliver report (status ${response.status}).`;
+        throw new Error(message);
+      }
+    } catch (err) {
+      console.warn("Report email failed", err);
+      throw err instanceof Error ? err : new Error("Failed to deliver the report.");
+    }
   }
 
   async function handleComment() {
@@ -468,9 +502,6 @@ export default function DashboardPage() {
               <h2>Community feed</h2>
               <p>Fresh updates from the people keeping their kitchens on track.</p>
             </div>
-            <button className="stream-new" onClick={() => setOpenComposer(true)}>
-              New post
-            </button>
           </div>
           <div className="feed">
             {recentPosts.map((p) => (

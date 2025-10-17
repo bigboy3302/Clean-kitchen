@@ -29,7 +29,7 @@ type Props = {
   onEdit?: (post: Post, nextText: string) => Promise<void>|void;
   onAddMedia?: (post: Post, files: File[]) => Promise<void>|void;
   onDelete?: (post: Post) => Promise<void>|void;
-  onReport?: (post: Post) => Promise<void>|void;
+  onReport?: (post: Post, details: { reason: string; postUrl?: string | null }) => Promise<void>|void;
   onComment?: (post: Post, text: string) => Promise<void>|void;
   onToggleRepost?: (post: Post, next: boolean) => Promise<void>|void;
   onToggleLike?: (post: Post, liked: boolean) => Promise<void>|void;
@@ -68,6 +68,11 @@ export default function PostCard({
   const [editBusy, setEditBusy] = useState(false);
   const [editError, setEditError] = useState("");
   const [justSaved, setJustSaved] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportError, setReportError] = useState("");
+  const [reportSent, setReportSent] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const likeBurstRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -222,6 +227,67 @@ export default function PostCard({
     }
   }
 
+  function openReportDialog() {
+    if (!meUid) {
+      alert("Please sign in to report posts.");
+      return;
+    }
+    setReportReason("");
+    setReportError("");
+    setReportSent(false);
+    setReportOpen(true);
+  }
+
+  function closeReportDialog() {
+    if (reportBusy) return;
+    setReportOpen(false);
+    setReportReason("");
+    setReportError("");
+    setReportSent(false);
+  }
+
+  async function submitReport() {
+    if (!meUid) {
+      alert("Please sign in to report posts.");
+      return;
+    }
+    const reason = reportReason.trim();
+    if (!reason) {
+      setReportError("Please describe what needs attention.");
+      return;
+    }
+    if (!post?.id || !onReport) {
+      setReportOpen(false);
+      return;
+    }
+    setReportBusy(true);
+    setReportError("");
+    try {
+      const origin =
+        typeof window !== "undefined" && window.location
+          ? window.location.origin
+          : undefined;
+      await onReport(post, {
+        reason,
+        postUrl: origin ? `${origin.replace(/\/$/, "")}/posts/${post.id}` : `/posts/${post.id}`,
+      });
+      setReportSent(true);
+      setTimeout(() => {
+        closeReportDialog();
+      }, 1600);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : typeof err === "string"
+          ? err
+          : "Failed to submit report.";
+      setReportError(message);
+    } finally {
+      setReportBusy(false);
+    }
+  }
+
   const displayName = author?.displayName || author?.username || "User";
   const profileHref = `/u/${author?.username || post.uid || ""}`;
   const threadHref = `/posts/${post.id}`;
@@ -282,7 +348,7 @@ export default function PostCard({
                       role="menuitem"
                       onClick={() => {
                         setMenuOpen(false);
-                        onReport?.(post);
+                        openReportDialog();
                       }}
                     >
                       Report post
@@ -357,6 +423,46 @@ export default function PostCard({
             </div>
           ) : null}
         </div>
+
+        {reportOpen && (
+          <div className="reportBackdrop" role="dialog" aria-modal="true" onClick={closeReportDialog}>
+            <div className="reportModal" onClick={(event) => event.stopPropagation()}>
+              <h3>Report post</h3>
+              <p>Let us know what needs attention. Your report is sent privately to the Clean Kitchen team.</p>
+              <textarea
+                className="reportReason"
+                value={reportReason}
+                onChange={(event) => setReportReason(event.target.value)}
+                placeholder="Describe the issue..."
+                disabled={reportBusy || reportSent}
+              />
+              {reportError ? <p className="reportError">{reportError}</p> : null}
+              {reportSent ? (
+                <p className="reportSuccess">
+                  Report sent for post <strong>{post.id}</strong>. Thank you for keeping the community safe.
+                </p>
+              ) : null}
+              <div className="reportActions">
+                <button
+                  type="button"
+                  className="reportBtn"
+                  onClick={closeReportDialog}
+                  disabled={reportBusy}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="reportBtn reportPrimary"
+                  onClick={submitReport}
+                  disabled={reportBusy || reportSent}
+                >
+                  {reportBusy ? "Sending..." : "Send report"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="pc-actions">
           <div className="left">
@@ -738,6 +844,106 @@ export default function PostCard({
         }
         .icon.active {
           color: #ef4444;
+        }
+        .reportBackdrop {
+          position: fixed;
+          inset: 0;
+          background: color-mix(in oklab, #000 60%, transparent);
+          display: grid;
+          place-items: center;
+          padding: 16px;
+          z-index: 1200;
+        }
+        .reportModal {
+          width: min(440px, 100%);
+          background: var(--bg-raised);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-card);
+          box-shadow: 0 24px 60px rgba(15, 23, 42, 0.4);
+          padding: 20px 22px;
+          display: grid;
+          gap: 14px;
+        }
+        .reportModal h3 {
+          margin: 0;
+          font-size: 20px;
+          font-weight: 800;
+          color: var(--text);
+        }
+        .reportModal p {
+          margin: 0;
+          font-size: 14px;
+          color: var(--muted);
+        }
+        .reportReason {
+          width: 100%;
+          min-height: 120px;
+          border-radius: var(--radius-button);
+          border: 1px solid var(--border);
+          background: var(--bg);
+          color: var(--text);
+          padding: 12px 14px;
+          font: inherit;
+          resize: vertical;
+        }
+        .reportReason:focus {
+          outline: none;
+          border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
+          box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 18%, transparent);
+        }
+        .reportError {
+          margin: 0;
+          color: #b91c1c;
+          font-size: 13px;
+          border-radius: var(--radius-button);
+          border: 1px solid rgba(239, 68, 68, 0.32);
+          background: rgba(239, 68, 68, 0.12);
+          padding: 8px 10px;
+        }
+        .reportSuccess {
+          margin: 0;
+          color: #0f766e;
+          font-size: 13px;
+          border-radius: var(--radius-button);
+          border: 1px solid rgba(45, 212, 191, 0.32);
+          background: rgba(45, 212, 191, 0.12);
+          padding: 8px 10px;
+        }
+        .reportActions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .reportBtn {
+          border-radius: var(--radius-button);
+          border: 1px solid var(--border);
+          background: var(--bg);
+          color: var(--text);
+          font-weight: 600;
+          padding: 9px 16px;
+          cursor: pointer;
+          transition: transform 0.12s ease, background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+        }
+        .reportBtn:hover {
+          background: color-mix(in oklab, var(--bg) 82%, var(--primary) 12%);
+        }
+        .reportBtn:active {
+          transform: translateY(1px);
+        }
+        .reportBtn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+          transform: none;
+        }
+        .reportPrimary {
+          background: var(--primary);
+          color: var(--primary-contrast);
+          border-color: color-mix(in oklab, var(--primary) 60%, var(--border));
+          box-shadow: 0 12px 28px color-mix(in oklab, var(--primary) 25%, transparent);
+        }
+        .reportPrimary:disabled {
+          box-shadow: none;
         }
       `}</style>
     </>

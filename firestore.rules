@@ -3,10 +3,22 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    /* ---------- helpers ---------- */
-    function isSignedIn()         { return request.auth != null; }
-    function creatingAsSelf()     { return isSignedIn() && request.resource.data.uid == request.auth.uid; }
+    /* -------- helpers -------- */
+    function isSignedIn() { return request.auth != null; }
+    function creatingAsSelf() { return isSignedIn() && request.resource.data.uid == request.auth.uid; }
     function ownershipUnchanged() { return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid; }
+
+    // Replace with your actual admin UIDs (you can add more):
+    function isAdmin() {
+      // Option 1: hardcode UIDs
+      return isSignedIn() && (
+        // Example: your UID(s) here
+        request.auth.uid in ['YOUR_ADMIN_UID_HERE']
+      );
+
+      // Option 2 (preferred): custom claims
+      // return isSignedIn() && request.auth.token.admin == true;
+    }
 
     function isClean(str) {
       return !(str.matches('(?i).*(\\b(fuck|shit|bitch|asshole|nigger|retard|cunt|faggot)\\b).*'));
@@ -17,13 +29,11 @@ service cloud.firestore {
              isClean(request.resource.data[field]);
     }
     function textOk() {
-      return !('text' in request.resource.data)
-             || request.resource.data.text == null
-             || (
-                  request.resource.data.text is string
-                  && request.resource.data.text.size() <= 25000
-                  && isClean(request.resource.data.text)
-                );
+      return !('text' in request.resource.data) ||
+             request.resource.data.text == null ||
+             (request.resource.data.text is string &&
+              request.resource.data.text.size() <= 25000 &&
+              isClean(request.resource.data.text));
     }
 
     function isStr(v, max)  { return v is string && v.size() <= max; }
@@ -47,8 +57,21 @@ service cloud.firestore {
         (prefs == null) ||
         (
           (prefs.units == null || isOneOf(prefs.units, ["metric","imperial"])) &&
-          (prefs.theme == null || isOneOf(prefs.theme, ["system","light","dark"])) &&
+          (prefs.theme == null || isOneOf(prefs.theme, ["system","light","dark","custom"])) &&
           (prefs.emailNotifications == null || isBool(prefs.emailNotifications)) &&
+          (
+            prefs.themePalette == null ||
+            (
+              prefs.themePalette.primary is string &&
+              prefs.themePalette.primaryContrast is string &&
+              prefs.themePalette.bg is string &&
+              prefs.themePalette.bg2 is string &&
+              prefs.themePalette.text is string &&
+              prefs.themePalette.muted is string &&
+              prefs.themePalette.border is string &&
+              prefs.themePalette.ring is string
+            )
+          ) &&
           (
             prefs.nav == null ||
             (
@@ -72,26 +95,20 @@ service cloud.firestore {
       return baseOk && prefsOk;
     }
 
-    /* ---------- public profile facade ---------- */
+    /* -------- public profile facade -------- */
     match /usersPublic/{uid} {
       allow read: if true;
-      allow create, update: if isSignedIn() && request.auth.uid == uid;
-      allow delete: if isSignedIn() && request.auth.uid == uid;
+      allow create, update, delete: if isSignedIn() && request.auth.uid == uid;
     }
 
-    /* ---------- users (doc) ---------- */
+    /* -------- users (private) -------- */
     match /users/{uid} {
       allow read: if isSignedIn() && request.auth.uid == uid;
 
-      allow create: if isSignedIn()
-                    && request.auth.uid == uid
-                    && (!('uid' in request.resource.data) || request.resource.data.uid == uid)
-                    && validUserWrite();
-
-      allow update: if isSignedIn()
-                    && request.auth.uid == uid
-                    && (!('uid' in request.resource.data) || request.resource.data.uid == uid)
-                    && validUserWrite();
+      allow create, update: if isSignedIn()
+                            && request.auth.uid == uid
+                            && (!('uid' in request.resource.data) || request.resource.data.uid == uid)
+                            && validUserWrite();
 
       allow delete: if isSignedIn() && request.auth.uid == uid;
 
@@ -100,7 +117,7 @@ service cloud.firestore {
       }
     }
 
-    /* ---------- pantryItems (OWNER-ONLY) ---------- */
+    /* -------- pantryItems (owner-only) -------- */
     match /pantryItems/{id} {
       allow read:    if isSignedIn() && resource.data.uid == request.auth.uid;
       allow create:  if creatingAsSelf();
@@ -108,31 +125,20 @@ service cloud.firestore {
       allow delete:  if isSignedIn() && resource.data.uid == request.auth.uid;
     }
 
-    /* ---------- consumptionLogs (OWNER-ONLY) ---------- */
-    match /consumptionLogs/{logId} {
-      allow read:   if isSignedIn() && resource.data.uid == request.auth.uid;
-      allow create: if creatingAsSelf();
-      allow update, delete: if false;
-    }
-
-    /* ---------- recipes (+ photos) ---------- */
+    /* -------- recipes (+ photos) -------- */
     match /recipes/{id} {
       allow read: if true;
 
       allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
 
       allow update: if isSignedIn()
-                    && (
-                         resource.data.uid == request.auth.uid ||
-                         (resource.data.author != null && resource.data.author.uid == request.auth.uid)
-                       )
+                    && (resource.data.uid == request.auth.uid ||
+                        (resource.data.author != null && resource.data.author.uid == request.auth.uid))
                     && ownershipUnchanged();
 
       allow delete: if isSignedIn()
-                    && (
-                         resource.data.uid == request.auth.uid ||
-                         (resource.data.author != null && resource.data.author.uid == request.auth.uid)
-                       );
+                    && (resource.data.uid == request.auth.uid ||
+                        (resource.data.author != null && resource.data.author.uid == request.auth.uid));
 
       match /photos/{pid} {
         allow read: if true;
@@ -146,14 +152,16 @@ service cloud.firestore {
       }
     }
 
-    /* ---------- fav recipes ---------- */
+    /* -------- fav recipes -------- */
     match /users/{uid}/favoriteRecipes/{rid} {
       allow read: if isSignedIn() && request.auth.uid == uid;
       allow create, delete: if isSignedIn() && request.auth.uid == uid;
       allow update: if false;
     }
 
-    /* ---------- posts (+likes, +reposts, +comments [+replies], +reports) ---------- */
+    /* ------------------------------------------------------------------
+       POSTS (+likes, +reposts, +comments [+replies], +reports)
+       ------------------------------------------------------------------ */
     match /posts/{postId} {
       allow read: if true;
 
@@ -185,21 +193,23 @@ service cloud.firestore {
 
       allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
 
+      /* likes */
       match /likes/{uid} {
         allow read: if true;
-        // Require the like doc id to be the auth uid, and ensure parent exists
         allow create, delete: if isSignedIn()
                               && request.auth.uid == uid
                               && exists(/databases/$(database)/documents/posts/$(postId));
         allow update: if false;
       }
 
+      /* reposts */
       match /reposts/{uid} {
         allow read: if true;
         allow create, delete: if isSignedIn() && request.auth.uid == uid;
         allow update: if false;
       }
 
+      /* comments (+ replies) */
       match /comments/{cid} {
         allow read: if true;
 
@@ -256,36 +266,56 @@ service cloud.firestore {
         }
       }
 
+      /* -------------------- REPORTS (Pattern A) -------------------- */
       match /reports/{uid} {
-        allow read: if false;
-        allow create: if isSignedIn() && request.auth.uid == uid;
+        // Keep reports private by default
+        allow read: if isAdmin();
+        // Only the signed-in user can create their own report
+        allow create: if isSignedIn()
+                      && request.auth.uid == uid
+                      && request.resource.data.uid == uid
+                      && request.resource.data.postId == postId
+                      && request.resource.data.reason is string
+                      && request.resource.data.reason.size() >= 10
+                      && request.resource.data.reason.size() <= 2000;
+        // No updates/deletes (immutability)
         allow update, delete: if false;
       }
     }
 
-    /* ---------- usernames (renames supported client-side) ---------- */
-    match /usernames/{uname} {
-      allow read: if true;
+    /* -------------------- REPORTS (Pattern B: top-level) -------------------- */
+    match /reports/{reportId} {
+      // Private to admins; reporters cannot read globally
+      allow read: if isAdmin();
 
-      // Reserve or re-assert a username mapping if it is free or already owned by the caller
+      // Expect a shape like:
+      // { uid, postId, postOwnerUid, reason, postPreview, createdAt, ... }
       allow create: if isSignedIn()
                     && request.resource.data.uid == request.auth.uid
-                    && (
-                         !exists(/databases/$(database)/documents/usernames/$(uname))
-                         || get(/databases/$(database)/documents/usernames/$(uname)).data.uid == request.auth.uid
-                       );
+                    && request.resource.data.reason is string
+                    && request.resource.data.reason.size() >= 10
+                    && request.resource.data.reason.size() <= 2000
+                    && request.resource.data.postId is string
+                    && request.resource.data.postId.size() > 0;
 
-      // Permit idempotent updates when the caller already owns the entry
+      allow update, delete: if false;
+    }
+
+    /* -------- usernames -------- */
+    match /usernames/{uname} {
+      allow read: if true;
+      allow create: if isSignedIn()
+                    && request.resource.data.uid == request.auth.uid
+                    && (!exists(/databases/$(database)/documents/usernames/$(uname))
+                        || get(/databases/$(database)/documents/usernames/$(uname)).data.uid == request.auth.uid);
       allow update: if isSignedIn()
                     && resource.data.uid == request.auth.uid
                     && request.resource.data.uid == request.auth.uid;
-
-      // Let the owner free their previous username during a rename
       allow delete: if isSignedIn()
                     && resource.data.uid == request.auth.uid;
     }
 
-    /* ---------- default deny ---------- */
+    /* -------- default deny -------- */
     match /{document=**} {
       allow read, write: if false;
     }
