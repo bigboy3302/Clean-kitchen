@@ -100,7 +100,7 @@ export default function RegisterPage() {
       startCooldown();
     } catch (e: any) {
       if (e?.code === "auth/email-already-in-use") {
-        setErr("Šis e-pasts jau ir reģistrēts. Lūdzu pieslēdzies ar Login.");
+        setErr("This email address is already registered. Please log in with Login.");
       } else {
         setErr(e?.message ?? "Neizdevās izveidot kontu.");
       }
@@ -173,17 +173,20 @@ export default function RegisterPage() {
       title="Create account"
       subtitle="Get started with Clean-Kitchen"
       footer={<span>Jau ir konts? <Link className="underline" href="/auth/login">Sign in</Link></span>}
+      errorBanner={
+        err ? <span>{err}</span> : null
+      }
     >
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Input
-            label="Vārds"
+            label="Name"
             value={firstName}
             onChange={(e) => setFirstName((e.target as HTMLInputElement).value)}
             required
           />
           <Input
-            label="Uzvārds"
+            label="Surname"
             value={lastName}
             onChange={(e) => setLastName((e.target as HTMLInputElement).value)}
             required
@@ -206,7 +209,6 @@ export default function RegisterPage() {
           required
         />
 
-        {err  && <p className="rounded-md bg-red-50 p-2 text-sm text-red-700">{err}</p>}
         {info && <p className="rounded-md bg-green-50 p-2 text-sm text-green-700">{info}</p>}
 
         <Button type="submit" disabled={busy}>

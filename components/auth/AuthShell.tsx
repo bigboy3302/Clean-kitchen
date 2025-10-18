@@ -7,9 +7,10 @@ type Props = {
   subtitle?: string;
   footer?: ReactNode;
   children: ReactNode;
+  errorBanner?: ReactNode;
 };
 
-export default function AuthShell({ title, subtitle, footer, children }: Props) {
+export default function AuthShell({ title, subtitle, footer, children, errorBanner }: Props) {
   return (
     <main className={styles.wrap}>
       <div className={styles.card}>
@@ -22,6 +23,7 @@ export default function AuthShell({ title, subtitle, footer, children }: Props) 
 
         {footer && <footer className={styles.footer}>{footer}</footer>}
       </div>
+      {errorBanner ? <div className={styles.banner}>{errorBanner}</div> : null}
     </main>
   );
 }

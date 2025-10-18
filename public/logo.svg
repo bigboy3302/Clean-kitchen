@@ -1,0 +1,45 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="18%" y1="8%" x2="88%" y2="92%">
+      <stop offset="0%" stop-color="#0ea5e9"/>
+      <stop offset="48%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#34d399"/>
+    </linearGradient>
+    <radialGradient id="plateGlow" cx="50%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.85)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </radialGradient>
+    <linearGradient id="leafGrad" x1="15%" y1="20%" x2="85%" y2="80%">
+      <stop offset="0%" stop-color="#22c55e"/>
+      <stop offset="100%" stop-color="#16a34a"/>
+    </linearGradient>
+    <filter id="softShadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="20" stdDeviation="28" flood-color="rgba(15,23,42,0.35)"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="120" fill="url(#bgGrad)"/>
+  <rect width="512" height="512" rx="120" fill="url(#plateGlow)" opacity="0.35"/>
+
+  <g filter="url(#softShadow)" transform="translate(76 84)">
+    <circle cx="180" cy="172" r="156" fill="rgba(248,250,252,0.92)"/>
+    <circle cx="180" cy="172" r="112" fill="#e0f2fe"/>
+    <circle cx="180" cy="172" r="80" fill="#f8fafc"/>
+
+    <path d="M250 92c24 7 40 24 40 48 0 30-24 54-54 54-16 0-30-6-40-18 4-8 10-16 12-26 8 10 18 16 30 16 18 0 32-14 32-32 0-14-8-24-20-30z" fill="#bae6fd" opacity="0.65"/>
+
+    <path d="M104 206c62-68 126-82 180-58-26 28-56 46-88 56 8 18 6 34-8 46-28 24-76 24-120-44 12 6 22 6 36 0z" fill="url(#leafGrad)"/>
+    <path d="M177 214c-4 0-8-2-10-6a6 6 0 0 1 2-8c32-18 68-28 98-24 4 0 6 4 6 8-2 4-6 6-10 6-24-2-56 6-84 22-2 2-4 2-6 2z" fill="#bbf7d0"/>
+
+    <g transform="translate(120 74) rotate(-12)">
+      <rect x="0" y="0" width="14" height="92" rx="6" fill="#0f172a" opacity="0.12"/>
+      <rect x="24" y="6" width="14" height="86" rx="6" fill="#0f172a" opacity="0.12"/>
+    </g>
+
+    <circle cx="90" cy="120" r="10" fill="#fefce8"/>
+    <circle cx="310" cy="210" r="10" fill="#fefce8"/>
+    <circle cx="130" cy="70" r="7" fill="#fefce8"/>
+    <path d="M320 116l6 14 14 6-14 6-6 14-6-14-14-6 14-6z" fill="#fff7ed" opacity="0.85"/>
+  </g>
+
+</svg>

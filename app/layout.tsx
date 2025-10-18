@@ -3,11 +3,9 @@ import type { ReactNode } from "react";
 import type { Metadata, Viewport } from "next";
 import ThemeScript from "@/components/theme/ThemeScript";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
-import FabNav from "@/components/nav/FabNav";
-import ExpiryBell from "@/components/nav/ExpiryBell";
 import EnsureUserDoc from "@/components/auth/EnsureUserDoc";
-import BottomNav from "@/components/nav/BottomNav";
 import AuthGate from "@/components/auth/AuthGate";
+import AppShell from "@/components/shell/AppShell";
 
 export const metadata: Metadata = {
   title: "Clean Kitchen",
@@ -23,34 +21,16 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <ThemeScript />
       </head>
-      <body suppressHydrationWarning>
+      <body>
         <ThemeProvider>
           {/* Wait for auth so client SDK calls don't race before user state is known */}
           <AuthGate>
             <EnsureUserDoc />
-
-            <header className="ck-navbar">
-              <div className="ck-navbar-inner">
-                <FabNav />
-                <ExpiryBell className="ck-bell-right" />
-              </div>
-            </header>
-
-            <main className="container section">
-              <div className="mobileNavBell">
-                <ExpiryBell />
-              </div>
-              {children}
-            </main>
-
-            <footer className="section">
-              <div className="container muted" style={{ fontSize: 12 }} />
-            </footer>
-            <BottomNav />
+            <AppShell>{children}</AppShell>
           </AuthGate>
         </ThemeProvider>
       </body>

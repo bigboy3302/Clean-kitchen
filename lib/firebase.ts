@@ -1,7 +1,13 @@
 // lib/firebase.ts
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, collection, doc, type Firestore } from "firebase/firestore";
+import {
+  initializeFirestore,
+  collection,
+  doc,
+  type Firestore,
+  setLogLevel,
+} from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getFunctions } from "firebase/functions";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
@@ -52,10 +58,16 @@ const app = globalThis._firebaseApp ?? (getApps().length ? getApp() : initialize
 globalThis._firebaseApp = app;
 
 export const auth = getAuth(app);
-export const db: Firestore = getFirestore(app);
+export const db: Firestore = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,
+});
 export const storage = getStorage(app);
 // If you use callable functions and care about region, you can set it here, e.g. getFunctions(app, "us-central1")
 export const functions = getFunctions(app);
+
+if (process.env.NODE_ENV === "development") {
+  setLogLevel("error");
+}
 
 // ----- App Check (reCAPTCHA v3) is OPTIONAL -----
 function initAppCheckOnce() {

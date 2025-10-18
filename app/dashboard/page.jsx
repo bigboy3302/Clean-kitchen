@@ -169,6 +169,9 @@ export default function DashboardPage() {
   useEffect(() => {
     const stop = onAuthStateChanged(auth, (u) => {
       if (!u) {
+        setUid(null);
+        setUserEmail("");
+        setReady(true);
         router.replace("/auth/login");
         return;
       }
@@ -322,15 +325,37 @@ export default function DashboardPage() {
   }
 
   async function handleReport(post, details) {
-    if (!uid || !post?.id) throw new Error("You must be signed in to report posts.");
+    const me = auth.currentUser;
+    if (!me || !post?.id) {
+      throw new Error("You must be signed in to report posts.");
+    }
     const reason = typeof details?.reason === "string" ? details.reason.trim() : "";
-    if (!reason) throw new Error("Please describe why you are reporting this post.");
+    if (reason.length < 10) {
+      throw new Error("Please provide at least 10 characters explaining the issue.");
+    }
 
-    await setDoc(doc(db, "posts", post.id, "reports", uid), {
-      uid,
-      reason,
-      createdAt: serverTimestamp(),
-    });
+    const postRef = doc(db, "posts", post.id, "reports", me.uid);
+    const postPreview = (
+      post?.title ||
+      post?.text ||
+      post?.description ||
+      ""
+    )
+      .toString()
+      .slice(0, 180);
+
+    await setDoc(
+      postRef,
+      {
+        uid: me.uid,
+        postId: post.id,
+        postOwnerUid: post?.uid ?? null,
+        postPreview,
+        reason,
+        createdAt: serverTimestamp(),
+      },
+      { merge: false }
+    );
 
     try {
       const response = await fetch("/api/reports", {
@@ -342,11 +367,12 @@ export default function DashboardPage() {
           postId: post.id,
           postOwnerUid: post.uid ?? null,
           postAuthor: post.author ?? null,
-          reporterUid: uid,
+          reporterUid: me.uid,
           reporterEmail: userEmail || null,
           reason,
           postText: post.text || post.description || "",
           postUrl: details?.postUrl || null,
+          postPreview,
         }),
       });
       if (!response.ok) {

@@ -17,9 +17,10 @@
     "date-fns": "^4.1.0",
     "firebase": "^12.2.1",
     "firebase-admin": "^13.5.0",
+    "framer-motion": "^12.23.24",
     "lucide-react": "^0.542.0",
-    "nodemailer": "^6.9.14",
     "next": "^14.2.32",
+    "nodemailer": "^6.9.14",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.62.0",
@@ -29,6 +30,7 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@types/nodemailer": "^7.0.2",
     "@types/react": "^18.3.24",
     "@types/react-dom": "^18.3.7",
     "@types/uuid": "^10.0.0",

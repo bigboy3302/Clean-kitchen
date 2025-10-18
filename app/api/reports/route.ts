@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 type ReportRequest = {
   postId?: string;
   postOwnerUid?: string | null;
@@ -9,6 +12,7 @@ type ReportRequest = {
   reporterEmail?: string | null;
   reason?: string;
   postText?: string | null;
+  postPreview?: string | null;
   postUrl?: string | null;
 };
 
@@ -30,9 +34,9 @@ export async function POST(req: Request) {
 
   const postId = payload.postId?.trim();
   const reason = payload.reason?.trim();
-  if (!postId || !reason) {
+  if (!postId || !reason || reason.length < 10) {
     return NextResponse.json(
-      { error: "Both postId and reason are required." },
+      { error: "Both postId and a detailed reason (10+ characters) are required." },
       { status: 400 }
     );
   }
@@ -53,7 +57,11 @@ export async function POST(req: Request) {
     user ||
     "reports@clean-kitchen";
 
-  const subject = `Post report • ${postId}`;
+  const preview =
+    (payload.postPreview || payload.postText || "")?.slice(0, 400) ||
+    "(no preview provided)";
+
+  const subject = `Post report - ${postId}`;
   const textLines = [
     "A post has been reported:",
     "",
@@ -65,6 +73,9 @@ export async function POST(req: Request) {
     "",
     "Reason:",
     reason,
+    "",
+    "Post preview:",
+    preview,
     "",
     "Post snippet:",
     (payload.postText || "").slice(0, 400) || "(no text provided)",
@@ -84,6 +95,8 @@ export async function POST(req: Request) {
   }</p>
   <h3>Reason</h3>
   <p>${reason.replace(/\n/g, "<br/>")}</p>
+  <h3>Post preview</h3>
+  <p>${preview.replace(/\n/g, "<br/>")}</p>
   <h3>Post snippet</h3>
   <p>${(payload.postText || "(no text provided)").replace(
     /\n/g,

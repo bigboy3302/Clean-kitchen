@@ -251,9 +251,9 @@ export default function PostCard({
       alert("Please sign in to report posts.");
       return;
     }
-    const reason = reportReason.trim();
-    if (!reason) {
-      setReportError("Please describe what needs attention.");
+    const trimmedReason = reportReason.trim();
+    if (trimmedReason.length < 10) {
+      setReportError("Please provide at least 10 characters so we can understand the issue.");
       return;
     }
     if (!post?.id || !onReport) {
@@ -268,7 +268,7 @@ export default function PostCard({
           ? window.location.origin
           : undefined;
       await onReport(post, {
-        reason,
+        reason: trimmedReason,
         postUrl: origin ? `${origin.replace(/\/$/, "")}/posts/${post.id}` : `/posts/${post.id}`,
       });
       setReportSent(true);

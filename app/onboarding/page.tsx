@@ -231,8 +231,8 @@ export default function OnboardingPage() {
       title="Complete your profile"
       subtitle="Choose your public username and health basics"
     >
-      <form onSubmit={save} className="space-y-6">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <form onSubmit={save} className="space-y-5 lg:space-y-6">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Input
             label="Vārds"
             value={first}
@@ -249,7 +249,7 @@ export default function OnboardingPage() {
 
         <div>
           <Input
-            label="Username (publiski redzams)"
+            label="Username (public view)"
             value={username}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
               setUsername(slugifyName(e.target.value))
@@ -258,8 +258,8 @@ export default function OnboardingPage() {
             required
           />
           <p className="mt-1 text-xs text-gray-500">
-            Atļauts: a–z, 0–9, “_” un “.” (3–20 simboli). “Ģirts Bērziņš” →{" "}
-            <code>girts.berzins</code>
+            Allowed: a–z, 0–9, “_” un “.” (3–20 simboli). “Name Surname” →{" "}
+            <code>name.surname</code>
           </p>
 
           {!!suggestions.length && (
@@ -280,9 +280,9 @@ export default function OnboardingPage() {
         </div>
 
         {/* JAUNIE LAUKI: svars/augums/vecums/dzimums */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Input
-            label="Svars (kg)"
+            label="Weight (kg)"
             type="number"
             min={30}
             max={400}
@@ -293,7 +293,7 @@ export default function OnboardingPage() {
             required
           />
           <Input
-            label="Augums (cm)"
+            label="Height (cm)"
             type="number"
             min={120}
             max={250}
@@ -304,7 +304,7 @@ export default function OnboardingPage() {
             required
           />
           <Input
-            label="Vecums"
+            label="Age"
             type="number"
             min={10}
             max={100}
@@ -317,23 +317,22 @@ export default function OnboardingPage() {
         </div>
 
         <div>
-          <label className="mb-1 block text-sm">Dzimums</label>
-          <div className="flex gap-4 text-sm">
-          
-            <label className="inline-flex items-center gap-2">
-            Male
-              <input 
+          <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+            Gender
+          </label>
+          <div className="flex flex-wrap gap-3 text-sm">
+            <label className="inline-flex items-center gap-2 rounded-full border border-gray-300/70 px-3 py-1.5 text-gray-700 transition hover:border-gray-400 dark:border-gray-600 dark:text-gray-200">
+              <input
                 type="radio"
                 name="sex"
                 checked={sex === "male"}
                 onChange={() => setSex("male")}
                 className="accent-gray-900"
                 required
-                
               />
+              <span>Male</span>
             </label>
-            Female
-            <label className="inline-flex items-center gap-2" > 
+            <label className="inline-flex items-center gap-2 rounded-full border border-gray-300/70 px-3 py-1.5 text-gray-700 transition hover:border-gray-400 dark:border-gray-600 dark:text-gray-200">
               <input
                 type="radio"
                 name="sex"
@@ -341,7 +340,7 @@ export default function OnboardingPage() {
                 onChange={() => setSex("female")}
                 className="accent-gray-900"
               />
-              
+              <span>Female</span>
             </label>
           </div>
         </div>
