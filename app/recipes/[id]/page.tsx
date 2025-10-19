@@ -2,11 +2,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
+import { useParams } from "next/navigation";
 import Link from "next/link";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth, db } from "@/lib/firebas1e";
-import { doc, getDoc, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebas1e";
+import { doc, onSnapshot, type FirestoreError, type Timestamp } from "firebase/firestore";
 
 type Author = {
   uid?: string | null;
@@ -16,6 +16,15 @@ type Author = {
 } | null;
 
 type Ingredient = { name?: string; measure?: string | null; qty?: string; unit?: string };
+
+type TimestampLike =
+  | Timestamp
+  | { seconds?: number; toDate?: () => Date }
+  | Date
+  | number
+  | string
+  | null
+  | undefined;
 
 type RecipeDoc = {
   id: string;
@@ -31,14 +40,22 @@ type RecipeDoc = {
   steps?: string | null;
   instructions?: string | null;
   author?: Author;
-  createdAt?: any;
+  createdAt?: TimestampLike;
 };
 
-function toMillis(ts: any): number {
+function toMillis(ts: TimestampLike): number {
   try {
     if (!ts) return 0;
-    if (typeof ts?.toDate === "function") return ts.toDate().getTime();
-    if (typeof ts?.seconds === "number") return ts.seconds * 1000;
+    if (ts instanceof Date) return ts.getTime();
+    if (typeof ts === "number") return ts;
+    if (typeof ts === "string") {
+      const parsed = Date.parse(ts);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    }
+    if (typeof ts === "object") {
+      if (typeof ts?.toDate === "function") return ts.toDate().getTime();
+      if (typeof ts?.seconds === "number") return ts.seconds * 1000;
+    }
   } catch {}
   return 0;
 }
@@ -53,22 +70,10 @@ function toLines(txt?: string | null): string[] {
 
 export default function RecipePublicPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
-
-  const [me, setMe] = useState<{ uid: string } | null>(null);
-  const [ready, setReady] = useState(false);
 
   const [recipe, setRecipe] = useState<RecipeDoc | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    const stop = onAuthStateChanged(auth, (u) => {
-      setMe(u || null);
-      setReady(true);
-    });
-    return () => stop();
-  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -79,33 +84,27 @@ export default function RecipePublicPage() {
         setLoading(false);
         if (!snap.exists()) {
           setRecipe(null);
-          setErr("This recipe doesn’t exist (or was deleted).");
+          setErr("This recipe doesn't exist (or was deleted).");
           return;
         }
-        const data = (snap.data() || {}) as any;
+        const data = (snap.data() || {}) as Omit<RecipeDoc, "id">;
         setRecipe({ id: snap.id, ...data });
         setErr(null);
       },
-      (e) => {
+      (error: FirestoreError) => {
         setLoading(false);
-        setErr(e?.message ?? "Could not load recipe.");
+        setErr(error.message || "Could not load recipe.");
       }
     );
     return () => stop();
   }, [id]);
 
-  const isOwner = useMemo(
-    () => !!me && !!recipe?.uid && me.uid === recipe.uid,
-    [me, recipe?.uid]
-  );
-
-  const created = useMemo(() => (recipe ? new Date(toMillis(recipe.createdAt)) : null), [recipe?.createdAt]);
+  const created = useMemo(() => (recipe ? new Date(toMillis(recipe.createdAt)) : null), [recipe]);
   const title = recipe?.title || "Untitled recipe";
   const cover = recipe?.imageURL || recipe?.image || null;
-  const gallery = Array.isArray(recipe?.gallery) ? recipe!.gallery : [];
   const desc = recipe?.description || "";
   const steps = toLines(recipe?.instructions || recipe?.steps);
-  const ing = Array.isArray(recipe?.ingredients) ? recipe!.ingredients : [];
+  const ing: Ingredient[] = Array.isArray(recipe?.ingredients) ? recipe?.ingredients ?? [] : [];
   const authorName =
     recipe?.author?.displayName ||
     recipe?.author?.username ||
@@ -149,8 +148,13 @@ export default function RecipePublicPage() {
       <section className="hero">
         <div className="cover">
           {cover ? (
-           
-            <img src={cover} alt={title} />
+            <Image
+              src={cover}
+              alt={title}
+              fill
+              className="coverImg"
+              sizes="(min-width: 900px) 55vw, 100vw"
+            />
           ) : (
             <div className="ph" aria-hidden>
               <svg width="28" height="28" viewBox="0 0 24 24">
@@ -165,8 +169,13 @@ export default function RecipePublicPage() {
           <div className="meta">
             <div className="who">
               {recipe?.author?.avatarURL ? (
-              
-                <img className="avatar" src={recipe.author.avatarURL} alt="" />
+                <Image
+                  className="avatar"
+                  src={recipe.author.avatarURL}
+                  alt=""
+                  width={44}
+                  height={44}
+                />
               ) : (
                 <div className="avatar ph">{authorName[0]?.toUpperCase() || "U"}</div>
               )}
@@ -255,8 +264,8 @@ const styles = `
 .hero{ display:grid; gap:14px; grid-template-columns: 1.4fr 1fr; align-items: stretch; }
 @media (max-width: 900px){ .hero{ grid-template-columns: 1fr; } }
 
-.cover{ border:1px solid var(--border); background:#000; border-radius:16px; overflow:hidden; aspect-ratio: 16/10; }
-.cover img{ width:100%; height:100%; object-fit:cover; display:block; }
+.cover{ border:1px solid var(--border); background:#000; border-radius:16px; overflow:hidden; aspect-ratio: 16/10; position:relative; }
+.coverImg{ object-fit:cover; position:absolute; inset:0; }
 .cover .ph{ width:100%; height:100%; display:grid; place-items:center; color: var(--muted); background: var(--bg2); }
 
 .head{

@@ -103,30 +103,6 @@ const extractFromRecord = (record: Record<string, unknown>, keys: string[]): str
   return null;
 };
 
-const firstMediaUrl = (media: unknown): string | null => {
-  if (!media) return null;
-  if (typeof media === "string") {
-    const trimmed = media.trim();
-    return trimmed.length ? trimmed : null;
-  }
-  if (Array.isArray(media)) {
-    for (const item of media) {
-      const found = firstMediaUrl(item);
-      if (found) return found;
-    }
-    return null;
-  }
-  if (typeof media === "object") {
-    return extractFromRecord(media as Record<string, unknown>, [
-      "url",
-      "src",
-      "downloadURL",
-      "href",
-    ]);
-  }
-  return null;
-};
-
 const getRecipeImage = (recipe: CommonRecipe): string | null => {
   if (recipe.image) return recipe.image;
   const record = recipe as Record<string, unknown>;

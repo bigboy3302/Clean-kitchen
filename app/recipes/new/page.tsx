@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebas1e";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
@@ -16,6 +16,19 @@ export default function NewRecipePage() {
   const [instructions, setInstructions] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const handleTitleChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setTitle(event.currentTarget.value);
+  };
+  const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setImage(event.currentTarget.value);
+  };
+  const handleIngredientsChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    setIngredientsText(event.currentTarget.value);
+  };
+  const handleInstructionsChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    setInstructions(event.currentTarget.value);
+  };
 
   useEffect(() => {
     if (!auth.currentUser) router.replace("/auth/login");
@@ -57,8 +70,9 @@ export default function NewRecipePage() {
         createdAt: serverTimestamp(),
       });
       router.push("/recipes");
-    } catch (e: any) {
-      setErr(e?.message || "Failed to create recipe.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to create recipe.";
+      setErr(message);
     } finally {
       setBusy(false);
     }
@@ -70,18 +84,18 @@ export default function NewRecipePage() {
 
       <section className="card">
         <div className="grid">
-          <Input label="Title" value={title} onChange={(e:any)=>setTitle(e.target.value)} placeholder="Best Tomato Pasta" />
-          <Input label="Image URL (optional)" value={image} onChange={(e:any)=>setImage(e.target.value)} placeholder="https://…" />
+          <Input label="Title" value={title} onChange={handleTitleChange} placeholder="Best Tomato Pasta" />
+          <Input label="Image URL (optional)" value={image} onChange={handleImageChange} placeholder="https://example.com/recipe.jpg" />
         </div>
 
         <div className="field">
           <label className="label">Ingredients (one per line)</label>
-          <textarea className="ta" rows={8} value={ingredientsText} onChange={(e)=>setIngredientsText(e.target.value)} placeholder="pasta - 250 g&#10;tomato - 2 pcs&#10;garlic - 2 cloves" />
+          <textarea className="ta" rows={8} value={ingredientsText} onChange={handleIngredientsChange} placeholder="pasta - 250 g&#10;tomato - 2 pcs&#10;garlic - 2 cloves" />
         </div>
 
         <div className="field">
           <label className="label">Instructions</label>
-          <textarea className="ta" rows={8} value={instructions} onChange={(e)=>setInstructions(e.target.value)} placeholder="Write the steps here…" />
+          <textarea className="ta" rows={8} value={instructions} onChange={handleInstructionsChange} placeholder="Write the steps here..." />
         </div>
 
         {err && <p className="error">{err}</p>}

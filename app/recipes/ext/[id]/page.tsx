@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
-import Link from "next/link";
 
 type Recipe = {
   id: string;
@@ -15,6 +14,20 @@ type Recipe = {
   calories?: number | null;
   instructionsHtml?: string | null;
   ingredients?: Array<{ name: string; amount?: string | number; unit?: string }> | null;
+};
+
+type ApiErrorResponse = { error: string };
+
+const hasApiError = (value: unknown): value is ApiErrorResponse => {
+  if (typeof value !== "object" || value === null) return false;
+  const errorValue = (value as { error?: unknown }).error;
+  return typeof errorValue === "string" && errorValue.length > 0;
+};
+
+const isRecipe = (value: unknown): value is Recipe => {
+  if (typeof value !== "object" || value === null) return false;
+  const maybe = value as Partial<Recipe>;
+  return typeof maybe.id === "string" && typeof maybe.title === "string";
 };
 
 export default function ExternalRecipePage() {
@@ -42,21 +55,32 @@ export default function ExternalRecipePage() {
         if (!res.ok) {
           if (!ignore) {
             setRecipe(null);
-            setErr("This recipe doesn’t exist (or was deleted).");
+            setErr("This recipe doesn't exist (or was deleted).");
           }
           return;
         }
-        const data = (await res.json()) as Recipe | { error?: string };
-        if ((data as any)?.error) {
+        const raw: unknown = await res.json();
+        if (hasApiError(raw)) {
           if (!ignore) {
             setRecipe(null);
-            setErr("This recipe doesn’t exist (or was deleted).");
+            setErr("This recipe doesn't exist (or was deleted).");
           }
           return;
         }
-        if (!ignore) setRecipe(data as Recipe);
-      } catch (e: any) {
-        if (!ignore) setErr(e?.message || "Failed to load recipe.");
+        if (!isRecipe(raw)) {
+          if (!ignore) {
+            setRecipe(null);
+            setErr("Could not parse recipe details.");
+          }
+          return;
+        }
+        if (!ignore) setRecipe(raw);
+      } catch (error: unknown) {
+        if (!ignore) {
+          const message = error instanceof Error ? error.message : "Failed to load recipe.";
+          setRecipe(null);
+          setErr(message);
+        }
       } finally {
         if (!ignore) setLoading(false);
       }
@@ -165,7 +189,7 @@ export default function ExternalRecipePage() {
           </div>
         </article>
       ) : (
-        <div className="card bad">This recipe doesn’t exist (or was deleted).</div>
+        <div className="card bad">This recipe doesn't exist (or was deleted).</div>
       )}
 
       <style jsx>{`
