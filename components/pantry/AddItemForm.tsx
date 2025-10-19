@@ -1,4 +1,4 @@
-
+﻿
 "use client";
 
 import { useState } from "react";
@@ -50,8 +50,9 @@ export default function AddItemForm() {
       setName("");
       setQty("");
       setDateStr("");
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to add item.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to add item.";
+      setErr(message);
     } finally {
       setBusy(false);
     }
@@ -90,3 +91,11 @@ export default function AddItemForm() {
     </form>
   );
 }
+
+
+
+
+
+
+
+

@@ -4,6 +4,15 @@ import Link from "next/link";
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import useNavPrefs, { defaultNavPrefs } from "./useNavPrefs";
 
+type FabNavCSSVars = React.CSSProperties & {
+  "--pill"?: string;
+  "--icon"?: string;
+  "--h"?: string;
+  "--w-open"?: string;
+  "--glow"?: string;
+  "--bdr"?: string;
+};
+
 type ItemKey = "dashboard" | "pantry" | "recipes" | "fitness" | "profile";
 
 const ALL_ITEMS: Record<ItemKey, { href: string; label: string; icon: JSX.Element }> = {
@@ -86,15 +95,15 @@ export default function FabNav() {
   const posClass =
     placement === "header" ? "pos-header" : placement === "top" ? "pos-top" : "pos-bottom";
 
-  const styleVars: React.CSSProperties = {
-    ["--pill" as any]: nav?.accent ?? "var(--navbar-bg)",
-    ["--icon" as any]: nav?.icon ?? "var(--navbar-fg)",
-    ["--h" as any]: (nav?.compact ?? defaultNavPrefs.compact) ? "48px" : "56px",
-    ["--w-open" as any]: (nav?.compact ?? defaultNavPrefs.compact) ? "460px" : "560px",
-    ["--glow" as any]: (nav?.glow ?? defaultNavPrefs.glow)
+  const styleVars: FabNavCSSVars = {
+    "--pill": nav?.accent ?? "var(--navbar-bg)",
+    "--icon": nav?.icon ?? "var(--navbar-fg)",
+    "--h": (nav?.compact ?? defaultNavPrefs.compact) ? "48px" : "56px",
+    "--w-open": (nav?.compact ?? defaultNavPrefs.compact) ? "460px" : "560px",
+    "--glow": (nav?.glow ?? defaultNavPrefs.glow)
       ? "0 16px 40px rgba(0,0,0,.22)"
       : "0 8px 20px rgba(0,0,0,.10)",
-    ["--bdr" as any]: "color-mix(in oklab, #000 12%, var(--pill))",
+    "--bdr": "color-mix(in oklab, #000 12%, var(--pill))",
   };
 
   return (

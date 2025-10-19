@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Goal } from "@/lib/fitness/calc";
 import {
@@ -38,8 +39,9 @@ export default function WorkoutGrid({
   initialBodyPart = "back",
   title = "Exercise Library",
   limit = 12,
-  goal = "maintain",
+  goal: _goal = "maintain",
 }: Props) {
+  void _goal;
   const [targets, setTargets] = useState<string[]>([]);
   const [sel, setSel] = useState<string>(initialBodyPart);
 
@@ -110,7 +112,7 @@ export default function WorkoutGrid({
     (async () => {
       try {
         const res = await fetch(endpoint, { cache: "no-store" });
-        const data = await res.json();
+        const data = (await res.json()) as unknown;
         if (!alive || lastKeyRef.current !== key) return;
 
         if (Array.isArray(data)) {
@@ -118,12 +120,22 @@ export default function WorkoutGrid({
           cache.set(key, cleaned);
           setList(cleaned);
         } else {
-          setErr(String((data as any)?.error || "Failed to load."));
+          if (
+            data &&
+            typeof data === "object" &&
+            "error" in data &&
+            typeof (data as { error?: unknown }).error === "string"
+          ) {
+            setErr((data as { error: string }).error);
+          } else {
+            setErr("Failed to load.");
+          }
           setList([]);
         }
-      } catch (e: any) {
+      } catch (error: unknown) {
         if (!alive || lastKeyRef.current !== key) return;
-        setErr(e?.message || "Failed to load exercises.");
+        const message = error instanceof Error ? error.message : "Failed to load exercises.";
+        setErr(message);
         setList([]);
       } finally {
         if (alive && lastKeyRef.current === key) setBusy(false);
@@ -140,31 +152,39 @@ export default function WorkoutGrid({
       const plan = await getWeekPlan();
       const today: DayKey = getTodayKey();
 
+      const exercisePayload: NonNullable<WorkoutItem["exercise"]> = {
+        id: ex.id,
+        name: ex.name,
+        bodyPart: ex.bodyPart,
+        target: ex.target,
+        equipment: ex.equipment,
+        gifUrl: ex.gifUrl,
+        imageUrl: ex.imageUrl || ex.gifUrl || null,
+        imageThumbnailUrl: ex.imageThumbnailUrl || ex.gifUrl || null,
+        descriptionHtml: ex.descriptionHtml,
+        primaryMuscles: ex.primaryMuscles,
+        secondaryMuscles: ex.secondaryMuscles,
+      };
+
+      if (ex.equipmentList?.length) {
+        exercisePayload.equipmentList = ex.equipmentList;
+      } else if (ex.equipment) {
+        exercisePayload.equipmentList = [ex.equipment];
+      }
+
       const item: WorkoutItem = {
         id: crypto.randomUUID(),
         name: ex.name,
         done: false,
-        exercise: {
-          id: ex.id,
-          name: ex.name,
-          bodyPart: ex.bodyPart,
-          target: ex.target,
-          equipment: ex.equipment,
-          gifUrl: ex.gifUrl,
-          imageUrl: ex.imageUrl || ex.gifUrl || null,
-          imageThumbnailUrl: ex.imageThumbnailUrl || ex.gifUrl || null,
-          descriptionHtml: ex.descriptionHtml,
-          primaryMuscles: ex.primaryMuscles,
-          secondaryMuscles: ex.secondaryMuscles,
-          equipmentList: ex.equipmentList?.length ? ex.equipmentList : [ex.equipment],
-        } as any,
+        exercise: exercisePayload,
       };
 
       await upsertDayItem(plan.weekId, today, item);
       setToast(`Added "${ex.name}" to Today`);
       setTimeout(() => setToast(null), 2000);
-    } catch (e: any) {
-      setToast(e?.message || "Failed to add to Today");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to add to Today";
+      setToast(message);
       setTimeout(() => setToast(null), 2200);
     }
   }
@@ -226,7 +246,7 @@ export default function WorkoutGrid({
         </div>
       )}
 
-      {busy && <p className="muted">Loadingâ€¦</p>}
+      {busy && <p className="muted">Loading…</p>}
       {err && <p className="error">{err}</p>}
       {!busy && !err && list.length === 0 && (
         <p className="muted">No exercises found. Try another search or target.</p>
@@ -236,13 +256,16 @@ export default function WorkoutGrid({
         {list.map((ex) => (
           <article key={`${ex.id}-${ex.name}`} className="item">
             {}
-            <img
+            <Image
               src={mediaSrc(ex)}
               alt={ex.name}
               className="gif"
+              width={400}
+              height={300}
               loading="lazy"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).src = "/placeholder.png";
+              unoptimized
+              onError={({ currentTarget }) => {
+                currentTarget.src = "/placeholder.png";
               }}
             />
             <div className="meta">
@@ -282,12 +305,15 @@ export default function WorkoutGrid({
               </button>
             </div>
             <div className="mbody">
-              <img
+              <Image
                 src={mediaSrc(openEx)}
                 alt={openEx.name}
                 className="modalGif"
-                onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).src = "/placeholder.png";
+                width={720}
+                height={480}
+                unoptimized
+                onError={({ currentTarget }) => {
+                  currentTarget.src = "/placeholder.png";
                 }}
               />
               <div className="chipsRow">
@@ -395,4 +421,8 @@ function getTodayKey(date = new Date()): DayKey {
   const js = date.getDay();
   return (["sun", "mon", "tue", "wed", "thu", "fri", "sat"][js] as DayKey) || "mon";
 }
+
+
+
+
 

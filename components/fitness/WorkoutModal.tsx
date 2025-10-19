@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import type { Goal } from "@/lib/fitness/calc";
 import type { Exercise } from "@/lib/workouts/types";
 
@@ -39,7 +40,17 @@ export default function WorkoutModal({ exercise, goal, onClose }: Props) {
           </button>
         </div>
 
-        <img className="hero" src={heroSrc} alt={exercise.name} />
+        <Image
+          className="hero"
+          src={heroSrc}
+          alt={exercise.name}
+          width={800}
+          height={480}
+          unoptimized
+          onError={({ currentTarget }) => {
+            currentTarget.src = "/placeholder.png";
+          }}
+        />
 
         <div className="meta">
           <span className="chip">{cap(exercise.bodyPart)}</span>

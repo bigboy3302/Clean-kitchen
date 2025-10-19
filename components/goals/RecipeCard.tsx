@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 export type Recipe = {
   id: string;
   title: string;
@@ -15,8 +17,14 @@ export default function RecipeCard({ r }: { r: Recipe }) {
   return (
     <div className="group overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:shadow-md">
       {r.thumbnail ? (
-       
-        <img src={r.thumbnail} alt={r.title} className="h-40 w-full object-cover" />
+        <Image
+          src={r.thumbnail}
+          alt={r.title}
+          width={320}
+          height={160}
+          className="h-40 w-full object-cover"
+          unoptimized
+        />
       ) : (
         <div className="h-40 w-full bg-gray-100" />
       )}
@@ -28,10 +36,18 @@ export default function RecipeCard({ r }: { r: Recipe }) {
           </span>
         </div>
         <div className="mt-3 grid grid-cols-4 gap-2 text-xs text-gray-600">
-          <div><b className="text-gray-900">{r.kcal}</b> kcal</div>
-          <div><b className="text-gray-900">{r.protein}g</b> P</div>
-          <div><b className="text-gray-900">{r.carbs}g</b> C</div>
-          <div><b className="text-gray-900">{r.fat}g</b> F</div>
+          <div>
+            <b className="text-gray-900">{r.kcal}</b> kcal
+          </div>
+          <div>
+            <b className="text-gray-900">{r.protein}g</b> P
+          </div>
+          <div>
+            <b className="text-gray-900">{r.carbs}g</b> C
+          </div>
+          <div>
+            <b className="text-gray-900">{r.fat}g</b> F
+          </div>
         </div>
       </div>
     </div>
