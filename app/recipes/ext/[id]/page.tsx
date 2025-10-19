@@ -189,7 +189,7 @@ export default function ExternalRecipePage() {
           </div>
         </article>
       ) : (
-        <div className="card bad">This recipe doesn't exist (or was deleted).</div>
+        <div className="card bad">{"This recipe doesn't exist (or was deleted)."}</div>
       )}
 
       <style jsx>{`

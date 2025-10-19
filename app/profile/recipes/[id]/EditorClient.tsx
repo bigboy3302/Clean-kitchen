@@ -124,8 +124,9 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
       const url = await getDownloadURL(storageRef);
       await updateDoc(doc(db, "recipes", String(id)), { image: url, updatedAt: serverTimestamp() });
       setCover(url);
-    } catch (e: any) {
-      setErr(e?.message || "Failed to upload cover.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to upload cover.";
+      setErr(message);
     } finally {
       setSaving(false);
       if (inputEl) inputEl.value = "";              
@@ -138,8 +139,9 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
     try {
       await updateDoc(doc(db, "recipes", String(id)), { image: null, updatedAt: serverTimestamp() });
       setCover(null);
-    } catch (e: any) {
-      setErr(e?.message || "Failed to remove cover.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to remove cover.";
+      setErr(message);
     } finally {
       setSaving(false);
     }
@@ -169,8 +171,9 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
       });
 
       router.push("/recipes");
-    } catch (e: any) {
-      setErr(e?.message || "Failed to save.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to save.";
+      setErr(message);
     } finally {
       setSaving(false);
     }
@@ -190,8 +193,9 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
       await deleteDoc(doc(db, "recipes", String(id)));
       setConfirmOpen(false);
       router.push("/recipes");
-    } catch (e: any) {
-      setDeleteErr(e?.message || "Failed to delete.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to delete.";
+      setDeleteErr(message);
     } finally {
       setDeleting(false);
     }
