@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Button from "@/components/ui/Button";
+import type { Timestamp } from "firebase/firestore";
 
 export type NutritionInfo = {
   name?: string | null;
@@ -20,11 +21,18 @@ export type NutritionInfo = {
   sodium100g?: number | null;
 };
 
+type TimestampLike =
+  | Timestamp
+  | Date
+  | { toDate?: () => Date; seconds?: number }
+  | string
+  | number;
+
 export type PantryCardItem = {
   id: string;
   name: string;
   quantity: number;
-  expiresAt?: any | null;
+  expiresAt?: TimestampLike | null;
   barcode?: string | null;
   nutrition?: NutritionInfo | null;
   lastConsumedGrams?: number | null;
@@ -32,7 +40,7 @@ export type PantryCardItem = {
 
 type Props = {
   item: PantryCardItem;
-  onSave?: (patch: { name: string; quantity: number; expiresAt: any }) => void | Promise<void>;
+  onSave?: (patch: { name: string; quantity: number; expiresAt: string | null }) => void | Promise<void>;
   onDelete?: () => void | Promise<void>;
   onConsume?: (payload: {
     grams: number;
@@ -40,13 +48,27 @@ type Props = {
   }) => void | Promise<void>;
 };
 
-function toDate(v: any): Date | null {
-  if (!v) return null;
-  if (v instanceof Date) return v;
-  const anyTs: any = v;
-  if (typeof anyTs?.toDate === "function") return anyTs.toDate();
-  if (typeof anyTs?.seconds === "number") return new Date(anyTs.seconds * 1000);
-  if (typeof v === "string" && !Number.isNaN(Date.parse(v))) return new Date(v);
+function toDate(value: unknown): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === "number" && Number.isFinite(value)) return new Date(value);
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed)) return new Date(parsed);
+  }
+  if (typeof value === "object" && value !== null) {
+    const candidate = value as { toDate?: () => Date; seconds?: number };
+    if (typeof candidate.toDate === "function") {
+      try {
+        return candidate.toDate();
+      } catch {
+        // ignore and attempt seconds fallback
+      }
+    }
+    if (typeof candidate.seconds === "number") {
+      return new Date(candidate.seconds * 1000);
+    }
+  }
   return null;
 }
 
@@ -76,7 +98,7 @@ function Chip({ children }: { children: React.ReactNode }) {
 export default function PantryCard({ item, onSave, onDelete, onConsume }: Props) {
   const d = toDate(item.expiresAt);
   const expiresStr = useMemo(() => {
-    if (!d) return "—";
+    if (!d) return "";
     const y = d.getFullYear(),
       m = String(d.getMonth() + 1).padStart(2, "0"),
       day = String(d.getDate()).padStart(2, "0");
@@ -86,10 +108,10 @@ export default function PantryCard({ item, onSave, onDelete, onConsume }: Props)
   const [editOpen, setEditOpen] = useState(false);
   const [name, setName] = useState(item.name);
   const [qty, setQty] = useState<number>(item.quantity || 1);
-  const [exp, setExp] = useState<string>(expiresStr !== "—" ? expiresStr : "");
+  const [exp, setExp] = useState<string>(expiresStr);
   const firstInputRef = useRef<HTMLInputElement | null>(null);
 
-  const n = item.nutrition || {};
+  const n: NutritionInfo = item.nutrition ?? {};
   const hasNutrition =
     !!item.barcode &&
     !!n &&
@@ -129,7 +151,7 @@ export default function PantryCard({ item, onSave, onDelete, onConsume }: Props)
   useEffect(() => {
     setName(item.name);
     setQty(item.quantity || 1);
-    setExp(expiresStr !== "—" ? expiresStr : "");
+    setExp(expiresStr);
     setConsumeGrams(item.lastConsumedGrams ?? 100);
   }, [item.id, item.name, item.quantity, expiresStr, item.lastConsumedGrams]);
 
@@ -153,18 +175,18 @@ export default function PantryCard({ item, onSave, onDelete, onConsume }: Props)
       clearTimeout(t);
       document.body.style.overflow = orig;
     };
-  }, [editOpen, nutriOpen, consumeOpen]);
+  }, [editOpen, nutriOpen, consumeOpen, handleSave]);
 
-  async function handleSave() {
+  const handleSave = useCallback(async () => {
     if (onSave) {
       await onSave({
         name: name.trim() || item.name,
         quantity: Number(qty) || 1,
-        expiresAt: exp || null,
+        expiresAt: exp ? exp : null,
       });
     }
     setEditOpen(false);
-  }
+  }, [onSave, name, item.name, qty, exp]);
 
   async function handleConsume() {
     if (!onConsume) {
@@ -185,14 +207,15 @@ export default function PantryCard({ item, onSave, onDelete, onConsume }: Props)
     try {
       await onDelete();
       setConfirmOpen(false);
-    } catch (e: any) {
-      setDeleteErr(e?.message || "Failed to delete.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to delete.";
+      setDeleteErr(message);
     } finally {
       setDeleting(false);
     }
   }
 
-  const facts: Array<{ label: string; value: any; suffix?: string }> = [
+  const facts: Array<{ label: string; value: number | string | null | undefined; suffix?: string }> = [
     { label: "Serving size", value: n.servingSize },
     { label: "kcal / 100g", value: n.kcalPer100g },
     { label: "kcal / serving", value: n.kcalPerServing },
@@ -675,3 +698,7 @@ export default function PantryCard({ item, onSave, onDelete, onConsume }: Props)
     </>
   );
 }
+
+
+
+

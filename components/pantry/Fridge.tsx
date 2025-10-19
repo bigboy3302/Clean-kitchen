@@ -1,17 +1,17 @@
 ﻿"use client";
 
 import React, { useMemo } from "react";
-
-type TSLike = any;
+import type { Timestamp } from "firebase/firestore";
+import type { NutritionInfo } from "@/lib/nutrition";
 
 export type FridgeItem = {
   id: string;
   uid?: string;
   name: string;
   quantity: number;
-  expiresAt?: TSLike | null;
+  expiresAt?: TimestampLike | null;
   barcode?: string | null;
-  nutrition?: any | null;
+  nutrition?: NutritionInfo | null;
 };
 
 type Props = {
@@ -30,13 +30,34 @@ type DisplayItem = FridgeItem & {
 
 const DAY_MS = 86_400_000;
 
-function toDate(v: any): Date | null {
-  if (!v) return null;
-  if (v instanceof Date) return v;
-  const anyTs: any = v;
-  if (typeof anyTs?.toDate === "function") return anyTs.toDate();
-  if (typeof anyTs?.seconds === "number") return new Date(anyTs.seconds * 1000);
-  if (typeof v === "string" && !Number.isNaN(Date.parse(v))) return new Date(v);
+type TimestampLike =
+  | Timestamp
+  | Date
+  | { toDate?: () => Date; seconds?: number }
+  | string
+  | number;
+
+function toDate(value: unknown): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === "number" && Number.isFinite(value)) return new Date(value);
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed)) return new Date(parsed);
+  }
+  if (typeof value === "object" && value !== null) {
+    const candidate = value as { toDate?: () => Date; seconds?: number };
+    if (typeof candidate.toDate === "function") {
+      try {
+        return candidate.toDate();
+      } catch {
+        // fall through; attempt seconds fallback
+      }
+    }
+    if (typeof candidate.seconds === "number") {
+      return new Date(candidate.seconds * 1000);
+    }
+  }
   return null;
 }
 
@@ -57,15 +78,6 @@ function describeExpiry(date: Date | null): { label: string; tone: StatusTone } 
   }
   const daysLeft = diffDays === 1 ? "1 day" : `${diffDays} days`;
   return { label: `Fresh for ${daysLeft}`, tone: "good" };
-}
-
-function formatDate(date: Date | null): string {
-  if (!date) return "No expiry";
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(date);
 }
 
 export default function Fridge({ items, isOpen, onToggleOpen }: Props) {

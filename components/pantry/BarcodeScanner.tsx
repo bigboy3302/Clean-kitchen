@@ -22,8 +22,8 @@ export default function BarcodeScanner({
   const [err, setErr] = useState<string | null>(null);
 
   const hints = useMemo(() => {
-    const m = new Map<DecodeHintType, any>();
-    m.set(DecodeHintType.POSSIBLE_FORMATS, [
+    const map = new Map<DecodeHintType, BarcodeFormat[] | boolean>();
+    map.set(DecodeHintType.POSSIBLE_FORMATS, [
       BarcodeFormat.EAN_13,
       BarcodeFormat.UPC_A,
       BarcodeFormat.UPC_E,
@@ -32,8 +32,8 @@ export default function BarcodeScanner({
       BarcodeFormat.CODE_39,
       BarcodeFormat.ITF,
     ]);
-    m.set(DecodeHintType.TRY_HARDER, true);
-    return m;
+    map.set(DecodeHintType.TRY_HARDER, true);
+    return map;
   }, []);
 
   const readerOpts = useMemo(
@@ -82,11 +82,12 @@ export default function BarcodeScanner({
       );
       controlsRef.current = controls;
       setRunning(true);
-    } catch (e: any) {
+    } catch (error: unknown) {
+      const err = (error ?? {}) as { name?: string; message?: string };
       setErr(
-        e?.name === "NotAllowedError"
+        err?.name === "NotAllowedError"
           ? "Camera permission was denied. Allow it in the browser settings."
-          : e?.message || "Camera failed to start. Use HTTPS or try again."
+          : err?.message || "Camera failed to start. Use HTTPS or try again."
       );
       setRunning(false);
     }
