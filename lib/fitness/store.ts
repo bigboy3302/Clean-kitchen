@@ -134,72 +134,14 @@ const DAY_KEYS: DayKey[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
    Metrics (client)
 ====================================================================== */
 export async function getMetrics(): Promise<Metrics | null> {
-  const cached = safeParse<Metrics>(lsGet(key("metrics")));
-  if (cached) return cached;
-
-  try {
-    // firebas1e.ts lives in lib/, this file is in lib/fitness/ â†’ go up one level
-    const [{ auth, db }, firestore] = await Promise.all([
-      import("../firebas1e.js"),
-      import("firebase/firestore"),
-    ]);
-
-    const user = auth.currentUser;
-    if (!user) return null;
-
-    const snap = await firestore.getDoc(firestore.doc(db, "users", user.uid));
-    if (!snap.exists()) return null;
-    const data = snap.data() || {};
-
-    const validActivities = new Set(["sedentary", "light", "moderate", "active", "veryActive"]);
-    const validGoals = new Set(["cut", "maintain", "bulk"]);
-
-    const metrics: Metrics = {
-      sex: data.sex === "male" || data.sex === "female" ? data.sex : undefined,
-      age: typeof data.age === "number" ? data.age : undefined,
-      heightCm: typeof data.heightCm === "number" ? data.heightCm : undefined,
-      weightKg: typeof data.weightKg === "number" ? data.weightKg : undefined,
-      activity: validActivities.has(data.activity) ? data.activity : undefined,
-      goal: validGoals.has(data.goal) ? data.goal : undefined,
-    };
-
-    const compact: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(metrics)) {
-      if (v !== undefined && v !== null) compact[k] = v;
-    }
-    if (Object.keys(compact).length) {
-      lsSet(key("metrics"), JSON.stringify(compact));
-      return metrics;
-    }
-    return null;
-  } catch (error) {
-    console.warn("[fitness] Failed to load metrics from Firestore", error);
-    return null;
-  }
+   return safeParse<Metrics>(lsGet(key("metrics")));
 }
+
 
 export async function saveMetrics(m: Metrics) {
   const clean: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(m)) if (v !== undefined) clean[k] = v;
   lsSet(key("metrics"), JSON.stringify(clean));
-
-  try {
-    const [{ auth, db }, firestore] = await Promise.all([
-      import("../firebas1e.js"),
-      import("firebase/firestore"),
-    ]);
-
-    const user = auth.currentUser;
-    if (!user) return;
-
-    await firestore.setDoc(
-      firestore.doc(db, "users", user.uid),
-      { ...clean, metricsUpdatedAt: firestore.serverTimestamp() },
-      { merge: true }
-    );
-  } catch (error) {
-    console.warn("[fitness] Failed to persist metrics to Firestore", error);
-  }
 }
 
 /* ======================================================================
