@@ -1,5 +1,5 @@
 // hooks/consumptionLogs.ts
-import { auth, db } from "@/lib/firebase/firebase";
+import { auth, db } from "@/lib/firebas1e";
 import { collection, query, where, orderBy, limit, onSnapshot, getDocs } from "firebase/firestore";
 
 export function watchMyConsumptionLogs(cb: (rows: any[]) => void) {

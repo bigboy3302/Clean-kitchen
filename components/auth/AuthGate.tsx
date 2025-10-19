@@ -2,7 +2,7 @@
 "use client";
 import { ReactNode, useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "@/lib/firebase/firebase";
+import { auth } from "@/lib/firebas1e";
 
 export default function AuthGate({ children, fallback = null }: { children: ReactNode; fallback?: ReactNode }) {
   const [ready, setReady] = useState(false);

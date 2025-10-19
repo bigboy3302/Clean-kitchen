@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
-import app from "@/lib/firebase/firebase";
+import app from "@/lib/firebas1e";
 
 export default function FirebaseAppCheck() {
   useEffect(() => {

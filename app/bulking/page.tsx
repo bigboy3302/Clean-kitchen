@@ -2,7 +2,7 @@
 
 import RequireAuth from "@/components/auth/RequireAuth";
 import { useEffect, useState } from "react";
-import { auth, db } from "@/lib/firebase/firebase";
+import { auth, db } from "@/lib/firebas1e";
 import { doc, getDoc } from "firebase/firestore";
 
 type Profile = {

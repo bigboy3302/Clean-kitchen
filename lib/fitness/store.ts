@@ -1,4 +1,4 @@
-// lib/fitness/store.ts
+﻿// lib/fitness/store.ts
 /* ======================================================================
    Types
 ====================================================================== */
@@ -80,15 +80,13 @@ function hasLS() {
     return false;
   }
 }
-
 function lsGet(k: string): string | null {
-  return hasLS() ? window.localStorage.getItem(k) : (mem.get(k) ?? null);
+  return hasLS() ? window.localStorage.getItem(k) : mem.get(k) ?? null;
 }
 function lsSet(k: string, v: string) {
   if (hasLS()) window.localStorage.setItem(k, v);
   else mem.set(k, v);
 }
-
 const key = (suffix: string) => `${LS_PREFIX}${suffix}`;
 
 function safeParse<T>(json: string | null): T | null {
@@ -140,17 +138,22 @@ export async function getMetrics(): Promise<Metrics | null> {
   if (cached) return cached;
 
   try {
+    // firebas1e.ts lives in lib/, this file is in lib/fitness/ â†’ go up one level
     const [{ auth, db }, firestore] = await Promise.all([
-       import("@/lib/firebase/firebase"),
+      import("../firebas1e.js"),
       import("firebase/firestore"),
     ]);
+
     const user = auth.currentUser;
     if (!user) return null;
+
     const snap = await firestore.getDoc(firestore.doc(db, "users", user.uid));
     if (!snap.exists()) return null;
     const data = snap.data() || {};
+
     const validActivities = new Set(["sedentary", "light", "moderate", "active", "veryActive"]);
     const validGoals = new Set(["cut", "maintain", "bulk"]);
+
     const metrics: Metrics = {
       sex: data.sex === "male" || data.sex === "female" ? data.sex : undefined,
       age: typeof data.age === "number" ? data.age : undefined,
@@ -159,6 +162,7 @@ export async function getMetrics(): Promise<Metrics | null> {
       activity: validActivities.has(data.activity) ? data.activity : undefined,
       goal: validGoals.has(data.goal) ? data.goal : undefined,
     };
+
     const compact: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(metrics)) {
       if (v !== undefined && v !== null) compact[k] = v;
@@ -173,6 +177,7 @@ export async function getMetrics(): Promise<Metrics | null> {
     return null;
   }
 }
+
 export async function saveMetrics(m: Metrics) {
   const clean: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(m)) if (v !== undefined) clean[k] = v;
@@ -180,17 +185,16 @@ export async function saveMetrics(m: Metrics) {
 
   try {
     const [{ auth, db }, firestore] = await Promise.all([
-      import("@/lib/firebase/firebase"),
+      import("../firebas1e.js"),
       import("firebase/firestore"),
     ]);
+
     const user = auth.currentUser;
     if (!user) return;
+
     await firestore.setDoc(
       firestore.doc(db, "users", user.uid),
-      {
-        ...clean,
-        metricsUpdatedAt: firestore.serverTimestamp(),
-      },
+      { ...clean, metricsUpdatedAt: firestore.serverTimestamp() },
       { merge: true }
     );
   } catch (error) {
@@ -226,7 +230,10 @@ export async function getWeekPlan(targetWeekId?: string): Promise<WeekPlan> {
     let mutated = false;
     for (const d of DAY_KEYS) {
       if (!cached.days[d]) {
-        cached.days[d] = { date: fmtDate(addDays(new Date(cached.startIsoDate), DAY_KEYS.indexOf(d))), items: [] };
+        cached.days[d] = {
+          date: fmtDate(addDays(new Date(cached.startIsoDate), DAY_KEYS.indexOf(d))),
+          items: [],
+        };
         mutated = true;
       } else if (!Array.isArray(cached.days[d].items)) {
         cached.days[d].items = [];
@@ -273,7 +280,7 @@ export async function removeDayItem(weekId: string, day: DayKey, id: string): Pr
 }
 
 /* ======================================================================
-   “Add to Today” helper (for the library grid)
+   â€œAdd to Todayâ€ helper (for the library grid)
 ====================================================================== */
 export async function addExerciseToToday(ex: ExerciseLike, day?: DayKey) {
   const now = new Date();
@@ -306,7 +313,7 @@ export async function addExerciseToToday(ex: ExerciseLike, day?: DayKey) {
 }
 
 /* ======================================================================
-   Daily meals (client) – pulls from your /api/recipes/random
+   Daily meals (client)
 ====================================================================== */
 const FALLBACK_MEALS: SuggestedMeal[] = [
   { id: "52772", title: "Teriyaki Chicken Casserole", image: "https://www.themealdb.com/images/media/meals/wvpsxx1468256321.jpg" },
@@ -343,7 +350,7 @@ export async function getOrCreateDailyMeals(
       }
     }
   } catch {
-    // ignore — use fallback
+    // ignore â€” use fallback
   }
 
   lsSet(cacheId, JSON.stringify(FALLBACK_MEALS));
@@ -351,32 +358,10 @@ export async function getOrCreateDailyMeals(
 }
 
 /* ======================================================================
-   Auth helpers for Weekly page
-   - Minimal, safe default works even without Firebase.
-   - If you have Firebase auth, uncomment the code below and wire to it.
+   Auth helpers for Weekly page (minimal)
 ====================================================================== */
-
-/** Returns the current user id or null. Replace with your real auth if you have it. */
 export async function getCurrentUserId(): Promise<string | null> {
-  // --- Default: no-op (always "signed in" anonymously) ---
-  // Return null if you want Weekly page to require login.
-  // return null;
-
-  // If you use Firebase client auth, you can replace with:
-  // try {
-  //   const { getAuth, onAuthStateChanged } = await import("firebase/auth");
-  //   const { app } = await import("@/lib/firebase");
-  //   const auth = getAuth(app);
-  //   const u = auth.currentUser;
-  //   if (u) return u.uid;
-  //   return new Promise<string | null>((resolve) =>
-  //     onAuthStateChanged(auth, (user) => resolve(user?.uid ?? null), () => resolve(null))
-  //   );
-  // } catch {
-  //   return null;
-  // }
-
-  // For now, return a deterministic anonymous id so per-user storage is distinct if desired.
+  // For now, deterministic anon id so per-user storage stays distinct.
   const anonKey = key("anonUid");
   const existing = lsGet(anonKey);
   if (existing) return existing;
@@ -388,8 +373,7 @@ export async function getCurrentUserId(): Promise<string | null> {
 /** Ensures a user is signed in during runtime; throws if not. */
 export async function requireSignedIn(): Promise<string> {
   const uid = await getCurrentUserId();
-  if (!uid) {
-    throw new Error("AUTH_REQUIRED");
-  }
+  if (!uid) throw new Error("AUTH_REQUIRED");
   return uid;
 }
+

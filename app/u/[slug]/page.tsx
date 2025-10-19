@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { db } from "@/lib/firebase/firebase";
+import { db } from "@/lib/firebas1e";
 import {
   collection, doc, getDoc, onSnapshot, query, where, limit as fsLimit,
 } from "firebase/firestore";

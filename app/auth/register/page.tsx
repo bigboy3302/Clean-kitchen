@@ -9,7 +9,7 @@ import {
   sendEmailVerification,
   deleteUser,
 } from "firebase/auth";
-import { auth } from "@/lib/firebase/firebase";
+import { auth } from "@/lib/firebas1e";
 import AuthShell from "@/components/auth/AuthShell";
 import Input from "components/ui/Input";
 import Button from "@/components/ui/Button";

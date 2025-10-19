@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth, db, storage } from "@/lib/firebase/firebase";
+import { auth, db, storage } from "@/lib/firebas1e";
 import { doc, updateDoc, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { getDownloadURL, ref as sref, uploadBytes } from "firebase/storage";
 import BookWritingLoader from "./BookWritingLoader";

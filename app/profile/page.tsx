@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { auth, db, storage, functions } from "@/lib/firebase/firebase";
+import { auth, db, storage, functions } from "@/lib/firebas1e";
 import {
   onAuthStateChanged,
   sendPasswordResetEmail,

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth, db } from "@/lib/firebase/firebase";
+import { auth, db } from "@/lib/firebas1e";
 import { doc, getDoc, onSnapshot } from "firebase/firestore";
 
 type Author = {

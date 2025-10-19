@@ -6,7 +6,7 @@ import {
   serverTimestamp,
   type Firestore,
 } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebase";
+import { db } from "@/lib/firebas1e";
 
 export type DayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 

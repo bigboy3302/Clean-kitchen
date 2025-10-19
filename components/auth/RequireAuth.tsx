@@ -3,7 +3,7 @@
 import { ReactNode, useEffect, useState } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { auth, db } from "@/lib/firebase/firebase";
+import { auth, db } from "@/lib/firebas1e";
 import { doc, getDoc } from "firebase/firestore";
 
 export default function RequireAuth({

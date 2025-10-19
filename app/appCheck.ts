@@ -1,7 +1,7 @@
 
 "use client";
 
-import app from "@/lib/firebase/firebase";
+import app from "@/lib/firebas1e";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 let started = false;

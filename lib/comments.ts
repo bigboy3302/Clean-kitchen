@@ -1,4 +1,4 @@
-import { db } from "@/lib/firebase/firebase";
+import { db } from "@/lib/firebas1e";
 import { addDoc, collection, doc, getDoc, serverTimestamp } from "firebase/firestore";
 
 export async function addComment(opts: { postId: string; uid: string; text: string }) {

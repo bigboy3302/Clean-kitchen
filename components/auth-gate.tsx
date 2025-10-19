@@ -3,9 +3,9 @@
 import { ReactNode, useEffect, useState } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { auth } from "@/lib/firebase/firebase";
+import { auth } from "@/lib/firebas1e";
 import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebase";
+import { db } from "@/lib/firebas1e";
 
 export default function AuthGate({ children }: { children: ReactNode }) {
   const router = useRouter();

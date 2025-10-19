@@ -9,7 +9,7 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { getDownloadURL, ref as sref, uploadBytes } from "firebase/storage";
 
-import { auth, db, storage } from "@/lib/firebase/firebase";
+import { auth, db, storage } from "@/lib/firebas1e";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import type { CommonRecipe, Ingredient } from "@/components/recipes/types";
