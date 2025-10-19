@@ -2,7 +2,7 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { fetchExercises } from "@/lib/workouts/exercisedb";
 
 type LegacyExerciseShape = {
@@ -21,44 +21,83 @@ type LegacyExerciseShape = {
 };
 
 const VALID_BODY_PARTS = new Set([
-  "back","cardio","chest","lower arms","lower legs","neck",
-  "shoulders","upper arms","upper legs","waist",
+  "back",
+  "cardio",
+  "chest",
+  "lower arms",
+  "lower legs",
+  "neck",
+  "shoulders",
+  "upper arms",
+  "upper legs",
+  "waist",
 ]);
 
-export async function GET(req: Request) {
+const toTrimmedString = (value: unknown): string | undefined => {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : undefined;
+};
+
+const asString = (value: unknown, fallback = ""): string => toTrimmedString(value) ?? fallback;
+
+const parseNonNegativeInt = (value: string | null, fallback: number, max: number): number => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  const clamped = Math.floor(parsed);
+  const bounded = Math.max(0, clamped);
+  return Math.min(bounded, max);
+};
+
+type ExerciseRecord = Record<string, unknown>;
+
+const toLegacyExercise = (item: ExerciseRecord): LegacyExerciseShape => {
+  const id = String(item.id ?? item._id ?? "");
+  const name = asString(item.name, "Exercise");
+  const bodyPart = asString(item.bodyPart, "unknown");
+  const target = asString(item.target, "");
+  const equipment = asString(item.equipment, "Bodyweight") || "Bodyweight";
+  const gifUrl = asString(item.gifUrl, "");
+
+  return {
+    id,
+    name,
+    bodyPart,
+    target,
+    equipment,
+    gifUrl,
+    imageUrl: gifUrl || null,
+    imageThumbnailUrl: gifUrl || null,
+    descriptionHtml: "",
+    primaryMuscles: target ? [target] : [],
+    secondaryMuscles: [],
+    equipmentList: equipment ? [equipment] : ["Bodyweight"],
+  };
+};
+
+export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     let bodyPart = searchParams.get("bodyPart");
     let target = searchParams.get("target");
-    const query = searchParams.get("q");
-    const limit = Math.max(1, Math.min(40, Number(searchParams.get("limit") || 12)));
-    const offset = Math.max(0, Number(searchParams.get("offset") || 0));
+    const query = searchParams.get("q") ?? undefined;
+    const limit = Math.max(1, parseNonNegativeInt(searchParams.get("limit"), 12, 40));
+    const offset = parseNonNegativeInt(searchParams.get("offset"), 0, Number.MAX_SAFE_INTEGER);
 
     if (!target && bodyPart && !VALID_BODY_PARTS.has(bodyPart.toLowerCase())) {
       target = bodyPart;
       bodyPart = null;
     }
 
-    const list = await fetchExercises({ search: query, target, bodyPart, limit, offset });
+    const rawList = await fetchExercises({ search: query ?? undefined, target, bodyPart, limit, offset });
+    const list = Array.isArray(rawList) ? rawList : [];
 
-    const shaped: LegacyExerciseShape[] = list.map((item: any) => ({
-      id: String(item.id),
-      name: item.name,
-      bodyPart: item.bodyPart,
-      target: item.target,
-      equipment: item.equipment || "Bodyweight",
-      gifUrl: item.gifUrl || "",
-      imageUrl: item.gifUrl || null,
-      imageThumbnailUrl: item.gifUrl || null,
-      descriptionHtml: "",
-      primaryMuscles: item.target ? [item.target] : [],
-      secondaryMuscles: [],
-      equipmentList: item.equipment ? [item.equipment] : ["Bodyweight"],
-    }));
+    const shaped: LegacyExerciseShape[] = list.map((item) => toLegacyExercise(item as ExerciseRecord));
 
     return NextResponse.json(shaped, { headers: { "cache-control": "public, max-age=300" } });
-  } catch (e: any) {
-    console.error("GET /api/workouts failed:", e);
-    return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
+  } catch (error: unknown) {
+    console.error("GET /api/workouts failed:", error);
+    const message = error instanceof Error && error.message ? error.message : "Server error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -1,41 +1,53 @@
 // app/api/recipes/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 /**
  * Primary upstream: Spoonacular via RapidAPI
  * Fallback upstream: TheMealDB (free) so UI still shows something when 429/5xx.
  */
 
-const RAPID_KEY = process.env.RAPIDAPI_KEY!;
+const RAPID_KEY = process.env.RAPIDAPI_KEY ?? "";
 const HOST =
   process.env.RAPIDAPI_RECIPES_HOST ||
   process.env.RAPIDAPI_HOST ||
   "spoonacular-recipe-food-nutrition-v1.p.rapidapi.com";
 
 // --- tiny in-memory cache (per server instance) ---
-type CacheEntry = { ts: number; data: any };
-type CacheMap = Map<string, CacheEntry>;
-function getCache(): CacheMap {
-  const g = globalThis as any;
-  if (!g.__REC_CACHE) g.__REC_CACHE = new Map();
-  return g.__REC_CACHE as CacheMap;
+type CacheEntry = { ts: number; data: unknown };
+type CacheStore = Map<string, CacheEntry>;
+type CacheParams = Record<string, string | number | boolean | null | undefined>;
+type GlobalWithCache = typeof globalThis & { __REC_CACHE?: CacheStore };
+const cacheGlobal = globalThis as GlobalWithCache;
+
+function getCache(): CacheStore {
+  if (!cacheGlobal.__REC_CACHE) {
+    cacheGlobal.__REC_CACHE = new Map();
+  }
+  return cacheGlobal.__REC_CACHE;
 }
-function cacheKey(path: string, params?: Record<string, any>) {
-  const u = new URL(`https://${HOST}${path}`);
-  if (params) Object.entries(params).forEach(([k, v]) => v != null && u.searchParams.set(k, String(v)));
-  return u.toString();
+
+function cacheKey(path: string, params?: CacheParams) {
+  const url = new URL(`https://${HOST}${path}`);
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
+    });
+  }
+  return url.toString();
 }
-function putCache(key: string, data: any, ttlMs = 5 * 60 * 1000) {
+
+function putCache(key: string, data: unknown, ttlMs = 5 * 60 * 1000) {
   getCache().set(key, { ts: Date.now() + ttlMs, data });
 }
-function getCached(key: string): any | null {
+
+function getCached<T>(key: string): T | null {
   const hit = getCache().get(key);
   if (!hit) return null;
   if (Date.now() > hit.ts) {
     getCache().delete(key);
     return null;
   }
-  return hit.data;
+  return hit.data as T;
 }
 
 // ---------- types ----------
@@ -79,17 +91,48 @@ function htmlToPlain(s?: string | null): string | null {
   return s.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() || null;
 }
 
+const asTrimmedString = (value: unknown): string | undefined => {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : undefined;
+};
+
+const asNumber = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) ? value : undefined;
+
+const parseLimit = (value: string | null, fallback: number, min: number, max: number): number => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(Math.trunc(parsed), min), max);
+};
+
+const getErrorStatus = (error: unknown): number | undefined => {
+  if (typeof error !== "object" || error === null || !("status" in error)) return undefined;
+  const status = (error as { status?: unknown }).status;
+  return typeof status === "number" ? status : undefined;
+};
+
+const getErrorMessage = (error: unknown, fallback: string): string =>
+  error instanceof Error && error.message ? error.message : fallback;
+
 function toCommon(r: SpoonacularRecipe): CommonRecipe {
-  const steps = (r.analyzedInstructions?.[0]?.steps || [])
-    .map((s) => (s?.step || "").trim())
+  const analyzed = Array.isArray(r.analyzedInstructions) ? r.analyzedInstructions : [];
+  const steps = (analyzed[0]?.steps || [])
+    .map((s) => asTrimmedString(s?.step) ?? "")
     .filter(Boolean);
   const instructions = steps.length ? steps.join("\n") : htmlToPlain(r.instructions ?? null);
-  const ingredients =
-    (r.extendedIngredients || []).map((i) => ({
-      name: i?.name || (i?.original || "").split(" ").slice(-1)[0] || "",
-      measure: i?.original || [i?.amount, i?.unit, i?.name].filter(Boolean).join(" ") || null,
-    })) || [];
-  const cuisine = (r.cuisines && r.cuisines[0]) || null;
+  const extended = Array.isArray(r.extendedIngredients) ? r.extendedIngredients : [];
+  const ingredients = extended.map((ingredient) => {
+    const name = asTrimmedString(ingredient?.name) ?? asTrimmedString(ingredient?.original)?.split(" ").slice(-1)[0] ?? "";
+    const measure =
+      asTrimmedString(ingredient?.original) ||
+      [asNumber(ingredient?.amount), asTrimmedString(ingredient?.unit), asTrimmedString(ingredient?.name)]
+        .filter(Boolean)
+        .join(" ") ||
+      null;
+    return { name, measure };
+  });
+  const cuisine = Array.isArray(r.cuisines) && r.cuisines.length ? r.cuisines[0] ?? null : null;
 
   return {
     id: String(r.id),
@@ -105,22 +148,42 @@ function toCommon(r: SpoonacularRecipe): CommonRecipe {
   };
 }
 
-function mealDbToCommon(m: any): CommonRecipe {
+type MealDbRecipe = Record<string, unknown> & {
+  idMeal?: string;
+  strMeal?: string;
+  strMealThumb?: string;
+  strCategory?: string;
+  strArea?: string;
+  strInstructions?: string;
+};
+
+type MealDbResponse<T> = {
+  meals: T[] | null;
+};
+
+function mealDbToCommon(meal: MealDbRecipe): CommonRecipe {
   // fallback transformer for TheMealDB
   const ingredients: { name: string; measure?: string | null }[] = [];
   for (let i = 1; i <= 20; i++) {
-    const name = (m[`strIngredient${i}`] || "").trim();
-    const measure = (m[`strMeasure${i}`] || "").trim();
+    const nameRaw = meal[`strIngredient${i}`];
+    const measureRaw = meal[`strMeasure${i}`];
+    const name = asTrimmedString(nameRaw) ?? "";
+    const measure = asTrimmedString(measureRaw) ?? "";
     if (name) ingredients.push({ name, measure: measure || null });
   }
-  const rawInstr = (m.strInstructions || "").split("\n").map((s: string) => s.trim()).filter(Boolean).join("\n");
+  const instructionsSource = asTrimmedString(meal.strInstructions) ?? "";
+  const rawInstr = instructionsSource
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join("\n");
   return {
-    id: String(m.idMeal),
+    id: String(meal.idMeal),
     source: "api",
-    title: m.strMeal || "Untitled",
-    image: m.strMealThumb || null,
-    category: m.strCategory || null,
-    area: m.strArea || null,
+    title: asTrimmedString(meal.strMeal) ?? "Untitled",
+    image: asTrimmedString(meal.strMealThumb) ?? null,
+    category: asTrimmedString(meal.strCategory) ?? null,
+    area: asTrimmedString(meal.strArea) ?? null,
     ingredients,
     instructions: rawInstr || null,
     minutes: null,
@@ -129,14 +192,17 @@ function mealDbToCommon(m: any): CommonRecipe {
 }
 
 // ---------- upstream callers with caching & graceful fallback ----------
-async function upstream<T>(path: string, params?: Record<string, any>): Promise<T> {
+async function upstream<T>(path: string, params?: CacheParams): Promise<T> {
   const key = cacheKey(path, params);
-  // try cache first if we’re hitting rate limits a lot
-  const cached = getCached(key);
-  if (cached) return cached as T;
+  const cached = getCached<T>(key);
+  if (cached) return cached;
 
   const url = new URL(`https://${HOST}${path}`);
-  if (params) Object.entries(params).forEach(([k, v]) => v != null && url.searchParams.set(k, String(v)));
+  if (params) {
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
+    });
+  }
 
   const r = await fetch(url.toString(), {
     method: "GET",
@@ -151,22 +217,27 @@ async function upstream<T>(path: string, params?: Record<string, any>): Promise<
   const body = text ? safeJSON(text) : null;
 
   if (!r.ok) {
-    // If rate-limited or server error, try cache or throw a typed error
-    const err = new Error(
-      `Upstream ${r.status} ${r.statusText}: ${JSON.stringify({ message: body?.message || body?.status || text || "error" })}`
-    ) as any;
-    err.status = r.status;
-    err.cached = cached;
-    throw err;
+    const message =
+      typeof body === "object" && body !== null && "message" in body && typeof (body as { message?: unknown }).message === "string"
+        ? (body as { message: string }).message
+        : typeof body === "object" && body !== null && "status" in body && typeof (body as { status?: unknown }).status === "string"
+        ? (body as { status: string }).status
+        : text || "error";
+    const error = new Error(`Upstream ${r.status} ${r.statusText}: ${message}`) as Error & {
+      status: number;
+      cached?: T | null;
+    };
+    error.status = r.status;
+    error.cached = cached;
+    throw error;
   }
 
   const data = (body ?? {}) as T;
-  // store small cache (5 min) for common queries
   putCache(key, data, 5 * 60 * 1000);
   return data;
 }
 
-function safeJSON(s: string) {
+function safeJSON(s: string): unknown {
   try {
     return JSON.parse(s);
   } catch {
@@ -175,7 +246,7 @@ function safeJSON(s: string) {
 }
 
 async function spoonacularByName(q: string, limit = 20, area?: string) {
-  const params: Record<string, any> = {
+  const params: CacheParams = {
     query: q,
     number: Math.min(Math.max(limit, 1), 60),
     addRecipeInformation: true,
@@ -237,137 +308,159 @@ async function spoonacularRandom(n = 10, area?: string) {
 const MEALDB = "https://www.themealdb.com/api/json/v1/1";
 
 async function mealDbRandom(n = 8): Promise<CommonRecipe[]> {
-  const packs = await Promise.all(
-    Array.from({ length: n }, () =>
-      fetch(`${MEALDB}/random.php`, { cache: "no-store" })
-        .then((r) => r.json())
-        .catch(() => ({ meals: [] }))
-    )
+  const packs: MealDbResponse<MealDbRecipe>[] = await Promise.all(
+    Array.from({ length: n }, async () => {
+      try {
+        const response = await fetch(`${MEALDB}/random.php`, { cache: "no-store" });
+        const json = (await response.json()) as MealDbResponse<MealDbRecipe>;
+        return json;
+      } catch {
+        return { meals: null };
+      }
+    })
   );
-  const meals = packs.map((p) => (p?.meals || [])[0]).filter(Boolean);
+  const meals = packs
+    .map((pack) => (Array.isArray(pack.meals) ? pack.meals[0] ?? null : null))
+    .filter((meal): meal is MealDbRecipe => meal !== null);
   const seen = new Set<string>();
   return meals
     .map(mealDbToCommon)
-    .filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true)));
+    .filter((recipe) => (seen.has(recipe.id) ? false : (seen.add(recipe.id), true)));
 }
 
 async function mealDbByName(q: string, limit = 24): Promise<CommonRecipe[]> {
-  const r = await fetch(`${MEALDB}/search.php?s=${encodeURIComponent(q)}`, { cache: "no-store" }).then((x) => x.json());
-  const meals = r?.meals || [];
-  return meals.slice(0, limit).map(mealDbToCommon);
+  try {
+    const response = await fetch(`${MEALDB}/search.php?s=${encodeURIComponent(q)}`, { cache: "no-store" });
+    const json = (await response.json()) as MealDbResponse<MealDbRecipe>;
+    const meals = Array.isArray(json?.meals) ? json.meals : [];
+    return meals.slice(0, limit).map(mealDbToCommon);
+  } catch {
+    return [];
+  }
 }
 
 async function mealDbByIngredients(ings: string[], limit = 24): Promise<CommonRecipe[]> {
   // MealDB only supports one ingredient at a time; union the results and trim
   const ids = new Set<string>();
   for (const ing of ings) {
-    const r = await fetch(`${MEALDB}/filter.php?i=${encodeURIComponent(ing)}`, { cache: "no-store" })
-      .then((x) => x.json())
-      .catch(() => ({ meals: [] }));
-    (r?.meals || []).forEach((m: any) => ids.add(String(m.idMeal)));
+    try {
+      const response = await fetch(`${MEALDB}/filter.php?i=${encodeURIComponent(ing)}`, { cache: "no-store" });
+      const json = (await response.json()) as MealDbResponse<Record<string, unknown> & { idMeal?: string }>;
+      const meals = Array.isArray(json?.meals) ? json.meals : [];
+      meals.forEach((meal) => {
+        const id = asTrimmedString(meal.idMeal);
+        if (id) ids.add(id);
+      });
+    } catch {
+      // ignore ingredient failure
+    }
   }
   const unique = Array.from(ids).slice(0, limit);
   const full = await Promise.all(
     unique.map((id) =>
-      fetch(`${MEALDB}/lookup.php?i=${encodeURIComponent(id)}`, { cache: "no-store" })
-        .then((x) => x.json())
-        .then((j) => j?.meals?.[0] || null)
-        .catch(() => null)
+      (async () => {
+        try {
+          const response = await fetch(`${MEALDB}/lookup.php?i=${encodeURIComponent(id)}`, { cache: "no-store" });
+          const json = (await response.json()) as MealDbResponse<MealDbRecipe>;
+          return Array.isArray(json?.meals) ? json.meals?.[0] ?? null : null;
+        } catch {
+          return null;
+        }
+      })()
     )
   );
   return full.filter(Boolean).map(mealDbToCommon);
 }
 
 // ---------- route ----------
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
 
-    const q = (searchParams.get("q") || "").trim();
-    const ingredientsParam = (searchParams.get("ingredients") || "").trim();
-    const idParam = (searchParams.get("id") || "").trim();
+    const q = searchParams.get("q")?.trim() ?? "";
+    const ingredientsParam = searchParams.get("ingredients")?.trim() ?? "";
+    const idParam = searchParams.get("id")?.trim() ?? "";
     const randomParam = searchParams.get("random");
     const area = (searchParams.get("area") || "").trim().toLowerCase();
-    const limit = Math.min(Math.max(Number(searchParams.get("limit") || 0) || 0, 1), 60);
-    const mode = (searchParams.get("mode") || "intersect") as "intersect" | "union";
+    const limit = parseLimit(searchParams.get("limit"), 30, 1, 60);
+    const mode = searchParams.get("mode") === "union" ? "union" : "intersect";
 
-    // If we somehow have no RapidAPI key, skip straight to MealDB fallback.
-    const spoonReady = !!RAPID_KEY;
+    const spoonReady = Boolean(RAPID_KEY);
 
-    // 1) single
     if (idParam) {
       try {
         const one = spoonReady ? await spoonacularOne(idParam) : null;
         if (one) return NextResponse.json({ ok: true, recipes: [one] });
-      } catch (e: any) {
-        if (e?.status !== 429) throw e;
+      } catch (error) {
+        if (getErrorStatus(error) !== 429) throw error;
       }
-      // MealDB fallback for single:
-      const m = await fetch(`${MEALDB}/lookup.php?i=${encodeURIComponent(idParam)}`, { cache: "no-store" })
-        .then((x) => x.json())
-        .catch(() => null);
-      const rec = m?.meals?.[0] ? mealDbToCommon(m.meals[0]) : null;
-      return NextResponse.json({ ok: true, recipes: rec ? [rec] : [] });
+
+      try {
+        const response = await fetch(`${MEALDB}/lookup.php?i=${encodeURIComponent(idParam)}`, { cache: "no-store" });
+        const json = (await response.json()) as MealDbResponse<MealDbRecipe>;
+        const recipe = Array.isArray(json?.meals) && json.meals[0] ? mealDbToCommon(json.meals[0]) : null;
+        return NextResponse.json({ ok: true, recipes: recipe ? [recipe] : [] });
+      } catch {
+        return NextResponse.json({ ok: true, recipes: [] });
+      }
     }
 
-    // 2) random
     if (randomParam) {
-      const n = Math.min(Math.max(parseInt(randomParam, 10) || 1, 1), 24);
+      const n = parseLimit(randomParam, 1, 1, 24);
       if (spoonReady) {
         try {
           const list = await spoonacularRandom(n, area || undefined);
           return NextResponse.json({ ok: true, recipes: list });
-        } catch (e: any) {
-          if (e?.status !== 429) throw e;
+        } catch (error) {
+          if (getErrorStatus(error) !== 429) throw error;
         }
       }
       const list = await mealDbRandom(n);
       return NextResponse.json({ ok: true, recipes: list });
     }
 
-    // 3) name search
     if (q) {
       if (spoonReady) {
         try {
-          const list = await spoonacularByName(q, limit || 30, area || undefined);
+          const list = await spoonacularByName(q, limit, area || undefined);
           return NextResponse.json({ ok: true, recipes: list });
-        } catch (e: any) {
-          if (e?.status !== 429) throw e;
+        } catch (error) {
+          if (getErrorStatus(error) !== 429) throw error;
         }
       }
-      const list = await mealDbByName(q, limit || 24);
+      const list = await mealDbByName(q, limit);
       return NextResponse.json({ ok: true, recipes: list });
     }
 
-    // 4) ingredients search
     if (ingredientsParam) {
-      const ings = ingredientsParam.split(",").map((s) => s.trim()).filter(Boolean);
+      const ingredients = ingredientsParam.split(",").map((s) => s.trim()).filter(Boolean);
       if (spoonReady) {
         try {
-          let list = await spoonacularByIngredients(ings, limit || 30, mode);
-          if (area && area !== "any") list = list.filter((r) => (r.area || "").toLowerCase() === area);
+          let list = await spoonacularByIngredients(ingredients, limit, mode);
+          if (area && area !== "any") {
+            list = list.filter((recipe) => (recipe.area || "").toLowerCase() === area);
+          }
           return NextResponse.json({ ok: true, recipes: list });
-        } catch (e: any) {
-          if (e?.status !== 429) throw e;
+        } catch (error) {
+          if (getErrorStatus(error) !== 429) throw error;
         }
       }
-      const list = await mealDbByIngredients(ings, limit || 24);
+      const list = await mealDbByIngredients(ingredients, limit);
       return NextResponse.json({ ok: true, recipes: list });
     }
 
-    // 5) default: small random
     if (spoonReady) {
       try {
         const list = await spoonacularRandom(8, area || undefined);
         return NextResponse.json({ ok: true, recipes: list });
-      } catch (e: any) {
-        if (e?.status !== 429) throw e;
+      } catch (error) {
+        if (getErrorStatus(error) !== 429) throw error;
       }
     }
+
     const list = await mealDbRandom(8);
     return NextResponse.json({ ok: true, recipes: list });
-  } catch (e: any) {
-    // last resort: never throw raw upstream to client
-    return NextResponse.json({ ok: false, error: e?.message || "Failed" }, { status: 200 });
+  } catch (error: unknown) {
+    return NextResponse.json({ ok: false, error: getErrorMessage(error, "Failed") }, { status: 200 });
   }
 }

@@ -1,17 +1,35 @@
 // app/api/recipes/random/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // simple in-memory cache for the server process
-const cache = new Map<string, { at: number; data: any }>();
+type RecipeSummary = { id: string; title: string; image: string | null };
+const cache = new Map<string, { at: number; data: RecipeSummary[] }>();
 const TTL_MS = 1000 * 60 * 60 * 20; // ~20 hours
 
-function todayISO(d?: string) {
-  if (d) return d.slice(0, 10);
+type RandomRecipe = {
+  id?: number | string;
+  title?: string;
+  image?: string;
+  imageUrl?: string;
+};
+
+type RandomRecipeResponse = {
+  recipes?: RandomRecipe[];
+};
+
+const getSafeCount = (value: string | null): number => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 3;
+  return Math.max(3, Math.min(12, Math.floor(parsed)));
+};
+
+const todayISO = (override?: string | null): string => {
+  if (override && override.trim()) return override.trim().slice(0, 10);
   return new Date().toISOString().slice(0, 10);
-}
+};
 
 function tagsForGoal(goal: string | null | undefined) {
   switch (goal) {
@@ -24,12 +42,12 @@ function tagsForGoal(goal: string | null | undefined) {
   }
 }
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const count = Math.max(3, Math.min(12, Number(searchParams.get("count") || 3)));
+    const count = getSafeCount(searchParams.get("count"));
     const goal = searchParams.get("goal") || "maintain";
-    const date = todayISO(searchParams.get("date") || undefined);
+    const date = todayISO(searchParams.get("date"));
 
     const key = `random|${date}|${goal}|${count}`;
     const hit = cache.get(key);
@@ -62,18 +80,22 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: txt || `upstream-${upstream.status}` }, { status: upstream.status });
     }
 
-    const json = (await upstream.json()) as { recipes?: any[] };
-    const shaped =
-      (json.recipes || []).map((r) => ({
-        id: String(r.id),
-        title: r.title,
-        image: r.image || r.imageUrl || null,
-      })) || [];
+    const raw: unknown = await upstream.json();
+    const json = (raw ?? {}) as RandomRecipeResponse;
+    const recipes = Array.isArray(json.recipes) ? json.recipes : [];
+
+    const shaped: RecipeSummary[] = recipes.map((recipe) => ({
+      id: String(recipe?.id ?? ""),
+      title: recipe?.title ?? "Recipe",
+      image: recipe?.image ?? recipe?.imageUrl ?? null,
+    }));
 
     const data = shaped.slice(0, count);
     cache.set(key, { at: Date.now(), data });
     return NextResponse.json(data);
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "server-error" }, { status: 500 });
+  } catch (error: unknown) {
+    console.error("Failed to fetch random recipes", error);
+    const message = error instanceof Error && error.message ? error.message : "server-error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

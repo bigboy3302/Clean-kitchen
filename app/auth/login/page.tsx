@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -38,6 +38,11 @@ function mapAuthError(code?: string) {
       return "Could not sign in. Please try again.";
   }
 }
+
+const getAuthErrorCode = (error: unknown): string | undefined =>
+  typeof error === "object" && error !== null && "code" in error && typeof (error as { code?: unknown }).code === "string"
+    ? (error as { code: string }).code
+    : undefined;
 
 export default function LoginPage() {
   const router = useRouter();
@@ -117,8 +122,8 @@ export default function LoginPage() {
     try {
       await signInWithEmailAndPassword(auth, email.trim(), pass);
       router.replace("/recipes");
-    } catch (err: any) {
-      const msg = mapAuthError(err?.code);
+    } catch (error: unknown) {
+      const msg = mapAuthError(getAuthErrorCode(error));
       setFormErr(msg);
     } finally {
       setBusy(false);
@@ -132,8 +137,8 @@ export default function LoginPage() {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
       router.replace("/recipes");
-    } catch (err: any) {
-      const msg = mapAuthError(err?.code);
+    } catch (error: unknown) {
+      const msg = mapAuthError(getAuthErrorCode(error));
       setFormErr(msg);
     } finally {
       setBusy(false);
@@ -144,6 +149,14 @@ export default function LoginPage() {
   const inputAccent =
     "focus:ring-2 focus:ring-red-500 focus:border-red-500 dark:focus:ring-red-500";
   const linkAccent = "text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300";
+
+  const handleEmailChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setEmail(event.currentTarget.value);
+  };
+
+  const handlePasswordChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setPass(event.currentTarget.value);
+  };
 
   return (
     <AuthShell
@@ -165,9 +178,8 @@ export default function LoginPage() {
             type="email"
             value={email}
             onBlur={() => setTouchedEmail(true)}
-            onChange={(e) => setEmail((e.target as HTMLInputElement).value)}
-            placeholder="you@email.com"
-            aria-invalid={Boolean(emailErr)}
+            onChange={handleEmailChange}
+            placeholder="you@email.com" aria-invalid={Boolean(emailErr)}
             aria-describedby={emailErr ? "email-error" : undefined}
             className={inputAccent}
             required
@@ -185,9 +197,8 @@ export default function LoginPage() {
             type="password"
             value={pass}
             onBlur={() => setTouchedPass(true)}
-            onChange={(e) => setPass((e.target as HTMLInputElement).value)}
-            placeholder="••••••••"
-            aria-invalid={Boolean(passErr)}
+            onChange={handlePasswordChange}
+            placeholder="••••••••" aria-invalid={Boolean(passErr)}
             aria-describedby={passErr ? "password-error" : undefined}
             className={inputAccent}
             required
@@ -210,7 +221,7 @@ export default function LoginPage() {
           disabled={!canSubmit}
           className="w-full rounded-lg bg-red-600 text-white hover:bg-red-700 focus-visible:ring-2 focus-visible:ring-red-500"
         >
-          {busy ? "Signing in…" : "Sign in"}
+          {busy ? "Signing inâ€¦" : "Sign in"}
         </Button>
       </form>
 
@@ -239,3 +250,11 @@ export default function LoginPage() {
     </AuthShell>
   );
 }
+
+
+
+
+
+
+
+

@@ -2,7 +2,7 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 function normalizeUrl(raw: string | null): URL | null {
   try {
@@ -41,7 +41,7 @@ async function pipe(upstream: Response) {
   });
 }
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   try {
     const u = new URL(req.url);
     const id = (u.searchParams.get("id") || "").trim();
@@ -76,8 +76,9 @@ export async function GET(req: Request) {
     }
 
     return NextResponse.json({ error: "missing-id-or-src" }, { status: 400 });
-  } catch (e: any) {
-    console.error("GET /api/workouts/gif failed:", e);
-    return NextResponse.json({ error: e?.message || "proxy-error" }, { status: 500 });
+  } catch (error: unknown) {
+    console.error("GET /api/workouts/gif failed:", error);
+    const message = error instanceof Error && error.message ? error.message : "proxy-error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
