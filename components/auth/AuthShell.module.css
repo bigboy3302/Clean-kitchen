@@ -1,75 +1,269 @@
-.wrap {
+.shell {
+  position: relative;
   min-height: 100dvh;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
   align-items: center;
-  gap: 18px;
-  padding: 48px 24px;
+  justify-content: center;
+  padding: clamp(28px, 6vw, 80px) clamp(18px, 5vw, 64px);
   background:
-    radial-gradient(900px 400px at 10% -10%, rgba(15,23,42,.06), transparent 60%),
-    radial-gradient(900px 400px at 110% 110%, rgba(15,23,42,.06), transparent 60%),
+    radial-gradient(1200px 700px at -10% -10%, rgba(59, 130, 246, 0.18), transparent 60%),
+    radial-gradient(900px 550px at 120% 130%, rgba(16, 185, 129, 0.16), transparent 65%),
     var(--bg);
+  overflow: hidden;
+}
+
+.backdrop {
+  position: absolute;
+  inset: -40%;
+  background:
+    conic-gradient(from 180deg at 50% 50%, rgba(59, 130, 246, 0.25), rgba(59, 130, 246, 0) 60%),
+    radial-gradient(60% 60% at 75% 20%, rgba(14, 165, 233, 0.25), transparent),
+    radial-gradient(55% 55% at 20% 80%, rgba(52, 211, 153, 0.18), transparent);
+  filter: blur(120px);
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.panel {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  width: min(980px, 100%);
+  border-radius: 32px;
+  border: 1px solid color-mix(in oklab, var(--border) 55%, transparent);
+  background: color-mix(in oklab, var(--bg) 70%, var(--bg2) 30%);
+  box-shadow: 0 40px 120px rgba(15, 23, 42, 0.35);
+  overflow: hidden;
+  backdrop-filter: blur(16px);
+  isolation: isolate;
+}
+
+.brand {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(59, 130, 246, 0.65));
+  color: #f8fafc;
+  padding: clamp(32px, 6vw, 68px);
+}
+
+.brand::after {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  background: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.2), transparent 65%);
+  filter: blur(28px);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.brandTop {
+  position: relative;
+  display: grid;
+  gap: 20px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  width: fit-content;
+  backdrop-filter: blur(6px);
+}
+
+.brandTitle {
+  margin: 0;
+  font-size: clamp(32px, 5vw, 46px);
+  line-height: 1.05;
+  font-weight: 800;
+}
+
+.brandCopy {
+  margin: 0;
+  font-size: clamp(15px, 2vw, 18px);
+  line-height: 1.6;
+  max-width: 36ch;
+  color: rgba(248, 250, 252, 0.9);
+}
+
+.brandList {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: rgba(248, 250, 252, 0.92);
+}
+
+.brandList li {
+  position: relative;
+  padding-left: 28px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.brandList li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.45em;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.12);
+}
+
+.brandFoot {
+  position: relative;
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(248, 250, 252, 0.7);
+}
+
+.form {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: clamp(28px, 5vw, 52px);
+  background: var(--card);
 }
 
 .card {
-  width: 100%;
-  max-width: clamp(360px, 92vw, 760px);
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  box-shadow: 0 12px 36px rgba(15,23,42,.1);
   display: flex;
   flex-direction: column;
+  gap: 24px;
 }
 
-.header { padding: 28px 32px 12px; }
-.header h1 { font-size: clamp(22px, 2.4vw, 26px); font-weight: 700; margin: 0; }
-.subtitle { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
+.header {
+  display: grid;
+  gap: 12px;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: clamp(26px, 3vw, 34px);
+  font-weight: 800;
+  color: var(--text);
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 0.95rem;
+  color: color-mix(in oklab, var(--muted) 90%, transparent);
+  line-height: 1.55;
+}
 
 .body {
-  padding: 20px 32px 24px;
-  overflow: visible;
-  flex: 1 1 auto;
-  scroll-behavior: smooth;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
+
 .footer {
-  padding: 16px 24px 24px;
-  border-top: 1px dashed var(--border);
+  margin-top: 6px;
+  padding-top: 16px;
+  border-top: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
   color: var(--muted);
-  font-size: 14px;
+  font-size: 0.9rem;
+  text-align: center;
 }
 
 .banner {
-  width: 100%;
-  max-width: clamp(360px, 92vw, 760px);
-  border-radius: 14px;
   padding: 12px 18px;
+  border-radius: 14px;
   background: rgba(254, 226, 226, 0.92);
   border: 1px solid rgba(220, 38, 38, 0.25);
   color: #b91c1c;
-  font-size: 14px;
+  font-size: 0.9rem;
   text-align: center;
-  box-shadow: 0 8px 24px rgba(248, 113, 113, 0.15);
+  box-shadow: 0 12px 36px rgba(248, 113, 113, 0.18);
 }
 
 @media (prefers-color-scheme: dark) {
+  .panel {
+    background: color-mix(in oklab, var(--bg) 40%, var(--bg2) 60%);
+    border-color: color-mix(in oklab, var(--border) 70%, transparent);
+  }
+  .form {
+    background: color-mix(in oklab, var(--bg2) 92%, transparent);
+  }
   .banner {
-    background: rgba(254, 202, 202, 0.15);
+    background: rgba(254, 202, 202, 0.12);
     border-color: rgba(248, 113, 113, 0.35);
     color: #fca5a5;
   }
 }
 
-@media (max-width: 640px) {
-  .wrap { padding: 32px 16px 24px; }
-  .card {
-    max-width: 100%;
-    margin: 0;
+@media (max-width: 960px) {
+  .panel {
+    grid-template-columns: 1fr;
+    border-radius: 28px;
   }
-  .header { padding: 22px 20px 12px; }
-  .body { padding: 18px 20px 18px; }
+  .brand {
+    align-items: flex-start;
+  }
+  .brand::after {
+    inset: 16%;
+  }
+}
+
+@media (max-width: 720px) {
+  .shell {
+    padding: 24px 14px 48px;
+  }
+  .panel {
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+  }
+  .brand {
+    padding: 26px 24px 32px;
+    border-radius: 26px 26px 0 0;
+  }
+  .brandList {
+    gap: 10px;
+  }
+  .brandList li {
+    font-size: 0.88rem;
+    padding-left: 24px;
+  }
+  .brandList li::before {
+    width: 12px;
+    height: 12px;
+  }
+  .form {
+    padding: 24px 20px 28px;
+  }
+  .footer {
+    text-align: left;
+  }
+}
+
+@media (max-width: 480px) {
+  .brandTitle {
+    font-size: 30px;
+  }
+  .brandList li {
+    font-size: 0.85rem;
+  }
+  .brandFoot {
+    font-size: 0.78rem;
+  }
   .banner {
-    padding: 12px 16px;
+    font-size: 0.85rem;
+    padding: 10px 14px;
   }
 }

@@ -8,15 +8,14 @@ import BottomNav from "@/components/nav/BottomNav";
 
 const HIDE_CHROME_PATHS = new Set([
   "/",
-  "/auth",
-  "/auth/login",
-  "/auth/register",
   "/auth/forgot",
+  "/onboarding",
 ]);
 
 function shouldHideChrome(pathname: string): boolean {
   if (HIDE_CHROME_PATHS.has(pathname)) return true;
   if (pathname.startsWith("/auth/")) return true;
+  if (pathname.startsWith("/onboarding")) return true;
   return false;
 }
 

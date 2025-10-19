@@ -16,7 +16,7 @@ type FirebaseConfig = {
   apiKey: string;
   authDomain: string;                      // e.g. clean-kitchen-de925.firebaseapp.com
   projectId: string;                       // e.g. clean-kitchen-de925
-  storageBucket: string;                   // e.g. clean-kitchen-de925.appspot.com  (NOT firebasestorage.app)
+  storageBucket: string;                   // e.g. clean-kitchen-de925.firebasestorage.app
   appId: string;
   // messagingSenderId is optional
   messagingSenderId?: string;

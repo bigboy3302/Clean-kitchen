@@ -12,7 +12,11 @@ service firebase.storage {
     /* avatars */
     match /avatars/{uid}/{allPaths=**} {
       allow read: if true;
-      allow write, delete, list: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn()
+                            && request.auth.uid == uid
+                            && isImage()
+                            && sizeUnder(5 * 1024 * 1024 + 1);
+      allow delete, list: if isSignedIn() && request.auth.uid == uid;
     }
 
     /* post media */

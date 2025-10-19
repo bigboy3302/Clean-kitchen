@@ -32,7 +32,7 @@ import {
   where,
   writeBatch,
 } from "firebase/firestore";
-import { ref as sref, uploadBytes, getDownloadURL, listAll, deleteObject } from "firebase/storage";
+import { ref as sref, uploadBytesResumable, getDownloadURL, listAll, deleteObject } from "firebase/storage";
 
 import ThemePicker from "@/components/theme/ThemePicker";
 import { useTheme } from "@/components/theme/ThemeProvider";
@@ -98,6 +98,7 @@ export default function ProfilePage() {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [busyUpload, setBusyUpload] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   
   const [msg, setMsg] = useState<string | null>(null);
@@ -205,7 +206,7 @@ export default function ProfilePage() {
   async function uploadAvatar() {
     if (!file || !me) return;
     if (!/image\/(png|jpe?g|webp)/i.test(file.type)) {
-      setErr("Please pick a PNG/JPG/WEBP image.");
+      setErr("Please pick a PNG, JPG, or WEBP image.");
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
@@ -214,11 +215,30 @@ export default function ProfilePage() {
     }
     setErr(null);
     setMsg(null);
+    setUploadProgress(0);
     setBusyUpload(true);
     try {
       const r = sref(storage, `avatars/${me.uid}/avatar.jpg`);
-      await uploadBytes(r, file);
-      const url = await getDownloadURL(r);
+      const task = uploadBytesResumable(r, file, {
+        contentType: file.type,
+        cacheControl: "public,max-age=86400",
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        task.on(
+          "state_changed",
+          (snapshot) => {
+            if (snapshot.totalBytes > 0) {
+              const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+              setUploadProgress(pct);
+            }
+          },
+          (error) => reject(error),
+          () => resolve()
+        );
+      });
+
+      const url = await getDownloadURL(task.snapshot.ref);
       await updateProfile(me, { photoURL: url });
       await updateDoc(doc(db, "users", me.uid), { photoURL: url });
       setUserDoc((prev) => (prev ? { ...prev, photoURL: url } : prev));
@@ -229,6 +249,7 @@ export default function ProfilePage() {
       setErr(e?.message ?? "Failed to update avatar.");
     } finally {
       setBusyUpload(false);
+      setUploadProgress(null);
     }
   }
 
@@ -236,6 +257,7 @@ export default function ProfilePage() {
     if (!me) return;
     setErr(null);
     setMsg(null);
+    setUploadProgress(null);
     setBusyUpload(true);
     try {
       const root = sref(storage, `avatars/${me.uid}`);
@@ -254,6 +276,7 @@ export default function ProfilePage() {
       setErr(e?.message ?? "Failed to remove avatar.");
     } finally {
       setBusyUpload(false);
+      setUploadProgress(null);
     }
   }
 
@@ -500,14 +523,22 @@ export default function ProfilePage() {
                         Choose
                       </Button>
                       <Button onClick={uploadAvatar} disabled={!file || busyUpload}>
-                        {busyUpload ? "Uploading..." : "Save"}
+                        {busyUpload
+                          ? typeof uploadProgress === "number"
+                            ? `Uploading… ${uploadProgress}%`
+                            : "Uploading…"
+                          : "Save"}
                       </Button>
                       <Button variant="secondary" onClick={removeAvatar} disabled={busyUpload}>
                         Remove
                       </Button>
                     </div>
                     <p className="avatarHint muted">
-                      {file ? `Selected: ${file.name}` : "PNG or JPG, up to 2MB."}
+                      {busyUpload && typeof uploadProgress === "number"
+                        ? `Uploading… ${uploadProgress}%`
+                        : file
+                        ? `Selected: ${file.name}`
+                        : "PNG, JPG, or WEBP up to 5 MB."}
                     </p>
                   </div>
 
@@ -528,7 +559,13 @@ export default function ProfilePage() {
                   ref={fileRef}
                   type="file"
                   accept="image/*"
-                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  onChange={(e) => {
+                    const nextFile = e.target.files?.[0] || null;
+                    setUploadProgress(null);
+                    setFile(nextFile);
+                    setErr(null);
+                    setMsg(null);
+                  }}
                   style={{ display: "none" }}
                 />
               </section>
