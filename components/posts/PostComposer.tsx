@@ -1,11 +1,21 @@
 "use client";
 
+import NextImage from "next/image";
 import { useEffect, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
 import { auth, db } from "@/lib/firebas1e";
 import { addDoc, collection, serverTimestamp, doc, getDoc } from "firebase/firestore";
 import { addMediaToPost } from "@/lib/postMedia";
 
 type MediaPreview = { url: string; type: "image" | "video" };
+type Author = { username: string | null; displayName: string | null; avatarURL: string | null };
+type UserDoc = {
+  username?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  displayName?: string | null;
+  photoURL?: string | null;
+};
 
 const MAX_IMAGE_DIMENSION = 1600;
 
@@ -74,7 +84,7 @@ export default function PostComposer() {
     };
   }, [previews]);
 
-  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onPick(e: ChangeEvent<HTMLInputElement>) {
     const list = Array.from(e.target.files || []).slice(0, 4);
     if (!list.length) {
       setFiles([]);
@@ -109,14 +119,16 @@ export default function PostComposer() {
 
     setBusy(true);
     try {
-      let author = { username: null as string|null, displayName: null as string|null, avatarURL: null as string|null };
+      let author: Author = { username: null, displayName: null, avatarURL: null };
       try {
         const snap = await getDoc(doc(db, "users", user.uid));
         if (snap.exists()) {
-          const u = snap.data() as any;
+          const u = snap.data() as UserDoc | undefined;
           author = {
             username: u?.username ?? null,
-            displayName: u?.firstName ? `${u.firstName}${u.lastName ? " " + u.lastName : ""}` : (u?.displayName ?? null),
+            displayName: u?.firstName
+              ? `${u.firstName}${u.lastName ? ` ${u.lastName}` : ""}`
+              : u?.displayName ?? null,
             avatarURL: u?.photoURL ?? null,
           };
         }
@@ -147,8 +159,9 @@ export default function PostComposer() {
       setPreviews([]);
       if (fileRef.current) fileRef.current.value = "";
       setPct(0);
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to create post.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to create post.";
+      setErr(message);
     } finally {
       setBusy(false);
     }
@@ -167,7 +180,18 @@ export default function PostComposer() {
         <div className={`grid mcount-${previews.length}`}>
           {previews.map((m,i)=>(
             <div key={i} className="cell">
-              {m.type === "video" ? <video src={m.url} controls/> : <img src={m.url} alt="preview"/>}
+              {m.type === "video" ? (
+                <video src={m.url} controls/>
+              ) : (
+                <NextImage
+                  src={m.url}
+                  alt="Selected media preview"
+                  fill
+                  sizes="(max-width: 768px) 50vw, 320px"
+                  unoptimized
+                  className="previewImg"
+                />
+              )}
             </div>
           ))}
         </div>
@@ -187,7 +211,8 @@ export default function PostComposer() {
         .grid.mcount-3{ grid-template-columns:2fr 1fr; grid-auto-rows:110px }
         .grid.mcount-3 .cell:first-child{ grid-row:1 / span 2; height:226px }
         .grid.mcount-4{ grid-template-columns:1fr 1fr; grid-auto-rows:110px }
-        .cell img, .cell video { width:100%; height:100%; object-fit:cover; display:block; border:1px solid #e5e7eb; border-radius:10px; background:#000 }
+        .cell { position:relative; }
+        .cell :global(.previewImg), .cell video { width:100%; height:100%; object-fit:cover; display:block; border:1px solid #e5e7eb; border-radius:10px; background:#000 }
         .hint { font-size:12px; color:#64748b; }
         .err { color:#b91c1c; background:#fef2f2; border:1px solid #fecaca; padding:6px 8px; border-radius:8px; font-size:12px; }
         button { border:1px solid #0f172a; background:#0f172a; color:#fff; border-radius:10px; padding:6px 10px; cursor:pointer; }

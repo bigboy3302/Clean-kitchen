@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
@@ -36,11 +37,24 @@ type Props = {
 };
 
 function timeAgo(ts: Post["createdAt"]) {
+  const secondsFromTimestamp = (value: unknown): number => {
+    if (typeof value !== "object" || value === null) return 0;
+    if ("seconds" in value && typeof (value as { seconds?: unknown }).seconds === "number") {
+      return (value as { seconds: number }).seconds;
+    }
+    return 0;
+  };
+
   if (!ts) return "";
   const sec =
-    typeof ts === "number" ? ts :
-    typeof ts === "string" ? Math.floor(Date.parse(ts)/1000) :
-    (ts as any)?.seconds ?? 0;
+    typeof ts === "number"
+      ? ts
+      : typeof ts === "string"
+        ? (() => {
+            const parsed = Date.parse(ts);
+            return Number.isNaN(parsed) ? 0 : Math.floor(parsed / 1000);
+          })()
+        : secondsFromTimestamp(ts);
   if (!sec) return "";
   const diff = Math.max(1, Math.floor(Date.now()/1000 - sec));
   const steps: [number,string][]= [[60,"s"],[60,"m"],[24,"h"],[7,"d"],[4.345,"w"],[12,"mo"],[Number.MAX_SAFE_INTEGER,"y"]];
@@ -369,7 +383,17 @@ export default function PostCard({
             <div className="rail" tabIndex={0} aria-label="Post media">
               {media.map((m,i)=>(
                 <div key={i} className="cell">
-                  {m.type === "video" ? <video src={m.url} controls playsInline preload="metadata" /> : <img src={m.url} alt="" />}
+                  {m.type === "video" ? (
+                    <video src={m.url} controls playsInline preload="metadata" />
+                  ) : (
+                    <Image
+                      src={m.url}
+                      alt=""
+                      fill
+                      sizes="(max-width: 768px) 80vw, 420px"
+                      className="mediaImg"
+                    />
+                  )}
                 </div>
               ))}
             </div>
@@ -648,7 +672,7 @@ export default function PostCard({
             max-height: 360px;
           }
         }
-        .pc-media img,
+        .pc-media :global(.mediaImg),
         .pc-media video {
           width: 100%;
           height: 100%;

@@ -1,6 +1,7 @@
 
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 
 type Post = {
@@ -18,7 +19,17 @@ export default function PostCard({ post }: { post: Post }) {
     
     <Link href={`/posts/${post.id}`} className="cardLink" aria-label="Open post">
       <article className="postCard">
-        {post.imageURL ? <img className="img" src={post.imageURL} alt="" /> : null}
+        {post.imageURL ? (
+          <div className="imgWrap">
+            <Image
+              src={post.imageURL}
+              alt=""
+              fill
+              sizes="(max-width: 768px) 100vw, 320px"
+              className="img"
+            />
+          </div>
+        ) : null}
         {post.text ? <p className="text">{post.text}</p> : null}
         <div className="meta">
           <span className="muted">{ts ? ts.toLocaleString() : ""}</span>
@@ -43,14 +54,8 @@ export default function PostCard({ post }: { post: Post }) {
           box-shadow: 0 12px 24px rgba(0,0,0,.12);
         }
 
-        .img {
-          width: 100%;
-          border-radius: 10px;
-          border: 1px solid var(--border);
-          background: var(--bg2);
-          object-fit: cover;
-          display:block;
-        }
+        .imgWrap { position: relative; width: 100%; padding-top: 56%; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); background: var(--bg2); }
+        .imgWrap :global(.img) { object-fit: cover; position: absolute; inset: 0; width: 100%; height: 100%; }
 
         .text {
           font-size: 15px;

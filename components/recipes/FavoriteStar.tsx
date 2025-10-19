@@ -7,7 +7,7 @@ import { doc, onSnapshot, serverTimestamp, setDoc, deleteDoc } from "firebase/fi
 
 type Props = {
   rid: string;               
-  payload?: Record<string, any>; 
+  payload?: Record<string, unknown>; 
   meUid?: string | null;      
   size?: "sm" | "md";
 };

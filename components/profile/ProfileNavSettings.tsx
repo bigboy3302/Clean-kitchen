@@ -1,16 +1,20 @@
 "use client";
 
-import React from "react";
-import useNavPrefs from "@/components/nav/useNavPrefs";
+import type { ChangeEvent } from "react";
+import useNavPrefs, { type NavPlacement } from "@/components/nav/useNavPrefs";
 
 export default function ProfileNavSettings() {
   const { effective, nav, save, loading, error } = useNavPrefs();
 
   if (loading) return <p>Loading…</p>;
-  if (error) return <p style={{ color: "red" }}>Error: {(error as any)?.message}</p>;
+  if (error) {
+    const message = error instanceof Error ? error.message : String(error ?? "Unknown error");
+    return <p style={{ color: "red" }}>Error: {message}</p>;
+  }
 
-  const handlePlacement = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    await save({ placement: e.target.value as any });
+  const handlePlacement = async (event: ChangeEvent<HTMLSelectElement>) => {
+    const placement = event.target.value as NavPlacement;
+    await save({ placement });
   };
 
   const toggleCompact = async () => {

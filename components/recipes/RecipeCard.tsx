@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
 export type IngredientObj = { name: string; measure?: string | null };
@@ -140,7 +141,13 @@ export default function RecipeCard({
         role="button"
         aria-label={open ? "Close details" : "Open details"}
       >
-        <img src={imageUrl} alt={title} className="img" />
+        <Image
+          src={imageUrl}
+          alt={title}
+          fill
+          sizes="(max-width: 768px) 90vw, 300px"
+          className="recipeImg"
+        />
         {onToggleFavorite ? (
           <button
             type="button"
@@ -321,14 +328,14 @@ export default function RecipeCard({
           position: relative;
           flex: 0 0 300px;
         }
-        .img {
+        .photo :global(.recipeImg) {
           width: 100%;
           height: 100%;
           object-fit: cover;
           display: block;
           transition: transform 0.8s ease;
         }
-        .rk-card:hover .img {
+        .rk-card:hover .photo :global(.recipeImg) {
           transform: scale(1.06);
         }
 
