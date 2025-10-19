@@ -20,7 +20,7 @@ import {
 } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 
-import { auth, db, storage } from "@/lib/firebase/firebase";
+import { auth, db, storage } from "@/lib/firebas1e";
 import PostCard from "@/components/posts/PostCard";
 
 
