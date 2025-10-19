@@ -1,210 +1,406 @@
-﻿﻿"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
-import Link from "next/link";
-import { db } from "@/lib/firebas1e";
+import Image from 'next/image';
+import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { db } from '@/lib/firebas1e';
 import {
-  collection, doc, getDoc, onSnapshot, query, where, limit as fsLimit,
-} from "firebase/firestore";
+  collection,
+  doc,
+  getDoc,
+  limit as fsLimit,
+  onSnapshot,
+  query,
+  where,
+  type DocumentData,
+  type FirestoreError,
+  type QueryDocumentSnapshot,
+} from 'firebase/firestore';
 
-type AnyTs = { toDate?: () => Date; seconds?: number } | null | undefined;
-const toMillis = (ts: AnyTs) =>
-  !ts ? 0 :
-  typeof ts?.toDate === "function" ? ts!.toDate().getTime() :
-  typeof (ts as any)?.seconds === "number" ? (ts as any).seconds * 1000 : 0;
+type AuthorLite = {
+  displayName?: string | null;
+  username?: string | null;
+  avatarURL?: string | null;
+};
 
-function trim(str: string, n: number) {
-  if (!str) return "";
-  const normalized = String(str);
-  if (normalized.length <= n) return normalized;
-  const slicePoint = Math.max(0, n - 3);
-  return `${normalized.slice(0, slicePoint).trimEnd()}...`;
-}
+type TimestampLike =
+  | { seconds?: number; toDate?: () => Date }
+  | Date
+  | number
+  | string
+  | null
+  | undefined;
 
-function firstMediaUrl(value: unknown): string | null {
-  if (!value) return null;
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    return trimmed ? trimmed : null;
+type PublicProfile = {
+  displayName?: string | null;
+  username?: string | null;
+  avatarURL?: string | null;
+};
+
+type MediaItem = {
+  url?: string | null;
+  src?: string | null;
+  downloadURL?: string | null;
+  href?: string | null;
+  type?: string | null;
+};
+
+type PublicPost = {
+  id: string;
+  uid?: string | null;
+  text?: string | null;
+  title?: string | null;
+  media?: MediaItem[];
+  createdAt?: TimestampLike;
+  author?: AuthorLite | null;
+  reposts?: number | null;
+};
+
+type PublicRecipe = {
+  id: string;
+  title?: string | null;
+  description?: string | null;
+  ingredients?: unknown[];
+  createdAt?: TimestampLike;
+  gallery?: unknown;
+  images?: unknown;
+  media?: unknown;
+};
+
+const trim = (value: unknown, max: number): string => {
+  const str = typeof value === 'string' ? value : String(value ?? '');
+  if (str.length <= max) return str;
+  const slicePoint = Math.max(0, max - 3);
+  return `${str.slice(0, slicePoint).trimEnd()}...`;
+};
+
+const toMillis = (ts: TimestampLike): number => {
+  if (!ts) return 0;
+  if (typeof ts === 'number') return ts;
+  if (ts instanceof Date) return ts.getTime();
+  if (typeof ts === 'string') {
+    const parsed = Date.parse(ts);
+    return Number.isNaN(parsed) ? 0 : parsed;
   }
-  if (typeof value === "object") {
-    const candidate =
-      (value as { url?: string; src?: string; downloadURL?: string; href?: string }).url ??
-      (value as any).src ??
-      (value as any).downloadURL ??
-      (value as any).href;
-    if (typeof candidate === "string") {
-      const trimmed = candidate.trim();
-      if (trimmed) return trimmed;
+  if (typeof ts === 'object') {
+    if (typeof ts.toDate === 'function') {
+      try {
+        return ts.toDate().getTime();
+      } catch {
+        return 0;
+      }
+    }
+    if (typeof ts.seconds === 'number') {
+      return ts.seconds * 1000;
+    }
+  }
+  return 0;
+};
+
+const coerceMediaItem = (value: unknown): MediaItem | null => {
+  if (typeof value !== 'object' || value === null) return null;
+  const record = value as Record<string, unknown>;
+  const item: MediaItem = {
+    url: typeof record.url === 'string' ? record.url : undefined,
+    src: typeof record.src === 'string' ? record.src : undefined,
+    downloadURL: typeof record.downloadURL === 'string' ? record.downloadURL : undefined,
+    href: typeof record.href === 'string' ? record.href : undefined,
+    type: typeof record.type === 'string' ? record.type : undefined,
+  };
+  return item;
+};
+
+const normalizePostDoc = (snapshot: QueryDocumentSnapshot<DocumentData>): PublicPost => {
+  const data = snapshot.data() ?? {};
+  const mediaRaw = Array.isArray(data.media) ? data.media : [];
+  const media = mediaRaw
+    .map(coerceMediaItem)
+    .filter((item): item is MediaItem => item !== null);
+
+  const authorRaw = data.author;
+  const author: AuthorLite | null =
+    authorRaw && typeof authorRaw === 'object'
+      ? {
+          displayName: typeof authorRaw.displayName === 'string' ? authorRaw.displayName : null,
+          username: typeof authorRaw.username === 'string' ? authorRaw.username : null,
+          avatarURL: typeof authorRaw.avatarURL === 'string' ? authorRaw.avatarURL : null,
+        }
+      : null;
+
+  return {
+    id: snapshot.id,
+    uid: typeof data.uid === 'string' ? data.uid : null,
+    text: typeof data.text === 'string' ? data.text : null,
+    title: typeof data.title === 'string' ? data.title : null,
+    media: media.length ? media : undefined,
+    createdAt: data.createdAt ?? null,
+    author,
+    reposts: typeof data.reposts === 'number' ? data.reposts : null,
+  };
+};
+
+const normalizeRecipeDoc = (snapshot: QueryDocumentSnapshot<DocumentData>): PublicRecipe => {
+  const data = snapshot.data() ?? {};
+  return {
+    id: snapshot.id,
+    title: typeof data.title === 'string' ? data.title : null,
+    description: typeof data.description === 'string' ? data.description : null,
+    ingredients: Array.isArray(data.ingredients) ? data.ingredients : undefined,
+    createdAt: data.createdAt ?? null,
+    gallery: data.gallery,
+    images: data.images,
+    media: data.media,
+  };
+};
+
+const firstMediaUrl = (value: unknown): string | null => {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : null;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = firstMediaUrl(item);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const keys = ['url', 'src', 'downloadURL', 'href'];
+    for (const key of keys) {
+      const candidate = record[key];
+      if (typeof candidate === 'string') {
+        const trimmed = candidate.trim();
+        if (trimmed) return trimmed;
+      }
     }
   }
   return null;
-}
+};
 
-function pickRecipeCover(recipe: unknown): string | null {
-  if (!recipe || typeof recipe !== "object") return null;
-  const keys = ["imageURL", "image", "imageUrl", "cover", "coverUrl", "coverURL"];
-  for (const key of keys) {
-    const found = firstMediaUrl((recipe as Record<string, unknown>)[key]);
-    if (found) return found;
-  }
-  const gallery = (recipe as Record<string, unknown>).gallery;
-  if (Array.isArray(gallery)) {
-    for (const item of gallery) {
-      const found = firstMediaUrl(item);
-      if (found) return found;
-    }
-  }
-  const images = (recipe as Record<string, unknown>).images;
-  if (Array.isArray(images)) {
-    for (const item of images) {
-      const found = firstMediaUrl(item);
-      if (found) return found;
-    }
-  }
-  const media = (recipe as Record<string, unknown>).media;
-  return firstMediaUrl(media);
-}
+const pickRecipeCover = (recipe: PublicRecipe): string | null => {
+  const fromMedia = firstMediaUrl(recipe.media);
+  if (fromMedia) return fromMedia;
+  const fromGallery = firstMediaUrl(recipe.gallery);
+  if (fromGallery) return fromGallery;
+  const fromImages = firstMediaUrl(recipe.images);
+  if (fromImages) return fromImages;
+  return null;
+};
 
 export default function PublicProfilePage() {
-  const { slug } = useParams<{ slug: string }>();
-  const [uid, setUid] = useState<string | null>(null);
+  const params = useParams<{ slug: string }>();
+  const slug = params?.slug ?? '';
 
-  const [profile, setProfile] = useState<{ displayName?: string|null; username?: string|null; avatarURL?: string|null } | null>(null);
-  const [posts, setPosts] = useState<any[]>([]);
-  const [recipes, setRecipes] = useState<any[]>([]);
+  const [uid, setUid] = useState<string | null>(null);
+  const [profile, setProfile] = useState<PublicProfile | null>(null);
+  const [posts, setPosts] = useState<PublicPost[]>([]);
+  const [recipes, setRecipes] = useState<PublicRecipe[]>([]);
   const [err, setErr] = useState<string | null>(null);
-  const [tab, setTab] = useState<"posts"|"recipes">("recipes");
+  const [tab, setTab] = useState<'posts' | 'recipes'>('recipes');
 
   useEffect(() => {
-    (async () => {
+    let cancelled = false;
+    async function resolveUid() {
       try {
         if (!slug) return;
-        const unameSnap = await getDoc(doc(db, "usernames", String(slug)));
-        if (unameSnap.exists()) {
-          const u = (unameSnap.data() || {}) as any;
-          setUid(String(u.uid));
-          return;
+        const usernameSnap = await getDoc(doc(db, 'usernames', String(slug)));
+        if (cancelled) return;
+        if (usernameSnap.exists()) {
+          const data = usernameSnap.data() as { uid?: string } | undefined;
+          setUid(data?.uid ? String(data.uid) : String(slug));
+        } else {
+          setUid(String(slug));
         }
-        setUid(String(slug));
-      } catch (e: any) {
-        setErr(e?.message ?? "Failed to resolve profile.");
+      } catch (error) {
+        if (cancelled) return;
+        const message = error instanceof Error ? error.message : 'Failed to resolve profile.';
+        setErr(message);
       }
-    })();
+    }
+    resolveUid();
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
 
   useEffect(() => {
     if (!uid) return;
-    getDoc(doc(db, "usersPublic", uid))
-      .then((s) => {
-        if (s.exists()) {
-          const p = s.data() as any;
-          setProfile({
-            displayName: p.displayName ?? null,
-            username: p.username ?? null,
-            avatarURL: p.avatarURL ?? null,
+    let cancelled = false;
+    getDoc(doc(db, 'usersPublic', uid))
+      .then((snapshot) => {
+        if (cancelled || !snapshot.exists()) return;
+        const data = snapshot.data() as DocumentData;
+        setProfile({
+          displayName: typeof data.displayName === 'string' ? data.displayName : null,
+          username: typeof data.username === 'string' ? data.username : null,
+          avatarURL: typeof data.avatarURL === 'string' ? data.avatarURL : null,
+        });
+      })
+      .catch((error: FirestoreError) => {
+        if (!cancelled) setErr(error.message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [uid]);
+
+  useEffect(() => {
+    if (!uid) return;
+    const qy = query(collection(db, 'posts'), where('uid', '==', uid), fsLimit(300));
+    const stop = onSnapshot(
+      qy,
+      (snap) => {
+        const list = snap.docs.map(normalizePostDoc);
+        setPosts(list);
+        const author = list[0]?.author;
+        if (author) {
+          setProfile((prev) => {
+            if (prev) return prev;
+            return {
+              displayName: author.displayName ?? null,
+              username: author.username ?? null,
+              avatarURL: author.avatarURL ?? null,
+            };
           });
         }
-      })
-      .catch(() => {});
-  }, [uid]);
-
-  useEffect(() => {
-    if (!uid) return;
-    const qy = query(collection(db, "posts"), where("uid","==",uid), fsLimit(300));
-    const stop = onSnapshot(qy, (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-      setPosts(list);
-      if (!profile && list[0]?.author) {
-        const a = list[0].author || {};
-        setProfile(p => p ?? {
-          displayName: a.displayName ?? null,
-          username: a.username ?? null,
-          avatarURL: a.avatarURL ?? null,
-        });
+      },
+      (error) => {
+        setErr(error.message || 'Failed to load posts.');
       }
-    }, (e)=>setErr(e?.message ?? "Failed to load posts."));
+    );
     return () => stop();
   }, [uid]);
 
   useEffect(() => {
     if (!uid) return;
-    const qy = query(collection(db, "recipes"), where("uid","==",uid), fsLimit(300));
-    const stop = onSnapshot(qy, (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-      setRecipes(list);
-    }, (e)=>setErr(e?.message ?? "Failed to load recipes."));
+    const qy = query(collection(db, 'recipes'), where('uid', '==', uid), fsLimit(300));
+    const stop = onSnapshot(
+      qy,
+      (snap) => {
+        const list = snap.docs.map(normalizeRecipeDoc);
+        setRecipes(list);
+      },
+      (error) => {
+        setErr(error.message || 'Failed to load recipes.');
+      }
+    );
     return () => stop();
   }, [uid]);
 
-  const sortedPosts   = useMemo(()=>posts.slice().sort((a,b)=>toMillis(b.createdAt)-toMillis(a.createdAt)),[posts]);
-  const sortedRecipes = useMemo(()=>recipes.slice().sort((a,b)=>toMillis(b.createdAt)-toMillis(a.createdAt)),[recipes]);
+  const sortedPosts = useMemo(
+    () => [...posts].sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt)),
+    [posts]
+  );
+  const sortedRecipes = useMemo(
+    () => [...recipes].sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt)),
+    [recipes]
+  );
 
   if (err) {
     return (
       <main className="wrap">
-        <div className="card bad">{err}</div>
-        <style jsx>{styles}</style>
-      </main>
-    );
-  }
-  if (!uid) {
-    return (
-      <main className="wrap">
-        <div className="card">Loading profileâ€¦</div>
-        <style jsx>{styles}</style>
+        <div className="card bad">
+          <p>{err}</p>
+        </div>
       </main>
     );
   }
 
-  const name = profile?.displayName || profile?.username || uid.slice(0,6);
+  if (!slug) {
+    return (
+      <main className="wrap">
+        <div className="card">
+          <p className="muted">Loading…</p>
+        </div>
+      </main>
+    );
+  }
+
+  const headingName =
+    profile?.displayName ??
+    (profile?.username ? `@${profile.username}` : slug);
+  const secondaryName =
+    profile?.username && profile.username !== headingName
+      ? `@${profile.username}`
+      : null;
+  const avatarInitial = headingName ? headingName.charAt(0).toUpperCase() : 'U';
 
   return (
     <main className="wrap">
       <header className="head">
         <div className="who">
           {profile?.avatarURL ? (
-            <img className="avatar" src={profile.avatarURL} alt="" />
+            <Image
+              className="avatar"
+              src={profile.avatarURL}
+              alt={headingName}
+              width={72}
+              height={72}
+              unoptimized
+            />
           ) : (
-            <div className="avatar ph">{name[0]?.toUpperCase() || "U"}</div>
+            <div className="avatar ph" aria-hidden="true">
+              {avatarInitial}
+            </div>
           )}
           <div className="names">
-            <h1 className="title">{name}</h1>
-            {profile?.username ? <div className="muted">@{profile.username}</div> : null}
+            <h1 className="title">{headingName}</h1>
+            {secondaryName ? <p className="muted">{secondaryName}</p> : null}
           </div>
         </div>
-        <Link className="btn" href="/dashboard">Home</Link>
+        <Link href="/" className="btn">
+          Explore
+        </Link>
       </header>
 
-      {/* TABS */}
-      <nav className="tabs" role="tablist" aria-label="Profile sections">
-        <button role="tab" aria-selected={tab==="recipes"} className={`tab ${tab==="recipes"?"on":""}`} onClick={()=>setTab("recipes")}>Recipes</button>
-        <button role="tab" aria-selected={tab==="posts"} className={`tab ${tab==="posts"?"on":""}`} onClick={()=>setTab("posts")}>Posts</button>
+      <nav className="tabs" role="tablist" aria-label="Profile content">
+        <button
+          role="tab"
+          aria-selected={tab === 'recipes'}
+          className={`tab ${tab === 'recipes' ? 'on' : ''}`}
+          onClick={() => setTab('recipes')}
+        >
+          Recipes
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'posts'}
+          className={`tab ${tab === 'posts' ? 'on' : ''}`}
+          onClick={() => setTab('posts')}
+        >
+          Posts
+        </button>
       </nav>
 
-      {/* RECIPES */}
-      {tab==="recipes" && (
+      {tab === 'recipes' && (
         <section className="section">
-          {sortedRecipes.length===0 ? (
+          {sortedRecipes.length === 0 ? (
             <p className="muted">No recipes yet.</p>
           ) : (
             <ul className="recipeGrid">
-              {sortedRecipes.map((r) => {
-                const cover = pickRecipeCover(r);
+              {sortedRecipes.map((recipe) => {
+                const cover = pickRecipeCover(recipe);
                 return (
-                  <li key={r.id} className="rc">
-                    <Link href={`/recipes/${r.id}`} className="cardLink" aria-label={`Open recipe ${r.title || ""}`}>
+                  <li key={recipe.id} className="rc">
+                    <Link
+                      href={`/recipes/${recipe.id}`}
+                      className="cardLink"
+                      aria-label={`Open recipe ${recipe.title || ''}`}
+                    >
                       <article className="recipeCard">
                         <div className="media">
                           {cover ? (
-                            <img
+                            <Image
                               src={cover}
-                              alt=""
-                              loading="lazy"
-                              onError={(event) => {
-                                event.currentTarget.src = "/placeholder.png";
-                              }}
+                              alt={recipe.title ?? 'Recipe cover'}
+                              width={320}
+                              height={220}
+                              className="mediaImg"
+                              unoptimized
                             />
                           ) : (
                             <div className="ph" aria-hidden="true">
@@ -218,16 +414,24 @@ export default function PublicProfilePage() {
                           )}
                         </div>
                         <div className="rcBody">
-                          <h3 className="rcTitle">{trim(r.title || "Untitled recipe", 64)}</h3>
-                          {r.description ? <p className="rcDesc">{trim(r.description, 120)}</p> : null}
+                          <h3 className="rcTitle">
+                            {trim(recipe.title || 'Untitled recipe', 64)}
+                          </h3>
+                          {recipe.description ? (
+                            <p className="rcDesc">{trim(recipe.description, 120)}</p>
+                          ) : null}
                           <div className="rcMeta">
-                            {r.ingredients?.length ? (
-                              <span className="badge">{r.ingredients.length} ingredients</span>
+                            {Array.isArray(recipe.ingredients) && recipe.ingredients.length ? (
+                              <span className="badge">
+                                {recipe.ingredients.length} ingredients
+                              </span>
                             ) : (
                               <span className="badge secondary">No ingredients</span>
                             )}
-                            {r.createdAt ? (
-                              <span className="muted">{new Date(toMillis(r.createdAt)).toLocaleDateString()}</span>
+                            {recipe.createdAt ? (
+                              <span className="muted">
+                                {new Date(toMillis(recipe.createdAt)).toLocaleDateString()}
+                              </span>
                             ) : null}
                           </div>
                         </div>
@@ -241,31 +445,50 @@ export default function PublicProfilePage() {
         </section>
       )}
 
-      {/* POSTS */}
-      {tab==="posts" && (
+      {tab === 'posts' && (
         <section className="section">
-          {sortedPosts.length===0 ? (
+          {sortedPosts.length === 0 ? (
             <p className="muted">No posts yet.</p>
           ) : (
             <div className="feed">
-              {sortedPosts.map((p)=>(
-                <div key={p.id} className="postRow">
-                  <Link href={`/posts/${p.id}`} className="postRowLink">
-                    <article className="postMini">
-                      {Array.isArray(p.media) && p.media[0]?.url
-                        ? <img className="thumb" src={p.media[0].url} alt="" />
-                        : <div className="thumb ph" />}
-                      <div className="pmBody">
-                        <div className="pmTitle">{trim(p.text || p.title || "Untitled post", 80)}</div>
-                        <div className="pmMeta">
-                          <span className="muted">{p.createdAt ? new Date(toMillis(p.createdAt)).toLocaleString() : ""}</span>
-                          {p.reposts ? <span className="badge">â†» {p.reposts}</span> : null}
+              {sortedPosts.map((post) => {
+                const cover = firstMediaUrl(post.media);
+                return (
+                  <div key={post.id} className="postRow">
+                    <Link href={`/posts/${post.id}`} className="postRowLink">
+                      <article className="postMini">
+                        {cover ? (
+                          <Image
+                            className="thumb"
+                            src={cover}
+                            alt=""
+                            width={80}
+                            height={80}
+                            unoptimized
+                          />
+                        ) : (
+                          <div className="thumb ph" aria-hidden="true" />
+                        )}
+                        <div className="pmBody">
+                          <div className="pmTitle">
+                            {trim(post.text || post.title || 'Untitled post', 80)}
+                          </div>
+                          <div className="pmMeta">
+                            <span className="muted">
+                              {post.createdAt
+                                ? new Date(toMillis(post.createdAt)).toLocaleString()
+                                : ''}
+                            </span>
+                            {typeof post.reposts === 'number' && post.reposts > 0 ? (
+                              <span className="badge">↻ {post.reposts}</span>
+                            ) : null}
+                          </div>
                         </div>
-                      </div>
-                    </article>
-                  </Link>
-                </div>
-              ))}
+                      </article>
+                    </Link>
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>
@@ -297,28 +520,13 @@ const styles = `
 
 .section { margin-top: 8px; }
 
-/* Recipe grid */
-.recipeGrid {
-  list-style:none; margin:0; padding:0;
-  display:grid; gap:14px;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-}
+.recipeGrid { list-style:none; margin:0; padding:0; display:grid; gap:14px; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
 .cardLink{ text-decoration:none; color:inherit; display:block; }
-.recipeCard{
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 16px;
-  overflow:hidden;
-  transition: transform .08s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease;
-}
-.recipeCard:hover{
-  transform: translateY(-2px);
-  box-shadow: 0 18px 36px rgba(0,0,0,.12);
-  border-color: color-mix(in oklab, var(--primary) 28%, var(--card-border));
-}
-.media{ aspect-ratio: 16/11; background:#000; }
-.media img{ width:100%; height:100%; object-fit:cover; display:block; }
-.media .ph{ width:100%; height:100%; display:grid; place-items:center; color: var(--muted); background: var(--bg2); }
+.recipeCard{ background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; overflow:hidden; transition: transform .08s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease; }
+.recipeCard:hover{ transform: translateY(-2px); box-shadow: 0 18px 36px rgba(0,0,0,.12); border-color: color-mix(in oklab, var(--primary) 28%, var(--card-border)); }
+.media{ aspect-ratio: 16/11; background:#000; overflow:hidden; }
+.mediaImg{ width:100%; height:100%; object-fit:cover; }
+.ph{ width:100%; height:100%; display:grid; place-items:center; color: var(--muted); background: var(--bg2); }
 .rcBody{ padding: 12px; display:grid; gap:6px; }
 .rcTitle{ font-weight:900; letter-spacing:-.01em; }
 .rcDesc{ color: var(--muted); font-size: 13px; line-height: 1.35; }
@@ -326,19 +534,12 @@ const styles = `
 .badge{ font-size:12px; font-weight:800; padding: 2px 8px; border-radius:999px; background: color-mix(in oklab, var(--primary) 12%, var(--bg)); border:1px solid color-mix(in oklab, var(--primary) 35%, var(--border)); }
 .badge.secondary{ background: color-mix(in oklab, var(--muted) 12%, var(--bg)); border-color: color-mix(in oklab, var(--muted) 35%, var(--border)); }
 
-/* Posts list (compact) */
 .feed{ display:grid; gap:10px; }
 .postRowLink{ text-decoration:none; color:inherit; display:block; }
-.postMini{
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 16px;
-  padding: 10px;
-  display:grid; grid-template-columns: 80px 1fr; gap: 12px; align-items:center;
-}
+.postMini{ background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; padding: 10px; display:grid; grid-template-columns: 80px 1fr; gap: 12px; align-items:center; }
 .thumb{ width:80px; height:80px; border-radius:12px; object-fit:cover; border:1px solid var(--border); background:#000; }
-.thumb.ph{ background: var(--bg2) }
-.pmBody{ min-width:0 }
+.thumb.ph{ background: var(--bg2); }
+.pmBody{ min-width:0; }
 .pmTitle{ font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pmMeta{ display:flex; gap:10px; align-items:center; margin-top:2px; }
 
