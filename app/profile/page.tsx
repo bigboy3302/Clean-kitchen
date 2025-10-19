@@ -1,8 +1,9 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
-import { auth, db, storage, functions } from "@/lib/firebas1e";
+import { auth, db, storage } from "@/lib/firebas1e";
 import {
   onAuthStateChanged,
   sendPasswordResetEmail,
@@ -68,6 +69,11 @@ function fullName(fn?: string | null, ln?: string | null) {
   return (f + " " + l).trim() || null;
 }
 
+const getErrorMessage = (error: unknown, fallback: string): string => {
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+};
+
 export default function ProfilePage() {
   const router = useRouter();
   const { mode, setMode } = useTheme();
@@ -84,8 +90,8 @@ export default function ProfilePage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState("");
-  const [checkingUname, setCheckingUname] = useState(false);
-  const [unameMsg, setUnameMsg] = useState<string | null>(null);
+  const [, setCheckingUname] = useState(false);
+  const [, setUnameMsg] = useState<string | null>(null);
 
   const [newEmail, setNewEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -109,6 +115,19 @@ export default function ProfilePage() {
   const [showDelete, setShowDelete] = useState(false);
   const [confirmText, setConfirmText] = useState("");
 
+  const handleFirstNameChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setFirstName(event.currentTarget.value);
+  };
+  const handleLastNameChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setLastName(event.currentTarget.value);
+  };
+  const handleFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const nextFile = event.currentTarget.files?.[0] ?? null;
+    setUploadProgress(null);
+    setFile(nextFile);
+    setErr(null);
+    setMsg(null);
+  };
   
   useEffect(() => {
     const stop = onAuthStateChanged(auth, (u) => {
@@ -157,13 +176,13 @@ export default function ProfilePage() {
         }
         setNewEmail(me.email || "");
         setErr(null);
-      } catch (e: any) {
-        setErr(e?.message ?? "Failed to load profile.");
+      } catch (error: unknown) {
+        setErr(getErrorMessage(error, "Failed to load profile."));
       } finally {
         setLoadingDoc(false);
       }
     })();
-  }, [authReady, me]);
+  }, [authReady, me, setMode]);
 
 
   useEffect(() => {
@@ -245,8 +264,8 @@ export default function ProfilePage() {
       setFile(null);
       if (fileRef.current) fileRef.current.value = "";
       setMsg("Profile photo updated!");
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to update avatar.");
+    } catch (error: unknown) {
+      setErr(getErrorMessage(error, "Failed to update avatar."));
     } finally {
       setBusyUpload(false);
       setUploadProgress(null);
@@ -272,8 +291,8 @@ export default function ProfilePage() {
       await updateDoc(doc(db, "users", me.uid), { photoURL: null });
       setUserDoc((prev) => (prev ? { ...prev, photoURL: null } : prev));
       setMsg("Profile photo removed.");
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to remove avatar.");
+    } catch (error: unknown) {
+      setErr(getErrorMessage(error, "Failed to remove avatar."));
     } finally {
       setBusyUpload(false);
       setUploadProgress(null);
@@ -379,8 +398,8 @@ export default function ProfilePage() {
       } else {
         setUnameMsg(null);
       }
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to save profile.");
+    } catch (error: unknown) {
+      setErr(getErrorMessage(error, "Failed to save profile."));
     } finally {
       setBusySave(false);
     }
@@ -403,8 +422,8 @@ export default function ProfilePage() {
       await fbUpdateEmail(me, newEmail);
       await updateDoc(doc(db, "users", me.uid), { email: newEmail });
       setMsg("Email updated.");
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to update email. (Re-auth may be required)");
+    } catch (error: unknown) {
+      setErr(getErrorMessage(error, "Failed to update email. (Re-auth may be required)"));
     } finally {
       setBusyEmail(false);
     }
@@ -415,8 +434,8 @@ export default function ProfilePage() {
     try {
       await sendEmailVerification(me);
       setMsg("Verification email sent.");
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to send verification email.");
+    } catch (error: unknown) {
+      setErr(getErrorMessage(error, "Failed to send verification email."));
     }
   }
 
@@ -429,8 +448,8 @@ export default function ProfilePage() {
       }
       await sendPasswordResetEmail(auth, email);
       setMsg("Password reset link sent.");
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to send reset email.");
+    } catch (error: unknown) {
+      setErr(getErrorMessage(error, "Failed to send reset email."));
     }
   }
 
@@ -438,8 +457,8 @@ export default function ProfilePage() {
     try {
       await signOut(auth);
       router.replace("/auth/login");
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to log out.");
+    } catch (error: unknown) {
+      setErr(getErrorMessage(error, "Failed to log out."));
     }
   }
 
@@ -467,14 +486,14 @@ export default function ProfilePage() {
       await updateDoc(doc(db, "users", me.uid), { deletedAt: new Date().toISOString() }).catch(() => {});
       try {
         await deleteUser(me);
-      } catch (e: any) {
-        throw new Error(e?.message || "Re-authenticate then try deleting again.");
+      } catch (error: unknown) {
+        throw new Error(getErrorMessage(error, "Re-authenticate then try deleting again."));
       }
       setMsg("Account deleted.");
       setShowDelete(false);
       router.replace("/auth/login");
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to delete account.");
+    } catch (error: unknown) {
+      setErr(getErrorMessage(error, "Failed to delete account."));
     } finally {
       setBusyDelete(false);
     }
@@ -506,9 +525,12 @@ export default function ProfilePage() {
                 <div className="heroCard">
                   <div className="avatarColumn">
                     <div className="avatarWrap">
-                      <img
+                      <Image
                         src={userDoc.photoURL || "/default-avatar.png"}
                         alt="Profile avatar"
+                        fill
+                        sizes="140px"
+                        className="avatarImg"
                       />
                       <button
                         type="button"
@@ -559,13 +581,7 @@ export default function ProfilePage() {
                   ref={fileRef}
                   type="file"
                   accept="image/*"
-                  onChange={(e) => {
-                    const nextFile = e.target.files?.[0] || null;
-                    setUploadProgress(null);
-                    setFile(nextFile);
-                    setErr(null);
-                    setMsg(null);
-                  }}
+                  onChange={handleFileInputChange}
                   style={{ display: "none" }}
                 />
               </section>
@@ -577,8 +593,8 @@ export default function ProfilePage() {
                   <p className="cardSubtitle">Update how your name and username appear to others.</p>
                   <br/>
                   <div className="grid2">
-                    <Input label="First name" value={firstName} onChange={(e: any) => setFirstName(e.target.value)} />
-                    <Input label="Last name" value={lastName} onChange={(e: any) => setLastName(e.target.value)} />
+                    <Input label="First name" value={firstName} onChange={handleFirstNameChange} />
+                    <Input label="Last name" value={lastName} onChange={handleLastNameChange} />
                    
                     <Input label="UID" value={userDoc.uid} readOnly />
                   </div>
@@ -785,9 +801,7 @@ export default function ProfilePage() {
           overflow: hidden;
           box-shadow: 0 14px 36px rgba(15, 23, 42, 0.22);
         }
-        .avatarWrap img {
-          width: 100%;
-          height: 100%;
+        .avatarImg {
           object-fit: cover;
         }
         .avatarTrigger {
