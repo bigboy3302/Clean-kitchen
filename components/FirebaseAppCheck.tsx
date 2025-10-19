@@ -7,7 +7,7 @@ import app from "@/lib/firebas1e";
 export default function FirebaseAppCheck() {
   useEffect(() => {
 
-    // @ts-ignore
+    // @ts-expect-error debug token only present in dev
     self.FIREBASE_APPCHECK_DEBUG_TOKEN = process.env.NEXT_PUBLIC_APPCHECK_DEBUG_TOKEN || undefined;
 
     try {

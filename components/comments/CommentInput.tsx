@@ -1,17 +1,20 @@
 "use client";
 
 import { useId, useState } from "react";
-const MAX = 25000;
 
-export default function CommentInput({
-  disabled,
-  placeholder = "Write a commentâ€¦",
-  onSubmit,
-}: {
+const MAX = 25_000;
+
+type Props = {
   disabled?: boolean;
   placeholder?: string;
   onSubmit: (text: string) => Promise<void> | void;
-}) {
+};
+
+export default function CommentInput({
+  disabled,
+  placeholder = "Write a comment…",
+  onSubmit,
+}: Props) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -27,8 +30,9 @@ export default function CommentInput({
     try {
       await onSubmit(trimmed);
       setText("");
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to post comment.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to post comment.";
+      setErr(message);
     } finally {
       setBusy(false);
     }
@@ -48,14 +52,16 @@ export default function CommentInput({
         aria-invalid={!!err}
       />
       <div className="row">
-        <small id={countId} className="muted">{text.length} / {MAX}</small>
+        <small id={countId} className="muted">
+          {text.length} / {MAX}
+        </small>
         <button
           className="btn"
           type="submit"
           disabled={disabled || busy || !text.trim()}
           aria-disabled={disabled || busy || !text.trim()}
         >
-          {busy ? "Postingâ€¦" : "Post"}
+          {busy ? "Posting…" : "Post"}
         </button>
       </div>
       {err ? (
@@ -122,3 +128,4 @@ export default function CommentInput({
     </form>
   );
 }
+

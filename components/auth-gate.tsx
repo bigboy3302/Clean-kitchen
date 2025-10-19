@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useState } from "react";
-import { onAuthStateChanged, User } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebas1e";
 import { doc, getDoc } from "firebase/firestore";
@@ -19,7 +19,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         return;
       }
 
-      const isPasswordProvider = u.providerData.some(p => p.providerId === "password");
+      const isPasswordProvider = u.providerData.some((p) => p.providerId === "password");
       if (isPasswordProvider && !u.emailVerified) {
         setChecking(false);
         router.replace("/auth/verify");

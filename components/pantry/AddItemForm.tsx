@@ -1,4 +1,4 @@
-﻿
+
 "use client";
 
 import { useState } from "react";
@@ -83,7 +83,7 @@ export default function AddItemForm() {
 
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
         <button className="btn-base btn--md btn--primary" disabled={busy}>
-          {busy ? "Adding…" : "Add item"}
+          {busy ? "Adding�" : "Add item"}
         </button>
       </div>
 
@@ -91,6 +91,7 @@ export default function AddItemForm() {
     </form>
   );
 }
+
 
 
 

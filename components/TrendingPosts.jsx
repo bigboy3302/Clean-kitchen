@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -11,13 +12,12 @@ import {
   limit as qlimit,
 } from "firebase/firestore";
 
-
 export default function TrendingPosts({
   maxPostsToTrack = 150,
-  topN = 5,              
+  topN = 5,
 }) {
-  const [posts, setPosts] = useState([]); 
-  const [repostCounts, setRepostCounts] = useState({}); 
+  const [posts, setPosts] = useState([]);
+  const [repostCounts, setRepostCounts] = useState({});
   const repostUnsubsRef = useRef([]);
 
   useEffect(() => {
@@ -36,7 +36,13 @@ export default function TrendingPosts({
   }, [maxPostsToTrack]);
 
   useEffect(() => {
-    repostUnsubsRef.current.forEach((fn) => { try { fn(); } catch {} });
+    repostUnsubsRef.current.forEach((fn) => {
+      try {
+        fn();
+      } catch {
+        /* noop */
+      }
+    });
     repostUnsubsRef.current = [];
 
     if (!posts.length) {
@@ -53,20 +59,23 @@ export default function TrendingPosts({
 
     repostUnsubsRef.current = unsubs;
     return () => {
-      unsubs.forEach((fn) => { try { fn(); } catch {} });
+      unsubs.forEach((fn) => {
+        try {
+          fn();
+        } catch {
+          /* noop */
+        }
+      });
     };
   }, [posts]);
 
   const top = useMemo(() => {
     const ranked = posts
       .map((p) => ({ post: p, count: repostCounts[p.id] ?? 0 }))
-      .filter((x) => (x.count || 0) > 0) 
+      .filter((x) => (x.count || 0) > 0)
       .sort((a, b) => {
         if (b.count !== a.count) return b.count - a.count;
-    
-        const ta = toMillis(a.post?.createdAt);
-        const tb = toMillis(b.post?.createdAt);
-        return tb - ta;
+        return toMillis(b.post?.createdAt) - toMillis(a.post?.createdAt);
       })
       .slice(0, topN);
 
@@ -101,7 +110,14 @@ export default function TrendingPosts({
             <li key={post.id} className="item">
               <Link href={`/posts/${post.id}`} className="row">
                 {cover ? (
-                  <img className="thumb" src={cover} alt="" />
+                  <Image
+                    className="thumb"
+                    src={cover}
+                    alt="Post cover"
+                    width={48}
+                    height={48}
+                    unoptimized
+                  />
                 ) : (
                   <div className="thumb ph" aria-hidden>
                     <svg width="18" height="18" viewBox="0 0 24 24">
@@ -113,7 +129,9 @@ export default function TrendingPosts({
                   </div>
                 )}
                 <div className="meta">
-                  <div className="title" title={title}>{title}</div>
+                  <div className="title" title={title}>
+                    {title}
+                  </div>
                   <div className="line">
                     <span className="badge">↻ {count}</span>
                     {post.author?.username ? (
@@ -136,14 +154,16 @@ function toMillis(ts) {
     if (!ts) return 0;
     if (typeof ts?.toDate === "function") return ts.toDate().getTime();
     if (typeof ts?.seconds === "number") return ts.seconds * 1000;
-  } catch {}
+  } catch {
+    /* ignore */
+  }
   return 0;
 }
 
 function trimMid(str, max) {
   if (!str) return "";
   if (str.length <= max) return str;
-  return str.slice(0, max - 1) + "…";
+  return `${str.slice(0, max - 1)}…`;
 }
 
 const styles = `

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -18,22 +17,44 @@ type AuthorLite = {
   avatarURL?: string | null;
 };
 
+type TimestampLike =
+  | { seconds?: number; toDate?: () => Date }
+  | number
+  | string
+  | Date
+  | null;
+
 type C = {
   id: string;
   uid: string;
   text: string;
-  createdAt?: { seconds?: number } | number | null;
+  createdAt?: TimestampLike;
   author?: AuthorLite | null;
 };
 
-function timeAgo(createdAt?: C["createdAt"]) {
-  if (!createdAt) return "";
-  const sec =
-    typeof createdAt === "number"
-      ? createdAt
-      : createdAt && typeof (createdAt as any).seconds === "number"
-      ? (createdAt as any).seconds
-      : Math.floor(Date.parse(String(createdAt)) / 1000) || 0;
+function secondsFromTimestamp(ts?: TimestampLike): number {
+  if (ts == null) return 0;
+  if (typeof ts === "number") return ts;
+  if (ts instanceof Date) return Math.floor(ts.getTime() / 1000);
+  if (typeof ts === "string") {
+    const parsed = Date.parse(ts);
+    return Number.isNaN(parsed) ? 0 : Math.floor(parsed / 1000);
+  }
+  if (typeof ts === "object") {
+    if (typeof ts.seconds === "number") return ts.seconds;
+    if (typeof ts.toDate === "function") {
+      try {
+        return Math.floor(ts.toDate().getTime() / 1000);
+      } catch {
+        return 0;
+      }
+    }
+  }
+  return 0;
+}
+
+function timeAgo(createdAt?: TimestampLike) {
+  const sec = secondsFromTimestamp(createdAt);
   if (!sec) return "";
   const diff = Math.max(1, Math.floor(Date.now() / 1000 - sec));
   const steps: [number, string][] = [
@@ -45,11 +66,23 @@ function timeAgo(createdAt?: C["createdAt"]) {
     [12, "mo"],
     [Number.MAX_SAFE_INTEGER, "y"],
   ];
-  let v = diff,
-    i = 0;
-  for (; i < steps.length - 1 && v >= steps[i][0]; i++)
-    v = Math.floor(v / steps[i][0]);
-  return `${v}${steps[i][1]}`;
+  let value = diff;
+  let index = 0;
+  for (; index < steps.length - 1 && value >= steps[index][0]; index++) {
+    value = Math.floor(value / steps[index][0]);
+  }
+  return `${value}${steps[index][1]}`;
+}
+
+function normalizeComment(id: string, data: unknown): C {
+  const base = (typeof data === "object" && data !== null ? data : {}) as Partial<C>;
+  return {
+    id,
+    uid: typeof base.uid === "string" ? base.uid : "",
+    text: typeof base.text === "string" ? base.text : "",
+    createdAt: base.createdAt ?? null,
+    author: base.author ?? null,
+  };
 }
 
 export default function CommentsList({
@@ -73,7 +106,8 @@ export default function CommentsList({
       orderBy("createdAt", "asc")
     );
     const stop = onSnapshot(q, (snap) => {
-      setItems(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })));
+      const mapped = snap.docs.map((d) => normalizeComment(d.id, d.data()));
+      setItems(mapped);
     });
     return () => stop();
   }, [postId]);
@@ -98,21 +132,26 @@ export default function CommentsList({
             c?.author?.displayName ||
             c?.author?.username ||
             (c.uid ? `@${c.uid.slice(0, 6)}` : "user");
-        return (
-          <li key={c.id} className="cItem">
-            <div className="cTop">
-              <span className="cName">{name}</span>
-              <span className="cDot">â€¢</span>
-              <span className="cTime">{timeAgo(c.createdAt)}</span>
-              {(meUid === c.uid || (postOwnerUid && meUid === postOwnerUid)) && (
-                <button className="cDel" onClick={() => onDeleteComment(c)}>Delete</button>
-              )}
-            </div>
-            <div className="cBubble">
-              <p className="cText">{c.text}</p>
-            </div>
-          </li>
-        );})}
+          const canDelete = meUid === c.uid || (postOwnerUid && meUid === postOwnerUid);
+
+          return (
+            <li key={c.id} className="cItem">
+              <div className="cTop">
+                <span className="cName">{name}</span>
+                <span className="cDot" aria-hidden="true">•</span>
+                <span className="cTime">{timeAgo(c.createdAt)}</span>
+                {canDelete && (
+                  <button className="cDel" onClick={() => onDeleteComment(c)}>
+                    Delete
+                  </button>
+                )}
+              </div>
+              <div className="cBubble">
+                <p className="cText">{c.text}</p>
+              </div>
+            </li>
+          );
+        })}
       </ul>
 
       {canSeeMore && (
@@ -148,3 +187,5 @@ export default function CommentsList({
     </div>
   );
 }
+
+

@@ -3,16 +3,24 @@
 import { useState } from "react";
 import { addComment } from "@/lib/comments";
 
-export default function AddCommentBox({ pId, uid }: { pId: string; uid: string }) {
+type Props = {
+  pId: string;
+  uid: string;
+};
+
+const MAX = 25_000;
+
+export default function AddCommentBox({ pId, uid }: Props) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const MAX = 25000;
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!uid) { setErr("Please sign in to comment."); return; }
+    if (!uid) {
+      setErr("Please sign in to comment.");
+      return;
+    }
     const trimmed = text.trim();
     if (!trimmed) return;
 
@@ -21,8 +29,9 @@ export default function AddCommentBox({ pId, uid }: { pId: string; uid: string }
     try {
       await addComment({ postId: pId, uid, text: trimmed });
       setText("");
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to add comment.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to add comment.";
+      setErr(message);
     } finally {
       setBusy(false);
     }
@@ -30,25 +39,29 @@ export default function AddCommentBox({ pId, uid }: { pId: string; uid: string }
 
   return (
     <form onSubmit={onSubmit} className="cmtForm">
-      <label className="visuallyHidden" htmlFor="cmt">Write a comment</label>
+      <label className="visuallyHidden" htmlFor="cmt">
+        Write a comment
+      </label>
       <textarea
         id="cmt"
         rows={5}
         value={text}
         onChange={(e) => setText(e.target.value.slice(0, MAX))}
-        placeholder="Write a replyâ€¦"
+        placeholder="Write a reply…"
         className="cmtInput"
       />
 
       <div className="cmtRow">
-        <small className="muted count">{text.length} / {MAX}</small>
+        <small className="muted count">
+          {text.length} / {MAX}
+        </small>
         <button
           className="btn"
           type="submit"
           disabled={busy || !uid || !text.trim()}
           aria-disabled={busy || !uid || !text.trim()}
         >
-          {busy ? "Postingâ€¦" : "Post"}
+          {busy ? "Posting…" : "Post"}
         </button>
       </div>
 
@@ -117,3 +130,5 @@ export default function AddCommentBox({ pId, uid }: { pId: string; uid: string }
     </form>
   );
 }
+
+        placeholder="Write a reply…"

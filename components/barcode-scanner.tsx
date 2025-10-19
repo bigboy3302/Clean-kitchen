@@ -23,8 +23,9 @@ export default function BarcodeScanner({ onDetected }:{ onDetected?:(text:string
           onDetected?.(result.getText());
           stop = true; 
         }
-      } catch (e: any) {
-        setError(e?.message ?? "Kameras pieeja liegta.");
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Camera access denied.";
+        setError(message);
       }
     })();
 
