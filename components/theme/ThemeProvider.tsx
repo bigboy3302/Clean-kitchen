@@ -68,7 +68,7 @@ function applyCssVars(p: Palette, dataTheme?: "light" | "dark" | "custom") {
   el.style.setProperty("--btn-border", "transparent");
 
   const isDark = dataTheme === "dark" || (dataTheme === "custom" && isPerceivedDark(p));
-  el.style.colorScheme = isDark ? ("dark" as any) : ("light" as any);
+  el.style.colorScheme = isDark ? "dark" : "light";
 }
 
 function isPerceivedDark(p: Palette) {
@@ -129,11 +129,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       mode === "light" ? LIGHT :
       mode === "custom" ? palette :
       (mql.matches ? DARK : LIGHT);
-    const themeAttr =
+    const themeAttr: "light" | "dark" | "custom" =
       mode === "system" ? (mql.matches ? "dark" : "light") :
       mode === "custom" ? "custom" :
       mode;
-    applyCssVars(paletteForMode, themeAttr as any);
+    applyCssVars(paletteForMode, themeAttr);
   }, [mode, palette]);
 
   const value = useMemo<Ctx>(() => ({

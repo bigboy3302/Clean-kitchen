@@ -8,6 +8,7 @@ import {
 } from "@zxing/browser";
 
 type Props = { onDetected: (code: string) => void };
+type TorchConstraintSet = MediaTrackConstraintSet & { torch: boolean };
 
 export default function BarcodeScanner({ onDetected }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -78,11 +79,12 @@ export default function BarcodeScanner({ onDetected }: Props) {
         const track = getVideoTrack();
         const caps = track?.getCapabilities?.();
         setTorchCapable(Boolean(caps && "torch" in caps));
-      } catch (e: any) {
+      } catch (error: unknown) {
+        const err = (error ?? {}) as { name?: string; message?: string };
         const msg =
-          e?.name === "NotAllowedError"
+          err?.name === "NotAllowedError"
             ? "Camera permission denied. Allow it or type the barcode."
-            : e?.message || "Camera failed to start (HTTPS or localhost required).";
+            : err?.message || "Camera failed to start (HTTPS or localhost required).";
         setErr(msg);
         setRunning(false);
       }
@@ -90,7 +92,7 @@ export default function BarcodeScanner({ onDetected }: Props) {
 
     return () => { mounted = false; stop(); };
 
-  }, [running, deviceId, facing]);
+  }, [running, deviceId, facing, onDetected]);
 
   function stop() {
     try { controlsRef.current?.stop(); } catch {}
@@ -114,7 +116,10 @@ export default function BarcodeScanner({ onDetected }: Props) {
     const caps = track?.getCapabilities?.();
     if (!track || !caps || !("torch" in caps)) return;
     try {
-      await track.applyConstraints({ advanced: [{ torch: !torchOn }] as any });
+      const torchConstraints: MediaTrackConstraints = {
+        advanced: [{ torch: !torchOn } as TorchConstraintSet],
+      };
+      await track.applyConstraints(torchConstraints);
       setTorchOn((s) => !s);
     } catch {}
   }

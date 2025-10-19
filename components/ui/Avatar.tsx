@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 type Props = {
   src?: string | null;
   alt?: string;
@@ -17,7 +19,17 @@ export default function Avatar({ src, alt = "avatar", size = 100, name, classNam
         style={{ width: size, height: size, minWidth: size, minHeight: size }}
         aria-label={alt}
       >
-        {src ? <img src={src} alt={alt} /> : <span className="ph">{initial}</span>}
+        {src ? (
+          <Image
+            src={src}
+            alt={alt}
+            width={size}
+            height={size}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        ) : (
+          <span className="ph">{initial}</span>
+        )}
       </span>
 
       <style jsx>{`
@@ -29,11 +41,9 @@ export default function Avatar({ src, alt = "avatar", size = 100, name, classNam
           border: 1px solid var(--border);
           line-height: 0;
         }
-        .ui-avatar img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
+        .ui-avatar :global(img) {
           display: block;
+          border-radius: 999px;
         }
         .ui-avatar .ph {
           width: 100%;

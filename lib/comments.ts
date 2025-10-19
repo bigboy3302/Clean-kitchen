@@ -15,7 +15,14 @@ export async function addComment(opts: { postId: string; uid: string; text: stri
     const uref = doc(db, "users", uid);
     const usnap = await getDoc(uref);
     if (usnap.exists()) {
-      const u = usnap.data() as any;
+      type UserDoc = {
+        firstName?: string | null;
+        lastName?: string | null;
+        displayName?: string | null;
+        username?: string | null;
+        photoURL?: string | null;
+      };
+      const u = usnap.data() as UserDoc;
       author = {
         displayName: u?.firstName
           ? `${u.firstName}${u.lastName ? " " + u.lastName : ""}`

@@ -17,6 +17,8 @@ import {
 } from "firebase/storage";
 
 export type MediaItem = { storagePath?: string };
+type PostDoc = { uid?: string | null };
+type RecipeDoc = { uid?: string | null; author?: { uid?: string | null } | null };
 
 function toRef(path: string): StorageReference {
   return sref(storage, path);
@@ -40,8 +42,8 @@ export async function hardDeletePost(
   const snap = await getDoc(postRef);
   if (!snap.exists()) return;
 
-  const data = snap.data() as any;
-  const owner = data?.uid as string | undefined;
+  const data = snap.data() as PostDoc | null;
+  const owner = data?.uid ?? undefined;
 
   if (!owner) {
     throw new Error("permission-denied: post has no uid field (legacy).");
@@ -80,7 +82,7 @@ export async function hardDeleteRecipe(recipeId: string) {
   const snap = await getDoc(ref);
   if (!snap.exists()) return;
 
-  const data = snap.data() as any;
+  const data = snap.data() as RecipeDoc | null;
   const owner = data?.uid ?? data?.author?.uid ?? null;
 
   if (!owner) {
