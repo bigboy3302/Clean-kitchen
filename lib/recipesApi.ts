@@ -15,7 +15,7 @@ export type CommonRecipe = {
 
 type ApiResponse = { ok: boolean; recipes: CommonRecipe[]; error?: string };
 
-async function j<T = any>(url: string): Promise<T> {
+async function j<T = unknown>(url: string): Promise<T> {
   const r = await fetch(url, { cache: "no-store" });
   if (!r.ok) {
     const txt = await r.text().catch(() => "");

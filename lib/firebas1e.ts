@@ -83,7 +83,7 @@ function initAppCheckOnce() {
   }
 
   if (process.env.NODE_ENV !== "production") {
-    // @ts-ignore debug token for local dev
+    // @ts-expect-error debug token for local dev
     self.FIREBASE_APPCHECK_DEBUG_TOKEN = process.env.NEXT_PUBLIC_APPCHECK_DEBUG_TOKEN || true;
   }
 

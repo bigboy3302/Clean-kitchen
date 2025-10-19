@@ -5,6 +5,8 @@ import {
   updateDoc,
   serverTimestamp,
   type Firestore,
+  type FieldValue,
+  type Timestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebas1e";
 
@@ -19,8 +21,8 @@ export type WeekPlan = {
   uid: string;
   week: string; 
   days: Record<DayKey, DayPlan>;
-  createdAt?: any;
-  updatedAt?: any;
+  createdAt?: Timestamp | FieldValue | null;
+  updatedAt?: Timestamp | FieldValue | null;
 };
 
 export function isoWeekKey(d = new Date()): string {
