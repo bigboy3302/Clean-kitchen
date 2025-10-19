@@ -1,7 +1,7 @@
 
 "use client";
 
-import { auth, db, storage } from "@/lib/firebase";
+import { auth, db, storage } from "@/lib/firebase/firebase";
 import {
   collection,
   deleteDoc,

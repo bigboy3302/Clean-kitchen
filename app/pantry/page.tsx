@@ -8,7 +8,7 @@ import {
   serverTimestamp, Timestamp, updateDoc, where, getDocs, limit, increment
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase/firebase";
 
 import Button from "@/components/ui/Button";
 import PantryCard, { PantryCardItem } from "@/components/pantry/PantryCard";

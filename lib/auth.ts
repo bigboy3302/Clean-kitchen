@@ -2,7 +2,7 @@
 
 import { onAuthStateChanged, User } from "firebase/auth";
 import { create } from "zustand";
-import { auth } from "@/lib/firebase";
+import { auth } from "@/lib/firebase/firebase";
 
 export type AuthState = {
   user: User | null | undefined;

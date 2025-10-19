@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { addDoc, collection, serverTimestamp, Timestamp } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase/firebase";
 
 function toTitleCase(s: string) {
   return s.replace(/\w\S*/g, (t) => t.charAt(0).toUpperCase() + t.slice(1));

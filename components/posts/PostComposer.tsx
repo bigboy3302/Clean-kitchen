@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { auth, db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase/firebase";
 import { addDoc, collection, serverTimestamp, doc, getDoc } from "firebase/firestore";
 import { addMediaToPost } from "@/lib/postMedia";
 

@@ -4,7 +4,7 @@ import {
   where, getDoc, getDocs, QueryConstraint, Firestore, Unsubscribe
 } from "firebase/firestore";
 import type { User } from "firebase/auth";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase/firebase";
 
 /** Read exactly the caller's user doc. */
 export async function getMyUserDoc(me: User) {

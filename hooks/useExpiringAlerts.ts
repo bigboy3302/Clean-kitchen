@@ -9,7 +9,7 @@ import {
   where,
   FirestoreError,
 } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase/firebase";
 
 type TSLike =
   | { toDate?: () => Date; seconds?: number }

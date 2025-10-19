@@ -1,6 +1,6 @@
 // lib/uploads.ts
 import { ref as sref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "@/lib/firebase";
+import { storage } from "@/lib/firebase/firebase";
 
 export async function uploadAvatarFile(userId: string, file: File) {
   if (!/image\/(png|jpe?g|webp)/i.test(file.type)) {

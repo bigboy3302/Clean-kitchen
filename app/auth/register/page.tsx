@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -9,7 +9,7 @@ import {
   sendEmailVerification,
   deleteUser,
 } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { auth } from "@/lib/firebase/firebase";
 import AuthShell from "@/components/auth/AuthShell";
 import Input from "components/ui/Input";
 import Button from "@/components/ui/Button";

@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { auth, db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase/firebase";
 import { doc, onSnapshot, serverTimestamp, setDoc, deleteDoc } from "firebase/firestore";
 
 type Props = {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase/firebase";
 import { collection, onSnapshot, query } from "firebase/firestore";
 import Avatar from "@/components/ui/Avatar";
 

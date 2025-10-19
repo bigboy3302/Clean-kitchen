@@ -12,7 +12,7 @@ import {
   where,
 } from "firebase/firestore";
 
-import { auth, db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase/firebase";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 

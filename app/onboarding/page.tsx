@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { auth, db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase/firebase";
 import { doc, getDoc, runTransaction, serverTimestamp } from "firebase/firestore";
 import { updateProfile } from "firebase/auth";
 import { useRouter } from "next/navigation";

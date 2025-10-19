@@ -1,5 +1,5 @@
 
-import { storage } from "@/lib/firebase";
+import { storage } from "@/lib/firebase/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 export async function uploadImage(file: File, path: string) {

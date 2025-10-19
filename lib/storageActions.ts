@@ -1,5 +1,5 @@
 
-import { storage } from "@/lib/firebase"; 
+import { storage } from "@/lib/firebase/firebase"; 
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { v4 as uuid } from "uuid";
 

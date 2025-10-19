@@ -19,7 +19,7 @@ import {
   setDoc,
   updateDoc,
 } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase/firebase";
 import Avatar from "@/components/ui/Avatar";
 
 type Author = {

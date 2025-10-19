@@ -1,5 +1,5 @@
 // hooks/pantry.ts
-import { auth, db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase/firebase";
 import { collection, query, where, onSnapshot, addDoc } from "firebase/firestore";
 
 export function watchMyPantry(cb: (rows: any[]) => void) {

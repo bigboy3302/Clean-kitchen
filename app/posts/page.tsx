@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, orderBy, query, Timestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase/firebase";
 import Card from "@/components/ui/Card";
 import PostCard, { Post } from "@/components/posts/PostCard";
 

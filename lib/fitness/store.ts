@@ -141,7 +141,7 @@ export async function getMetrics(): Promise<Metrics | null> {
 
   try {
     const [{ auth, db }, firestore] = await Promise.all([
-      import("@/lib/firebase"),
+       import("@/lib/firebase/firebase.js"),
       import("firebase/firestore"),
     ]);
     const user = auth.currentUser;
@@ -180,7 +180,7 @@ export async function saveMetrics(m: Metrics) {
 
   try {
     const [{ auth, db }, firestore] = await Promise.all([
-      import("@/lib/firebase"),
+      import("@/lib/firebase/firebase.js"),
       import("firebase/firestore"),
     ]);
     const user = auth.currentUser;
