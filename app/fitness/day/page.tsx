@@ -1,4 +1,4 @@
-﻿﻿"use client";
+﻿'use client';
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -109,6 +109,9 @@ const exerciseFromItem = (item: WorkoutItem): Exercise | null => {
   };
 };
 
+const getErrorMessage = (error: unknown, fallback: string): string =>
+  error instanceof Error && error.message ? error.message : fallback;
+
 export default function DayPlannerPage() {
   const [plan, setPlan] = useState<WeekPlan | null>(null);
   const [day, setDay] = useState<DayKey>(() => currentDayKey());
@@ -133,8 +136,8 @@ export default function DayPlannerPage() {
 
         const todaysMeals = await getOrCreateDailyMeals(undefined, metrics?.goal ?? "maintain", 3);
         if (!ignore) setRecipes(todaysMeals.slice(0, 3));
-      } catch (e: any) {
-        if (!ignore) setError(e?.message || "Unable to load today.");
+      } catch (error) {
+        if (!ignore) setError(getErrorMessage(error, "Unable to load today."));
       } finally {
         if (!ignore) setBusy(false);
       }
@@ -182,8 +185,8 @@ export default function DayPlannerPage() {
     try {
       const fresh = await getWeekPlan(targetWeekId);
       setPlan(fresh);
-    } catch (e: any) {
-      setError(e?.message || "Unable to refresh plan");
+    } catch (error) {
+      setError(getErrorMessage(error, "Unable to refresh plan"));
     }
   }
 
@@ -196,8 +199,8 @@ export default function DayPlannerPage() {
       await upsertDayItem(plan.weekId, day, item);
       await refreshPlan(plan.weekId);
       setText("");
-    } catch (e: any) {
-      setError(e?.message || "Unable to add workout");
+    } catch (error) {
+      setError(getErrorMessage(error, "Unable to add workout"));
     } finally {
       setBusy(false);
     }
@@ -209,8 +212,8 @@ export default function DayPlannerPage() {
     try {
       await toggleDone(plan.weekId, day, id, done);
       await refreshPlan(plan.weekId);
-    } catch (e: any) {
-      setError(e?.message || "Unable to update workout");
+    } catch (error) {
+      setError(getErrorMessage(error, "Unable to update workout"));
     } finally {
       setBusy(false);
     }
@@ -222,8 +225,8 @@ export default function DayPlannerPage() {
     try {
       await removeDayItem(plan.weekId, day, id);
       await refreshPlan(plan.weekId);
-    } catch (e: any) {
-      setError(e?.message || "Unable to remove workout");
+    } catch (error) {
+      setError(getErrorMessage(error, "Unable to remove workout"));
     } finally {
       setBusy(false);
     }
@@ -254,7 +257,7 @@ export default function DayPlannerPage() {
     } catch {
       // fall through to fallback shape
     }
-    // Fallback if API didn’t return details; shape it as CommonRecipe
+    // Fallback if API didn't return details; shape it as CommonRecipe
     const fallback: CommonRecipe = {
       id: meal.id,
       source: "api",
@@ -264,7 +267,7 @@ export default function DayPlannerPage() {
       area: null,
       ingredients: [],
       instructions: null,
-      author: { uid: null as any, name: null },
+      author: { uid: null, name: null },
     };
     setOpenRecipe(fallback);
   }
@@ -399,7 +402,7 @@ export default function DayPlannerPage() {
       <section className="sectionCard mealsCard">
         <div className="sectionHead">
           <div>
-            <h2 className="sectionTitle">Today's meals</h2>
+            <h2 className="sectionTitle">Today&apos;s meals</h2>
             <p className="muted">Tap a meal to preview ingredients & preparation.</p>
           </div>
         </div>

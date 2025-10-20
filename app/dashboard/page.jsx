@@ -1,8 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import NextImage from "next/image";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   collection,
@@ -154,7 +155,7 @@ export default function DashboardPage() {
   const lastPostLabel = useMemo(() => {
     if (!myPosts.length) return "Share your first post";
     const ago = formatRelativeFromMs(lastPostMs);
-    return ago ? `Last post · ${ago} ago` : "Last post";
+    return ago ? `Last post Ā· ${ago} ago` : "Last post";
   }, [myPosts.length, lastPostMs]);
 
 
@@ -572,7 +573,14 @@ export default function DashboardPage() {
                             thumb.type === "video" ? (
                               <video src={thumb.url} muted playsInline preload="metadata" />
                             ) : (
-                              <img src={thumb.url} alt="" />
+                              <NextImage
+                                src={thumb.url}
+                                alt={p.title || p.text || "Trending post media"}
+                                fill
+                                sizes="56px"
+                                className="trendImage"
+                                unoptimized
+                              />
                             )
                           ) : (
                             <span>#{i + 1}</span>
@@ -605,7 +613,7 @@ export default function DashboardPage() {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="mHead">
               <div className="mTitle">Create post</div>
-              <button className="x" onClick={() => setOpenComposer(false)}>✕</button>
+              <button className="x" onClick={() => setOpenComposer(false)}>ā•</button>
             </div>
 
             <div className="mBody">
@@ -616,7 +624,7 @@ export default function DashboardPage() {
                 rows={4}
                 value={postText}
                 onChange={(e) => setPostText(e.target.value)}
-                placeholder="What’s on your mind?"
+                placeholder="Whatā€™s on your mind?"
               />
 
               <label className="lab">Media (up to 4)</label>
@@ -632,7 +640,18 @@ export default function DashboardPage() {
                 <div className={`preview grid-${Math.min(previews.length, 2)}`}>
                   {previews.map((m, i) => (
                     <div key={i} className="pCell">
-                      {m.type === "video" ? <video src={m.url} controls muted /> : <img src={m.url} alt="" />}
+                      {m.type === "video" ? (
+                        <video src={m.url} controls muted />
+                      ) : (
+                        <NextImage
+                          src={m.url}
+                          alt={`Selected media ${i + 1}`}
+                          fill
+                          sizes="(max-width: 768px) 100vw, 420px"
+                          className="pImage"
+                          unoptimized
+                        />
+                      )}
                     </div>
                   ))}
                 </div>
@@ -642,7 +661,7 @@ export default function DashboardPage() {
             <div className="mFoot">
               <button className="btn ghost" onClick={() => setOpenComposer(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={createPost} disabled={busyPost}>
-                {busyPost ? "Publishing…" : "Publish"}
+                {busyPost ? "Publishingā€¦" : "Publish"}
               </button>
             </div>
           </div>
@@ -943,6 +962,7 @@ export default function DashboardPage() {
           color: inherit;
         }
         .trend-thumb {
+          position: relative;
           width: 56px;
           height: 56px;
           border-radius: 14px;
@@ -950,16 +970,20 @@ export default function DashboardPage() {
           border: 1px solid var(--border);
           background: var(--bg);
           display: grid;
-          place-items: center;
-          font-weight: 800;
-          color: var(--muted);
+          place-items: center;\n          font-weight: 800;\n          font-size: 16px;\n          color: var(--muted);
         }
-        .trend-thumb img,
         .trend-thumb video {
           width: 100%;
           height: 100%;
           object-fit: cover;
           display: block;
+        }
+        .trend-thumb :global(.trendImage) {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
         }
         .trend-body {
           min-width: 0;
@@ -1085,18 +1109,25 @@ export default function DashboardPage() {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
         .pCell {
+          position: relative;
           border: 1px solid var(--border);
           border-radius: var(--radius-button);
           overflow: hidden;
           background: #000;
           aspect-ratio: 16 / 10;
         }
-        .pCell img,
         .pCell video {
           width: 100%;
           height: 100%;
           object-fit: cover;
           display: block;
+        }
+        .pCell :global(.pImage) {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
         }
         .mFoot {
           display: flex;

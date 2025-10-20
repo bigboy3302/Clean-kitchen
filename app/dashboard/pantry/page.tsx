@@ -64,8 +64,8 @@ export default function PantryPage() {
       base,
       (snap) => {
         const docs = snap.docs.map((docSnap) => {
-          const { id: _ignored, ...rest } = docSnap.data() as PantryItem;
-          return { id: docSnap.id, ...rest } as PantryItem;
+          const data = docSnap.data() as Omit<PantryItem, "id">;
+          return { id: docSnap.id, ...data };
         });
         setItems(docs);
       },

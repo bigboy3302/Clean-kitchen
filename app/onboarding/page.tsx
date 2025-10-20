@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { updateProfile } from "firebase/auth";
@@ -263,7 +263,7 @@ export default function OnboardingPage() {
             required
           />
           <p className="mt-1 text-xs text-gray-500">
-            Allowed: a-z, 0-9, "_" and "." (3-20 symbols). Example: <code>name.surname</code>
+            Allowed: a-z, 0-9, &quot;_&quot; and &quot;.&quot; (3-20 symbols). Example: <code>name.surname</code>
           </p>
 
           {suggestions.length > 0 ? (
