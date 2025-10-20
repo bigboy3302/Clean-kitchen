@@ -1,64 +1,61 @@
 ﻿"use client";
 
-import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   createUserWithEmailAndPassword,
-  updateProfile,
   sendEmailVerification,
-  deleteUser,
+  updateProfile,
 } from "firebase/auth";
-import { auth } from "@/lib/firebas1e";
+import { FirebaseError } from "firebase/app";
+import { auth, db } from "@/lib/firebas1e";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+
 import AuthShell from "@/components/auth/AuthShell";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 
 type Phase = "form" | "verify";
 
-const getAuthErrorCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error && typeof (error as { code?: unknown }).code === "string"
-    ? (error as { code: string }).code
-    : undefined;
+function mapFirebaseError(code?: string, fallback?: string) {
+  switch (code) {
+    case "auth/invalid-email":
+      return "The email address looks invalid.";
+    case "auth/email-already-in-use":
+      return "This email is already registered.";
+    case "auth/weak-password":
+      return "Password is too weak. Use at least 6–8 characters.";
+    case "auth/network-request-failed":
+      return "Network error. Please check your connection and try again.";
+    default:
+      return fallback || "Registration failed. Please try again.";
+  }
+}
 
-const getErrorMessage = (error: unknown, fallback: string): string =>
-  error instanceof Error && error.message ? error.message : fallback;
+/** Type guard for FirebaseError */
+function isFirebaseError(e: unknown): e is FirebaseError {
+  return typeof e === "object" && e !== null && "code" in e;
+}
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [phase, setPhase] = useState<Phase>("form");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+
+  // Form fields
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [displayName, setDisplayName] = useState("");
 
-  const [info, setInfo] = useState<string | null>(null);
+  // UI state
   const [err, setErr] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState<Phase>("form");
 
-  const COOLDOWN = 60;
-  const [cooldown, setCooldown] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const handleFirstNameChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setFirstName(event.currentTarget.value);
-  };
-
-  const handleLastNameChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setLastName(event.currentTarget.value);
-  };
-
-  const handleEmailChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setEmail(event.currentTarget.value);
-  };
-
-  const handlePasswordChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setPass(event.currentTarget.value);
-  };
-
+  // Lock scroll (optional—mirrors your login behavior)
   useEffect(() => {
     if (typeof window === "undefined") return;
-
     const bodyStyle = document.body.style;
     const htmlStyle = document.documentElement.style;
     const prevBodyOverflow = bodyStyle.overflow;
@@ -76,182 +73,144 @@ export default function RegisterPage() {
     };
   }, []);
 
-  useEffect(() => {
-    if (cooldown <= 0 && timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  }, [cooldown]);
-
-  function startCooldown() {
-    setCooldown(COOLDOWN);
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => setCooldown((value) => Math.max(value - 1, 0)), 1000);
-  }
-
-  const actionCodeSettings = {
-    url:
-      typeof window !== "undefined"
-        ? `${window.location.origin}/onboarding`
-        : "http://localhost:3000/onboarding",
-    handleCodeInApp: false,
-  };
-
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErr(null);
     setInfo(null);
+
+    // Client-side validation
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !pass || !confirm) {
+      setErr("Please fill in all required fields.");
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(trimmedEmail)) {
+      setErr("Please enter a valid email address.");
+      return;
+    }
+    if (pass.length < 6) {
+      setErr("Password must be at least 6 characters.");
+      return;
+    }
+    if (pass !== confirm) {
+      setErr("Passwords do not match.");
+      return;
+    }
+
     setBusy(true);
     try {
-      const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
-      const displayName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
-      if (displayName) {
-        await updateProfile(cred.user, { displayName });
+      // Create user
+      const cred = await createUserWithEmailAndPassword(auth, trimmedEmail, pass);
+
+      // Optional displayName
+      const name = displayName.trim();
+      if (name) {
+        await updateProfile(cred.user, { displayName: name });
       }
 
+      // Create/merge user doc
+      await setDoc(
+        doc(db, "users", cred.user.uid),
+        {
+          uid: cred.user.uid,
+          email: cred.user.email ?? trimmedEmail,
+          displayName: name || null,
+          createdAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      // Send verification (non-blocking UX)
       try {
-        localStorage.setItem(
-          "ck_pending_profile",
-          JSON.stringify({
-            firstName: firstName.trim(),
-            lastName: lastName.trim(),
-            email: email.trim(),
-          })
-        );
-      } catch {}
-
-      await sendEmailVerification(cred.user, actionCodeSettings);
-      setPhase("verify");
-      setInfo("We sent a verification email. Please check your inbox.");
-      startCooldown();
-    } catch (error: unknown) {
-      const code = getAuthErrorCode(error);
-      if (code === "auth/email-already-in-use") {
-        setErr("This email address is already registered. Please log in with Login.");
-      } else {
-        setErr(getErrorMessage(error, "Neizdevās izveidot kontu."));
+        await sendEmailVerification(cred.user);
+        setInfo("We sent a verification email. Please check your inbox.");
+        setPhase("verify");
+      } catch {
+        setInfo("Account created. Please continue to onboarding.");
       }
+
+      router.replace("/onboarding");
+    } catch (e: unknown) {
+      const msg = isFirebaseError(e)
+        ? mapFirebaseError(e.code, e.message)
+        : "Registration failed. Please try again.";
+      setErr(msg);
     } finally {
       setBusy(false);
     }
   }
 
-  async function resendEmail() {
-    setErr(null);
-    setInfo(null);
-    const u = auth.currentUser;
-    if (!u) {
-      setErr("Session lost. Please sign in again.");
-      return;
-    }
-    setBusy(true);
-    try {
-      await sendEmailVerification(u, actionCodeSettings);
-      setInfo("Verification email sent again!");
-      startCooldown();
-    } catch (error: unknown) {
-      const code = getAuthErrorCode(error);
-      if (code === "auth/too-many-requests") {
-        setErr("Pārāk bieži mēģināji sūtīt e-pastu. Lūdzu pagaidi minūti un mēģini vēlreiz.");
-      } else {
-        setErr(getErrorMessage(error, "Failed to send verification email."));
-      }
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function iVerified() {
-    setErr(null);
-    setInfo(null);
-    const u = auth.currentUser;
-    if (!u) {
-      setErr("Session lost. Please sign in again.");
-      return;
-    }
-    setBusy(true);
-    try {
-      await u.reload();
-      if (auth.currentUser?.emailVerified) {
-        router.replace("/onboarding");
-      } else {
-        setErr("Email is not verified yet. Check your inbox or resend.");
-      }
-    } catch (error: unknown) {
-      setErr(getErrorMessage(error, "Could not verify status."));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function cancelRegistration() {
-    setErr(null);
-    setInfo(null);
-    const u = auth.currentUser;
-    if (!u) {
-      setErr("Nothing to cancel.");
-      setPhase("form");
-      return;
-    }
-    setBusy(true);
-    try {
-      await deleteUser(u);
-      try {
-        localStorage.removeItem("ck_pending_profile");
-      } catch {}
-      setPhase("form");
-      setErr("Registration was cancelled.");
-    } catch (error: unknown) {
-      setErr(getErrorMessage(error, "Failed to cancel registration."));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return phase === "form" ? (
+  return (
     <AuthShell
-      title="Create account"
-      subtitle="Get started with Clean-Kitchen"
-      footer={<span>Allready have an account? <Link className="underline" href="/auth/login">Sign in</Link></span>}
-      errorBanner={err ? <span>{err}</span> : null}
+      title="Create your account"
+      subtitle="Join Clean Kitchen to track your pantry and fitness"
+      footer={
+        <span>
+          Already have an account?{" "}
+          <Link className="underline" href="/auth/login">
+            Sign in
+          </Link>
+        </span>
+      }
     >
       <form onSubmit={onSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Input label="Name" value={firstName} onChange={handleFirstNameChange} required />
-          <Input label="Surname" value={lastName} onChange={handleLastNameChange} required />
-        </div>
+        <Input
+          label="Display name (optional)"
+          type="text"
+          value={displayName}
+          onChange={(e) => setDisplayName((e.target as HTMLInputElement).value)}
+          placeholder="Jane Doe"
+        />
 
-        <Input label="Email" type="email" value={email} onChange={handleEmailChange} required />
+        <Input
+          label="Email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail((e.target as HTMLInputElement).value)}
+          placeholder="you@email.com"
+          required
+        />
 
-        <Input label="Password (min 8)" type="password" value={pass} onChange={handlePasswordChange} required />
+        <Input
+          label="Password"
+          type="password"
+          value={pass}
+          onChange={(e) => setPass((e.target as HTMLInputElement).value)}
+          placeholder="••••••••"
+          required
+        />
 
-        {info && <p className="rounded-md bg-green-50 p-2 text-sm text-green-700">{info}</p>}
+        <Input
+          label="Confirm password"
+          type="password"
+          value={confirm}
+          onChange={(e) => setConfirm((e.target as HTMLInputElement).value)}
+          placeholder="••••••••"
+          required
+        />
+
+        {err && (
+          <p className="rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700 ring-1 ring-red-200">
+            {err}
+          </p>
+        )}
+
+        {info && (
+          <p className="rounded-lg bg-blue-50 p-3 text-sm text-blue-700 ring-1 ring-blue-200">
+            {info}
+          </p>
+        )}
 
         <Button type="submit" disabled={busy}>
-          {busy ? "Creating…" : "Create account"}
+          {busy ? "Creating account…" : "Create account"}
         </Button>
       </form>
-    </AuthShell>
-  ) : (
-    <AuthShell title="Verify your email" subtitle="We&apos;ve sent a verification email.">
-      <div className="space-y-4">
-        {err && <p className="rounded-md bg-red-50 p-2 text-sm text-red-700">{err}</p>}
-        {info && <p className="rounded-md bg-yellow-50 p-2 text-sm text-yellow-800">{info}</p>}
 
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <Button onClick={resendEmail} disabled={busy || cooldown > 0} variant="secondary">
-            {cooldown > 0 ? `Send again (${cooldown}s)` : "Send again"}
-          </Button>
-
-          <Button onClick={iVerified} disabled={busy}>
-            I&apos;verified
-          </Button>
-
-          <Button onClick={cancelRegistration} disabled={busy} variant="ghost">
-            Cancel
-          </Button>
-        </div>
-      </div>
+      {phase === "verify" && (
+        <p className="mt-4 text-xs text-gray-500">
+          Didn’t get the email? Check your spam folder, or try again later.
+        </p>
+      )}
     </AuthShell>
   );
 }

@@ -193,15 +193,22 @@ export default function PostThreadPage() {
     const stop = onSnapshot(
       ref,
       (snap) => {
-        const nextComments = snap.docs.map((docSnap) => {
+        const nextComments = snap.docs.reduce<CommentDoc[]>((acc, docSnap) => {
           const data = docSnap.data() as CommentRecord | undefined;
-          return {
+          if (!data || typeof data.uid !== "string") {
+            return acc;
+          }
+          acc.push({
             id: docSnap.id,
-            ...(data ?? {}),
-            replyCount: data?.replyCount ?? 0,
-            repostCount: data?.repostCount ?? 0,
-          };
-        });
+            uid: data.uid,
+            text: data.text ?? null,
+            createdAt: data.createdAt,
+            author: data.author ?? null,
+            replyCount: data.replyCount ?? 0,
+            repostCount: data.repostCount ?? 0,
+          });
+          return acc;
+        }, []);
         setComments(nextComments);
       },
       (error) => {
@@ -747,10 +754,20 @@ function CommentRow({
       orderBy("createdAt", "asc")
     );
     const stop = onSnapshot(qRef, (snap) => {
-      const nextReplies = snap.docs.map((docSnap) => {
-        const data = (docSnap.data() as ReplyRecord | undefined) ?? {};
-        return { id: docSnap.id, ...data };
-      });
+      const nextReplies = snap.docs.reduce<ReplyDoc[]>((acc, docSnap) => {
+        const data = docSnap.data() as ReplyRecord | undefined;
+        if (!data || typeof data.uid !== "string") {
+          return acc;
+        }
+        acc.push({
+          id: docSnap.id,
+          uid: data.uid,
+          text: data.text ?? null,
+          createdAt: data.createdAt,
+          author: data.author ?? null,
+        });
+        return acc;
+      }, []);
       setReplies(nextReplies);
     });
     return () => stop();

@@ -47,7 +47,7 @@ export default function AddCommentBox({ pId, uid }: Props) {
         rows={5}
         value={text}
         onChange={(e) => setText(e.target.value.slice(0, MAX))}
-        placeholder="Write a reply…"
+        placeholder="Write a reply..."
         className="cmtInput"
       />
 
@@ -61,7 +61,7 @@ export default function AddCommentBox({ pId, uid }: Props) {
           disabled={busy || !uid || !text.trim()}
           aria-disabled={busy || !uid || !text.trim()}
         >
-          {busy ? "Posting…" : "Post"}
+          {busy ? "Postingï¿½" : "Post"}
         </button>
       </div>
 
@@ -131,4 +131,4 @@ export default function AddCommentBox({ pId, uid }: Props) {
   );
 }
 
-        placeholder="Write a reply…"
+   
