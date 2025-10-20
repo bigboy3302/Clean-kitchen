@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   addDoc,
@@ -22,41 +23,68 @@ import {
 import { auth, db } from "@/lib/firebas1e";
 import Avatar from "@/components/ui/Avatar";
 
+type TimestampLike =
+  | Date
+  | number
+  | string
+  | { seconds?: number; nanoseconds?: number; toDate?: () => Date }
+  | null
+  | undefined;
+
 type Author = {
   username?: string | null;
   displayName?: string | null;
   avatarURL?: string | null;
 } | null;
 
-type MediaItem = { type: "image" | "video"; url: string };
+type MediaItem = {
+  type: "image" | "video";
+  url: string;
+  w?: number;
+  h?: number;
+  duration?: number;
+};
 
-type PostDoc = {
-  id: string;
+type PostRecord = {
   uid: string;
   title?: string | null;
   description?: string | null;
   text?: string | null;
   media?: MediaItem[] | null;
-  createdAt?: any;
+  createdAt?: TimestampLike;
   author?: Author;
+  likes?: number | null;
+  reposts?: number | null;
 };
 
-type CommentDoc = {
-  id: string;
+type PostDoc = { id: string } & PostRecord;
+
+type CommentRecord = {
   uid: string;
   text?: string | null;
-  createdAt?: any;
+  createdAt?: TimestampLike;
   author?: Author;
   replyCount?: number | null;
   repostCount?: number | null;
 };
 
-type ReplyDoc = {
-  id: string;
+type CommentDoc = { id: string } & CommentRecord;
+
+type ReplyRecord = {
   uid: string;
   text?: string | null;
-  createdAt?: any;
+  createdAt?: TimestampLike;
   author?: Author;
+};
+
+type ReplyDoc = { id: string } & ReplyRecord;
+
+type UserRecord = {
+  firstName?: string | null;
+  lastName?: string | null;
+  displayName?: string | null;
+  username?: string | null;
+  photoURL?: string | null;
 };
 
 async function getMyAuthor(uid: string): Promise<Author> {
@@ -65,13 +93,13 @@ async function getMyAuthor(uid: string): Promise<Author> {
     const snap = await getDoc(ref);
     if (!snap.exists())
       return { displayName: null, username: null, avatarURL: null };
-    const data = (snap.data() || {}) as any;
+    const data = (snap.data() as UserRecord | undefined) ?? {};
+    const first = data.firstName?.trim();
+    const last = data.lastName?.trim();
     const displayName =
-      data.firstName && data.lastName
-        ? `${data.firstName} ${data.lastName}`
-        : data.firstName
-        ? data.firstName
-        : data.displayName ?? null;
+      first && last
+        ? `${first} ${last}`.trim()
+        : first || data.displayName || null;
     return {
       displayName: displayName ?? null,
       username: data.username ?? null,
@@ -83,10 +111,27 @@ async function getMyAuthor(uid: string): Promise<Author> {
   }
 }
 
-function tsToDate(ts: any): Date | undefined {
-  if (!ts) return undefined;
-  if (typeof ts?.toDate === "function") return ts.toDate();
-  if (typeof ts?.seconds === "number") return new Date(ts.seconds * 1000);
+function tsToDate(ts: TimestampLike): Date | undefined {
+  if (ts == null) return undefined;
+  if (ts instanceof Date) return ts;
+  if (typeof ts === "number" && Number.isFinite(ts)) return new Date(ts);
+  if (typeof ts === "string") {
+    const parsed = Date.parse(ts);
+    return Number.isNaN(parsed) ? undefined : new Date(parsed);
+  }
+  if (typeof ts === "object") {
+    const candidate = ts as { toDate?: () => Date; seconds?: number };
+    if (typeof candidate.toDate === "function") {
+      try {
+        return candidate.toDate();
+      } catch {
+        // ignore and fall through
+      }
+    }
+    if (typeof candidate.seconds === "number") {
+      return new Date(candidate.seconds * 1000);
+    }
+  }
   return undefined;
 }
 
@@ -122,7 +167,8 @@ export default function PostThreadPage() {
           router.replace("/dashboard");
           return;
         }
-        setPost({ id: snap.id, ...(snap.data() as any) });
+        const data = (snap.data() as PostRecord | undefined) ?? {};
+        setPost({ id: snap.id, ...data });
         setErr(null);
       },
       (error) => {
@@ -143,17 +189,16 @@ export default function PostThreadPage() {
     const stop = onSnapshot(
       ref,
       (snap) => {
-        setComments(
-          snap.docs.map((docSnap) => {
-            const data = docSnap.data() as any;
-            return {
-              id: docSnap.id,
-              ...data,
-              replyCount: data.replyCount ?? 0,
-              repostCount: data.repostCount ?? 0,
-            };
-          })
-        );
+        const nextComments = snap.docs.map((docSnap) => {
+          const data = (docSnap.data() as CommentRecord | undefined) ?? {};
+          return {
+            id: docSnap.id,
+            ...data,
+            replyCount: data.replyCount ?? 0,
+            repostCount: data.repostCount ?? 0,
+          };
+        });
+        setComments(nextComments);
       },
       (error) => {
         console.warn("comments snapshot error", error);
@@ -178,7 +223,7 @@ export default function PostThreadPage() {
 
   
   const sortedComments = useMemo(() => {
-    const byCreatedDesc = (a?: any, b?: any) =>
+    const byCreatedDesc = (a?: TimestampLike, b?: TimestampLike) =>
       (tsToDate(b)?.getTime() || 0) - (tsToDate(a)?.getTime() || 0);
 
     const list = [...comments];
@@ -211,8 +256,8 @@ export default function PostThreadPage() {
         author,
       });
       setCommentText("");
-    } catch (error: any) {
-      const message = String(error?.message || error);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       alert(
         /unauthorized|permission/i.test(message)
           ? "Comment blocked by rules. Please sign in."
@@ -389,7 +434,13 @@ export default function PostThreadPage() {
                       preload="metadata"
                     />
                   ) : (
-                    <img src={item.url} alt="" />
+                    <Image
+                      src={item.url}
+                      alt=""
+                      fill
+                      sizes="(max-width: 768px) 80vw, 420px"
+                      className="postMediaImage"
+                    />
                   )}
                 </div>
               ))}
@@ -533,13 +584,16 @@ export default function PostThreadPage() {
           overflow: hidden;
           background: #000;
           height: 280px;
+          position: relative;
         }
-        .cell img,
         .cell video {
           width: 100%;
           height: 100%;
           object-fit: cover;
           display: block;
+        }
+        :global(.postMediaImage) {
+          object-fit: cover;
         }
         .caption {
           white-space: pre-wrap;
@@ -689,12 +743,11 @@ function CommentRow({
       orderBy("createdAt", "asc")
     );
     const stop = onSnapshot(qRef, (snap) => {
-      setReplies(
-        snap.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...(docSnap.data() as any),
-        }))
-      );
+      const nextReplies = snap.docs.map((docSnap) => {
+        const data = (docSnap.data() as ReplyRecord | undefined) ?? {};
+        return { id: docSnap.id, ...data };
+      });
+      setReplies(nextReplies);
     });
     return () => stop();
   }, [isOpen, postId, comment.id]);

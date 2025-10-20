@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, orderBy, query, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebas1e";
-import Card from "@/components/ui/Card";
 import PostCard, { Post } from "@/components/posts/PostCard";
 
 type PostDoc = Post & {
@@ -16,7 +15,10 @@ export default function PostsPage() {
   useEffect(() => {
     const qy = query(collection(db, "posts"), orderBy("createdAt", "desc"));
     const stop = onSnapshot(qy, (snap) => {
-      const rows: PostDoc[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+      const rows: PostDoc[] = snap.docs.map((docSnap) => {
+        const data = docSnap.data() as Omit<PostDoc, "id">;
+        return { id: docSnap.id, ...data };
+      });
       setPosts(rows);
     });
     return () => stop();

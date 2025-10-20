@@ -19,7 +19,14 @@ import Fridge from "@/components/pantry/Fridge";
 import TrashCan from "@/components/pantry/TrashCan";
 import HealthCoach from "@/components/pantry/HealthCoach";
 
-type TSLike = Timestamp | { seconds: number; nanoseconds: number } | Date | null | undefined;
+type TSLike =
+  | Timestamp
+  | { seconds?: number; nanoseconds?: number; toDate?: () => Date }
+  | Date
+  | string
+  | number
+  | null
+  | undefined;
 
 const looksLikeBarcode = (s: string) => /^\d{6,}$/.test(s);
 const capFirst = (s: string) => s.replace(/^\p{L}/u, (m) => m.toUpperCase());
@@ -27,12 +34,53 @@ const todayStr = () => { const now = new Date(); return `${now.getFullYear()}-${
 const startOfToday = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
 
 function toDate(ts?: TSLike | null) {
-  if (!ts) return null;
+  if (ts === null || ts === undefined) return null;
   if (ts instanceof Date) return ts;
-  const anyTs: any = ts;
-  if (typeof anyTs?.toDate === "function") return anyTs.toDate();
-  if (typeof anyTs?.seconds === "number") return new Date(anyTs.seconds * 1000);
-  if (typeof ts === "string" && !Number.isNaN(Date.parse(ts))) return new Date(ts);
+  if (typeof ts === "number" && Number.isFinite(ts)) return new Date(ts);
+  if (typeof ts === "string") {
+    const parsed = Date.parse(ts);
+    return Number.isNaN(parsed) ? null : new Date(parsed);
+  }
+  if (typeof ts === "object" && ts !== null) {
+    const candidate = ts as { toDate?: () => Date; seconds?: number };
+    if (typeof candidate.toDate === "function") {
+      try {
+        return candidate.toDate();
+      } catch {
+        // ignore failure and fall back to seconds handling
+      }
+    }
+    if (typeof candidate.seconds === "number") {
+      return new Date(candidate.seconds * 1000);
+    }
+  }
+  return null;
+}
+
+function toTimestamp(value: TSLike | null): Timestamp | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Timestamp) return value;
+  if (value instanceof Date) return Timestamp.fromDate(value);
+  if (typeof value === "number" && Number.isFinite(value)) return Timestamp.fromDate(new Date(value));
+  if (typeof value === "string") {
+    const iso = value.includes("T") ? value : `${value}T00:00:00`;
+    const parsed = Date.parse(iso);
+    if (!Number.isNaN(parsed)) return Timestamp.fromDate(new Date(iso));
+    return null;
+  }
+  if (typeof value === "object" && value !== null) {
+    const candidate = value as { toDate?: () => Date; seconds?: number };
+    if (typeof candidate.toDate === "function") {
+      try {
+        return Timestamp.fromDate(candidate.toDate());
+      } catch {
+        // ignore and fall back to seconds handling
+      }
+    }
+    if (typeof candidate.seconds === "number") {
+      return Timestamp.fromDate(new Date(candidate.seconds * 1000));
+    }
+  }
   return null;
 }
 
@@ -82,6 +130,9 @@ type ConsumptionLog = {
   createdAt: TSLike | null;
 };
 
+type PantryItemRecord = Omit<PantryItemPage, "id">;
+type ConsumptionLogRecord = Omit<ConsumptionLog, "id">;
+
 export default function PantryPage() {
   const router = useRouter();
 
@@ -122,8 +173,14 @@ export default function PantryPage() {
       );
       const stopItems = onSnapshot(
         qy,
-        (snap) => setItems(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as PantryItemPage[]),
-        (e) => setErr(e?.message ?? "Could not load pantry.")
+        (snap) => {
+          const nextItems = snap.docs.map((docSnap) => {
+            const data = docSnap.data() as PantryItemRecord;
+            return { id: docSnap.id, ...data };
+          });
+          setItems(nextItems);
+        },
+        (error) => setErr(error instanceof Error ? error.message : "Could not load pantry.")
       );
 
       const qLogs = query(
@@ -132,8 +189,17 @@ export default function PantryPage() {
       );
       const stopLogs = onSnapshot(
         qLogs,
-        (snap) => setLogs(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as ConsumptionLog[]),
-        (e) => console.error("consumptionLogs listener failed:", (e as FirebaseError)?.code || "", (e as FirebaseError)?.message)
+        (snap) => {
+          const nextLogs = snap.docs.map((docSnap) => {
+            const data = docSnap.data() as ConsumptionLogRecord;
+            return { id: docSnap.id, ...data };
+          });
+          setLogs(nextLogs);
+        },
+        (error) => {
+          const message = error instanceof FirebaseError ? `${error.code}: ${error.message}` : String(error);
+          console.error("consumptionLogs listener failed:", message);
+        }
       );
 
       stopRef.current = () => { stopItems(); stopLogs(); };
@@ -150,8 +216,9 @@ export default function PantryPage() {
         const info = await fetchNutritionByBarcode(barcode);
         setNutrition(info || null);
         if (info?.name) setName(normalizeProductName(info.name));
-      } catch (e: any) {
-        setNutriErr(e?.message || "Could not fetch nutrition.");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Could not fetch nutrition.";
+        setNutriErr(message);
       } finally {
         setNutriBusy(false);
       }
@@ -230,35 +297,37 @@ export default function PantryPage() {
       setName(""); setQty(1); setDate(""); setBarcode(""); setNutrition(null); setNutriErr(null);
       setScannerAutoStart(false); setScannerKey((k) => k + 1);
       setFridgeOpen(true); setTimeout(()=>setFridgeOpen(false), 1200);
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to add item.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to add item.";
+      setErr(message);
     } finally { setBusy(false); }
   }
 
-  async function saveItem(id: string, patch: { name: string; quantity: number; expiresAt: any }) {
+  async function saveItem(id: string, patch: { name: string; quantity: number; expiresAt: TSLike | null }) {
     const cleaned = capFirst(normalizeProductName(patch.name || ""));
-    const toWrite: any = {
+    const toWrite: {
+      name: string;
+      nameKey: string;
+      quantity: number;
+      expiresAt: Timestamp | null;
+    } = {
       name: cleaned,
       nameKey: cleaned.toLowerCase(),
       quantity: Number(patch.quantity) || 1,
-      expiresAt: null,
+      expiresAt: toTimestamp(patch.expiresAt ?? null),
     };
-    if (patch.expiresAt) {
-      const p: any = patch.expiresAt;
-      if (typeof p?.toDate === "function") toWrite.expiresAt = p;
-      else if (p instanceof Date) toWrite.expiresAt = Timestamp.fromDate(p);
-      else if (typeof p?.seconds === "number") toWrite.expiresAt = Timestamp.fromDate(new Date(p.seconds * 1000));
-      else if (typeof patch.expiresAt === "string" && !Number.isNaN(Date.parse(patch.expiresAt)))
-        toWrite.expiresAt = Timestamp.fromDate(new Date(`${patch.expiresAt}T00:00:00`));
-    }
     await updateDoc(doc(db, "pantryItems", id), toWrite);
   }
 
   async function removeItem(id: string) {
-    try { await deleteDoc(doc(db, "pantryItems", id)); }
-    catch (e) {
-      const code = (e as FirebaseError).code || "";
-      throw new Error(code === "permission-denied" ? "You can only delete items you own." : (e as any)?.message ?? "Failed to delete.");
+    try {
+      await deleteDoc(doc(db, "pantryItems", id));
+    } catch (error) {
+      if (error instanceof FirebaseError && error.code === "permission-denied") {
+        throw new Error("You can only delete items you own.");
+      }
+      const message = error instanceof Error ? error.message : "Failed to delete.";
+      throw new Error(message);
     }
   }
 
@@ -275,8 +344,9 @@ export default function PantryPage() {
     expiresAt: it.expiresAt ?? null, barcode: it.barcode ?? null, nutrition: it.nutrition ?? null,
   }));
   const trashItems = expired.map((it) => ({
-    id: it.id, uid: it.uid, name: it.name, quantity: it.quantity,
-    expiresAt: it.expiresAt ?? null, barcode: it.barcode ?? null, nutrition: it.nutrition ?? null,
+    id: it.id,
+    name: it.name,
+    quantity: it.quantity,
   }));
 
   async function logConsumptionForItem(it: PantryItemPage, payload: { grams: number; nutrients: { sugars_g: number; satFat_g: number; sodium_g: number; kcal: number }}) {
@@ -294,8 +364,8 @@ export default function PantryPage() {
         kcal: payload.nutrients.kcal,
         createdAt: serverTimestamp(),
       });
-    } catch (e: any) {
-      console.error("Failed to log consumption", e);
+    } catch (error) {
+      console.error("Failed to log consumption", error);
     }
   }
 
@@ -382,7 +452,7 @@ export default function PantryPage() {
             <label className="label">Scan with camera</label>
             <div className="scanner"><BarcodeScanner key={scannerKey} autoStart={scannerAutoStart} onDetected={handleDetected} /></div>
             <div className="rowHint">
-              {nutriBusy ? <span className="muted small">Looking up nutrition's</span> : <span className="muted small">Tip: hold steady 20-30cm away</span>}
+              {nutriBusy ? <span className="muted small">Looking up nutrition data</span> : <span className="muted small">Tip: hold steady 20-30cm away</span>}
               {nutriErr ? <span className="error small">{nutriErr}</span> : null}
             </div>
           </div>
@@ -449,11 +519,7 @@ export default function PantryPage() {
       <section className="list" style={{ marginTop: 20 }}>
         <div className="twoCol">
           <aside className="leftCol">
-            <TrashCan
-              items={trashItems as any}
-              isOpen={trashOpen}
-              onToggleOpen={(v) => setTrashOpen(v)}
-            />
+            <TrashCan items={trashItems} isOpen={trashOpen} onToggleOpen={(v) => setTrashOpen(v)} />
           </aside>
           <div className={`rightCol ${trashOpen ? "" : "isClosed"}`}>
             <div className="sectionHead"><h2 className="secTitle">Expired</h2></div>
