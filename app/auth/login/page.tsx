@@ -221,7 +221,7 @@ export default function LoginPage() {
           disabled={!canSubmit}
           className="w-full rounded-lg bg-red-600 text-white hover:bg-red-700 focus-visible:ring-2 focus-visible:ring-red-500"
         >
-          {busy ? "Signing inâ€¦" : "Sign in"}
+          {busy ? "Signing in..." : "Sign in"}
         </Button>
       </form>
 
