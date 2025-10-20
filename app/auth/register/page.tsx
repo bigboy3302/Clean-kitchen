@@ -392,7 +392,7 @@ export default function RegisterPage() {
   ) : (
     <AuthShell
       title="Verify your email"
-      subtitle="We've sent a verification email so you can activate your Clean Kitchen profile."
+      subtitle="We&apos;ve sent a verification email so you can activate your Clean Kitchen profile."
       footer={
         <span>
           Need to change your email?{" "}
@@ -406,7 +406,7 @@ export default function RegisterPage() {
       <div className="verify">
         {info ? <div className="verify__info">{info}</div> : null}
         <p className="verify__copy">
-          Click the link in the email we just sent. Once you're verified, we'll take you straight to your onboarding.
+          Click the link in the email we just sent. Once you&apos;re verified, we&apos;ll take you straight to your onboarding.
         </p>
         <div className="verify__actions">
           <Button onClick={resendEmail} disabled={busy || cooldown > 0} variant="secondary">
