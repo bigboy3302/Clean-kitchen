@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { format, parseISO } from "date-fns";
 import Container from "@/components/Container";
 import PageHeader from "@/components/PageHeader";
@@ -364,7 +365,14 @@ export default function DayPlannerPage() {
 
                   {resolved ? (
                     <div className="workBody">
-                      <img src={mediaSrc(resolved)} alt={resolved.name} className="workImg" loading="lazy" />
+                      <Image
+                        src={mediaSrc(resolved)}
+                        alt={resolved.name}
+                        className="workImg"
+                        width={260}
+                        height={160}
+                        sizes="(max-width: 768px) 60vw, 260px"
+                      />
                       <div className="workMeta">
                         <div className="workName">{cap(resolved.name)}</div>
                         <p className="workDesc">
@@ -404,7 +412,14 @@ export default function DayPlannerPage() {
               className="mealCard"
               onClick={() => openMeal(meal)}
             >
-              <img src={meal.image || "/placeholder.png"} alt={meal.title} loading="lazy" />
+              <Image
+                src={meal.image || "/placeholder.png"}
+                alt={meal.title}
+                width={72}
+                height={72}
+                className="mealImg"
+                sizes="72px"
+              />
               <div className="mealInfo">
                 <div className="mealTitle">{meal.title}</div>
                 <span className="mealLink">Open &gt;</span>
@@ -719,7 +734,7 @@ export default function DayPlannerPage() {
           border-color: var(--primary);
           box-shadow: 0 14px 32px color-mix(in oklab, var(--primary) 18%, transparent);
         }
-        .mealCard img {
+        .mealImg {
           width: 72px;
           height: 72px;
           border-radius: 14px;

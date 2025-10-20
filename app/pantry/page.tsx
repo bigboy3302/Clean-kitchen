@@ -86,7 +86,8 @@ function toTimestamp(value: TSLike | null): Timestamp | null {
 
 function normalizeProductName(raw: string): string {
   const original = raw || "";
-  let s = original.toLowerCase()
+  const s = original
+    .toLowerCase()
     .replace(/[_\-]+/g, " ")
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .replace(/\s+/g, " ")

@@ -235,10 +235,10 @@ export default function FitnessPage() {
             </div>
 
             <div className="sectionCard plannerCard">
-              <h3 className="sectionTitle">Today's planner</h3>
+              <h3 className="sectionTitle">Today&apos;s planner</h3>
               <p className="muted">Review your checklist, mark workouts complete, and see recipe ideas.</p>
               <Link className="cta" href="/fitness/day">
-                Open today's planner
+                Open today&apos;s planner
               </Link>
             </div>
           </section>

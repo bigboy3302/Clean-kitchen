@@ -1,27 +1,27 @@
-﻿"use client";
+"use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { auth, db } from "@/lib/firebas1e";
-import { doc, getDoc, runTransaction, serverTimestamp } from "firebase/firestore";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { updateProfile } from "firebase/auth";
+import { doc, getDoc, runTransaction, serverTimestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import AuthShell from "@/components/auth/AuthShell";
-import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
+import Input from "@/components/ui/Input";
+import { auth, db } from "@/lib/firebas1e";
 
+const USERNAME_PATTERN = /^[a-z0-9_.]{3,20}$/;
 
-function slugifyName(s: string) {
-  return s
+function slugifyName(value: string): string {
+  return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/[^a-z0-9\._]+/g, " ")
+    .replace(/[^a-z0-9._]+/g, " ")
     .trim()
     .replace(/\s+/g, "_");
 }
 
-
-function makeUsernameCandidates(first: string, last: string, max = 12) {
+function makeUsernameCandidates(first: string, last: string, max = 12): string[] {
   const f = slugifyName(first);
   const l = slugifyName(last);
 
@@ -36,30 +36,33 @@ function makeUsernameCandidates(first: string, last: string, max = 12) {
 
   const extras = new Set<string>();
   while (extras.size < max) {
-    const n = Math.floor(Math.random() * 9999).toString().padStart(2, "0");
+    const n = Math.floor(Math.random() * 9999)
+      .toString()
+      .padStart(2, "0");
     const pick = f || l || "user";
     extras.add(`${pick}${n}`);
   }
 
   const all = [...base, ...extras];
-  return all.filter((x) => x.length >= 3 && x.length <= 20).slice(0, max);
+  return all.filter((candidate) => candidate.length >= 3 && candidate.length <= 20).slice(0, max);
 }
 
-/** Vai username brīvs? (usernames/{uname} neeksistē) */
-async function isUsernameFree(uname: string) {
+const getErrorMessage = (error: unknown, fallback: string): string =>
+  error instanceof Error && error.message ? error.message : fallback;
+
+async function isUsernameFree(uname: string): Promise<boolean> {
   const snap = await getDoc(doc(db, "usernames", uname));
   return !snap.exists();
 }
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const u = auth.currentUser;
+  const user = auth.currentUser;
 
   const [first, setFirst] = useState("");
   const [last, setLast] = useState("");
   const [username, setUsername] = useState("");
 
-  
   const [weightKg, setWeightKg] = useState<number | "">("");
   const [heightCm, setHeightCm] = useState<number | "">("");
   const [age, setAge] = useState<number | "">("");
@@ -67,14 +70,13 @@ export default function OnboardingPage() {
 
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [checking, setChecking] = useState(false);
 
   const initialisedRef = useRef(false);
 
   useEffect(() => {
-    if (!u) {
+    if (!user) {
       router.replace("/auth/login");
       return;
     }
@@ -84,91 +86,92 @@ export default function OnboardingPage() {
     try {
       const raw = localStorage.getItem("ck_pending_profile");
       if (raw) {
-        const data = JSON.parse(raw);
-        if (data?.firstName) setFirst(data.firstName);
-        if (data?.lastName) setLast(data.lastName);
+        const data = JSON.parse(raw) as { firstName?: string; lastName?: string } | null;
+        if (data?.firstName) {
+          setFirst((prev) => prev || data.firstName!);
+        }
+        if (data?.lastName) {
+          setLast((prev) => prev || data.lastName!);
+        }
       }
-    } catch {}
+    } catch {
+      // ignore storage parsing issues
+    }
 
-    if ((!first || !last) && u.displayName) {
-      const parts = u.displayName.split(" ").filter(Boolean);
+    if (user.displayName) {
+      const parts = user.displayName.split(" ").filter(Boolean);
       if (parts.length >= 2) {
-        if (!first) setFirst(parts[0]);
-        if (!last) setLast(parts.slice(1).join(" "));
-      } else if (parts.length === 1 && !first) {
-        setFirst(parts[0]);
+        const [firstName, ...rest] = parts;
+        setFirst((prev) => prev || firstName);
+        setLast((prev) => prev || rest.join(" "));
+      } else if (parts.length === 1) {
+        setFirst((prev) => prev || parts[0]);
       }
     }
-    
-  }, [u, router]);
-
+  }, [router, user]);
 
   useEffect(() => {
     const list = makeUsernameCandidates(first, last, 12);
     setSuggestions(list);
 
+    if (!list.length) {
+      setChecking(false);
+      return;
+    }
+
     let cancelled = false;
-    async function pickFirstFree() {
+    const pickFirstFree = async () => {
       setChecking(true);
-      for (const cand of list) {
-        const free = await isUsernameFree(cand);
+      for (const candidate of list) {
+        const free = await isUsernameFree(candidate);
         if (cancelled) return;
         if (free) {
-          setUsername(cand);
+          setUsername(candidate);
           break;
         }
       }
-      setChecking(false);
-    }
-    if (first || last) pickFirstFree();
+      if (!cancelled) setChecking(false);
+    };
+
+    pickFirstFree();
+
     return () => {
       cancelled = true;
     };
   }, [first, last]);
 
-  async function shuffle() {
-    const list = makeUsernameCandidates(first, last, 12);
-    setSuggestions(list);
+  async function adoptSuggestion(value: string) {
     setChecking(true);
-    for (const cand of list) {
-      const free = await isUsernameFree(cand);
-      if (free) {
-        setUsername(cand);
-        break;
-      }
-    }
-    setChecking(false);
-  }
-
-  async function adoptSuggestion(s: string) {
-    setChecking(true);
-    const free = await isUsernameFree(s);
+    const free = await isUsernameFree(value);
     if (free) {
-      setUsername(s);
+      setUsername(value);
       setErr(null);
     } else {
-      setErr("Šis username tikko tika aizņemts. Pamēģini citu.");
+      setErr("That username was just claimed. Please try another option.");
     }
     setChecking(false);
   }
 
-  async function save(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!u) return;
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
     setErr(null);
     setBusy(true);
+
     try {
       const uname = slugifyName(username);
-      if (!/^[a-z0-9_\.]{3,20}$/.test(uname)) {
-        throw new Error("Username must be 3–20 chars, a-z, 0-9, _ or .");
+      if (!USERNAME_PATTERN.test(uname)) {
+        throw new Error("Username must be 3-20 characters using a-z, 0-9, _ or .");
       }
 
-      const w = typeof weightKg === "number" ? weightKg : NaN;
-      const h = typeof heightCm === "number" ? heightCm : NaN;
-      const a = typeof age === "number" ? age : NaN;
+      const weight = typeof weightKg === "number" ? weightKg : NaN;
+      const height = typeof heightCm === "number" ? heightCm : NaN;
+      const years = typeof age === "number" ? age : NaN;
 
-      if (!Number.isFinite(w) || !Number.isFinite(h) || !Number.isFinite(a) || !sex) {
-        throw new Error("Lūdzu aizpildi svaru, augumu, vecumu un dzimumu.");
+      if (!Number.isFinite(weight) || !Number.isFinite(height) || !Number.isFinite(years) || !sex) {
+        throw new Error("Please provide weight, height, age, and gender.");
       }
 
       await runTransaction(db, async (tx) => {
@@ -176,20 +179,20 @@ export default function OnboardingPage() {
         const taken = await tx.get(unameRef);
         if (taken.exists()) throw new Error("Username already taken.");
 
-        tx.set(unameRef, { uid: u.uid, reservedAt: serverTimestamp() });
+        tx.set(unameRef, { uid: currentUser.uid, reservedAt: serverTimestamp() });
 
-        const userRef = doc(db, "users", u.uid);
+        const userRef = doc(db, "users", currentUser.uid);
         tx.set(
           userRef,
           {
-            uid: u.uid,
-            email: u.email ?? null,
+            uid: currentUser.uid,
+            email: currentUser.email ?? null,
             firstName: first.trim(),
             lastName: last.trim(),
             username: uname,
-            weightKg: w,
-            heightCm: h,
-            age: a,
+            weightKg: weight,
+            heightCm: height,
+            age: years,
             sex,
             createdAt: serverTimestamp(),
           },
@@ -197,16 +200,20 @@ export default function OnboardingPage() {
         );
       });
 
-      const displayName = uname || [first.trim(), last.trim()].filter(Boolean).join(" ");
-      if (displayName) await updateProfile(u, { displayName });
+      const displayName = [first.trim(), last.trim()].filter(Boolean).join(" ") || uname;
+      if (displayName) {
+        await updateProfile(currentUser, { displayName });
+      }
 
       try {
         localStorage.removeItem("ck_pending_profile");
-      } catch {}
+      } catch {
+        // ignore storage issues
+      }
 
       router.replace("/dashboard");
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to save profile.");
+    } catch (error) {
+      setErr(getErrorMessage(error, "Failed to save profile."));
     } finally {
       setBusy(false);
     }
@@ -214,17 +221,15 @@ export default function OnboardingPage() {
 
   const canSubmit = useMemo(() => {
     return (
-      first.trim() &&
-      last.trim() &&
-      username.trim() &&
+      Boolean(first.trim()) &&
+      Boolean(last.trim()) &&
+      Boolean(username.trim()) &&
       weightKg !== "" &&
       heightCm !== "" &&
       age !== "" &&
-      !!sex &&
-      !checking &&
-      !busy
+      Boolean(sex)
     );
-  }, [first, last, username, weightKg, heightCm, age, sex, checking, busy]);
+  }, [age, first, heightCm, last, sex, username, weightKg]);
 
   return (
     <AuthShell
@@ -234,15 +239,15 @@ export default function OnboardingPage() {
       <form onSubmit={save} className="space-y-5 lg:space-y-6">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Input
-            label="Vārds"
+            label="First name"
             value={first}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFirst(e.target.value)}
+            onChange={(event: ChangeEvent<HTMLInputElement>) => setFirst(event.target.value)}
             required
           />
           <Input
-            label="Uzvārds"
+            label="Last name"
             value={last}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLast(e.target.value)}
+            onChange={(event: ChangeEvent<HTMLInputElement>) => setLast(event.target.value)}
             required
           />
         </div>
@@ -251,35 +256,33 @@ export default function OnboardingPage() {
           <Input
             label="Username (public view)"
             value={username}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setUsername(slugifyName(e.target.value))
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              setUsername(slugifyName(event.target.value))
             }
-            placeholder="piem., janis_k"
+            placeholder="e.g., janis_k"
             required
           />
           <p className="mt-1 text-xs text-gray-500">
-            Allowed: a–z, 0–9, “_” un “.” (3–20 simboli). “Name Surname” →{" "}
-            <code>name.surname</code>
+            Allowed: a-z, 0-9, "_" and "." (3-20 symbols). Example: <code>name.surname</code>
           </p>
 
-          {!!suggestions.length && (
+          {suggestions.length > 0 ? (
             <div className="mt-3 flex flex-wrap gap-2">
-              {suggestions.map((s) => (
+              {suggestions.map((suggestion) => (
                 <button
-                  key={s}
+                  key={suggestion}
                   type="button"
-                  onClick={() => adoptSuggestion(s)}
+                  onClick={() => adoptSuggestion(suggestion)}
                   disabled={checking || busy}
                   className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50"
                 >
-                  {s}
+                  {suggestion}
                 </button>
               ))}
             </div>
-          )}
+          ) : null}
         </div>
 
-        {/* JAUNIE LAUKI: svars/augums/vecums/dzimums */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Input
             label="Weight (kg)"
@@ -287,8 +290,8 @@ export default function OnboardingPage() {
             min={30}
             max={400}
             value={weightKg}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setWeightKg(e.target.value === "" ? "" : Number(e.target.value))
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              setWeightKg(event.target.value === "" ? "" : Number(event.target.value))
             }
             required
           />
@@ -298,8 +301,8 @@ export default function OnboardingPage() {
             min={120}
             max={250}
             value={heightCm}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setHeightCm(e.target.value === "" ? "" : Number(e.target.value))
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              setHeightCm(event.target.value === "" ? "" : Number(event.target.value))
             }
             required
           />
@@ -309,8 +312,8 @@ export default function OnboardingPage() {
             min={10}
             max={100}
             value={age}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setAge(e.target.value === "" ? "" : Number(e.target.value))
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              setAge(event.target.value === "" ? "" : Number(event.target.value))
             }
             required
           />
@@ -345,10 +348,10 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        {err && <p className="rounded-md bg-red-50 p-2 text-sm text-red-700">{err}</p>}
+        {err ? <p className="rounded-md bg-red-50 p-2 text-sm text-red-700">{err}</p> : null}
 
-        <Button type="submit" disabled={!canSubmit}>
-          {busy ? "Saving…" : "Save & continue"}
+        <Button type="submit" disabled={!canSubmit || busy}>
+          {busy ? "Saving..." : "Save & continue"}
         </Button>
       </form>
     </AuthShell>

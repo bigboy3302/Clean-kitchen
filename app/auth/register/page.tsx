@@ -212,7 +212,7 @@ export default function RegisterPage() {
     <AuthShell
       title="Create account"
       subtitle="Get started with Clean-Kitchen"
-      footer={<span>Jau ir konts? <Link className="underline" href="/auth/login">Sign in</Link></span>}
+      footer={<span>Allready have an account? <Link className="underline" href="/auth/login">Sign in</Link></span>}
       errorBanner={err ? <span>{err}</span> : null}
     >
       <form onSubmit={onSubmit} className="space-y-4">
