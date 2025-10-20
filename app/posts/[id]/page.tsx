@@ -168,7 +168,12 @@ export default function PostThreadPage() {
           return;
         }
         const data = (snap.data() as PostRecord | undefined) ?? {};
-        setPost({ id: snap.id, ...data });
+        const record = snap.data() as PostRecord | undefined;
+        if (!record) {
+          setPost(null);
+        } else {
+          setPost({ id: snap.id, ...record });
+        }
         setErr(null);
       },
       (error) => {
