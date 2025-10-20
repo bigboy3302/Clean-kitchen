@@ -167,7 +167,6 @@ export default function PostThreadPage() {
           router.replace("/dashboard");
           return;
         }
-        const data = (snap.data() as PostRecord | undefined) ?? {};
         const record = snap.data() as PostRecord | undefined;
         if (!record) {
           setPost(null);
@@ -195,12 +194,12 @@ export default function PostThreadPage() {
       ref,
       (snap) => {
         const nextComments = snap.docs.map((docSnap) => {
-          const data = (docSnap.data() as CommentRecord | undefined) ?? {};
+          const data = docSnap.data() as CommentRecord | undefined;
           return {
             id: docSnap.id,
-            ...data,
-            replyCount: data.replyCount ?? 0,
-            repostCount: data.repostCount ?? 0,
+            ...(data ?? {}),
+            replyCount: data?.replyCount ?? 0,
+            repostCount: data?.repostCount ?? 0,
           };
         });
         setComments(nextComments);
