@@ -244,7 +244,7 @@ export default function RegisterPage() {
           </Button>
 
           <Button onClick={iVerified} disabled={busy}>
-            I&apos;ve verified
+            I&apos;verified
           </Button>
 
           <Button onClick={cancelRegistration} disabled={busy} variant="ghost">

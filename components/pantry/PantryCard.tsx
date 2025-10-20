@@ -155,6 +155,17 @@ export default function PantryCard({ item, onSave, onDelete, onConsume }: Props)
     setConsumeGrams(item.lastConsumedGrams ?? 100);
   }, [item.id, item.name, item.quantity, expiresStr, item.lastConsumedGrams]);
 
+  const handleSave = useCallback(async () => {
+    if (onSave) {
+      await onSave({
+        name: name.trim() || item.name,
+        quantity: Number(qty) || 1,
+        expiresAt: exp ? exp : null,
+      });
+    }
+    setEditOpen(false);
+  }, [onSave, name, item.name, qty, exp]);
+
   useEffect(() => {
     const anyModal = editOpen || nutriOpen || consumeOpen;
     if (!anyModal) return;
@@ -176,17 +187,6 @@ export default function PantryCard({ item, onSave, onDelete, onConsume }: Props)
       document.body.style.overflow = orig;
     };
   }, [editOpen, nutriOpen, consumeOpen, handleSave]);
-
-  const handleSave = useCallback(async () => {
-    if (onSave) {
-      await onSave({
-        name: name.trim() || item.name,
-        quantity: Number(qty) || 1,
-        expiresAt: exp ? exp : null,
-      });
-    }
-    setEditOpen(false);
-  }, [onSave, name, item.name, qty, exp]);
 
   async function handleConsume() {
     if (!onConsume) {

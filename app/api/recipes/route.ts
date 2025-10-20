@@ -369,7 +369,7 @@ async function mealDbByIngredients(ings: string[], limit = 24): Promise<CommonRe
       })()
     )
   );
-  return full.filter(Boolean).map(mealDbToCommon);
+  return (full.filter(Boolean) as MealDbRecipe[]).map(mealDbToCommon);
 }
 
 // ---------- route ----------
