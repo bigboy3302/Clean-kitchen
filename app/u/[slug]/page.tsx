@@ -352,7 +352,7 @@ export default function PublicProfilePage() {
             {secondaryName ? <p className="muted">{secondaryName}</p> : null}
           </div>
         </div>
-        <Link href="/" className="btn">
+        <Link href="/auth/login" className="btn">
           Explore
         </Link>
       </header>

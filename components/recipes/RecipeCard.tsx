@@ -3,12 +3,29 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
+export const RECIPE_PLACEHOLDERS = [
+  "/placeholders/food-1.jpg",
+  "/placeholders/food-2.jpg",
+  "/placeholders/food-3.jpg",
+] as const;
+
+export function getRecipePlaceholder(seed?: string | null) {
+  if (!seed) return RECIPE_PLACEHOLDERS[0];
+  const base = seed.trim();
+  if (!base) return RECIPE_PLACEHOLDERS[0];
+  let hash = 0;
+  for (let i = 0; i < base.length; i += 1) {
+    hash = (hash * 31 + base.charCodeAt(i)) % 997;
+  }
+  return RECIPE_PLACEHOLDERS[hash % RECIPE_PLACEHOLDERS.length];
+}
+
 export type IngredientObj = { name: string; measure?: string | null };
 type PanelPlacement = "push" | "overlay-left" | "overlay-right";
 
 export type RecipeCardProps = {
   title: string;
-  imageUrl: string;
+  imageUrl?: string | null;
   description?: string;
   ingredients?: IngredientObj[];
   steps?: string[];
@@ -54,7 +71,7 @@ function fmt(n: number): string {
 
 export default function RecipeCard({
   title,
-  imageUrl,
+  imageUrl = null,
   description,
   ingredients = [],
   steps = [],
@@ -91,6 +108,10 @@ export default function RecipeCard({
     event.stopPropagation();
     onToggleFavorite?.();
   };
+  const displayImage =
+    typeof imageUrl === "string" && imageUrl.trim().length > 0
+      ? imageUrl
+      : getRecipePlaceholder(title);
 
   useEffect(() => {
     if (!open) return;
@@ -142,7 +163,7 @@ export default function RecipeCard({
         aria-label={open ? "Close details" : "Open details"}
       >
         <Image
-          src={imageUrl}
+          src={displayImage}
           alt={title}
           fill
           sizes="(max-width: 768px) 90vw, 300px"

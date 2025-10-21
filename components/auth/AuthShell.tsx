@@ -62,9 +62,9 @@ export default function AuthShell({ title, subtitle, footer, children, errorBann
           justify-content: center;
           padding: clamp(28px, 6vw, 80px) clamp(18px, 5vw, 64px);
           background:
-            radial-gradient(1100px 620px at 18% -5%, rgba(37, 99, 235, 0.25), transparent 65%),
-            radial-gradient(900px 560px at 82% 110%, rgba(14, 165, 233, 0.18), transparent 70%),
-            linear-gradient(180deg, #020617 0%, #0a1020 55%, #0f172a 100%);
+            radial-gradient(1100px 620px at 18% -5%, color-mix(in oklab, var(--primary) 22%, transparent), transparent 65%),
+            radial-gradient(900px 560px at 82% 110%, color-mix(in oklab, var(--ring) 36%, transparent), transparent 70%),
+            linear-gradient(180deg, color-mix(in oklab, var(--bg) 92%, var(--primary) 8%), var(--bg));
           overflow: hidden;
         }
 
@@ -72,9 +72,9 @@ export default function AuthShell({ title, subtitle, footer, children, errorBann
           position: absolute;
           inset: -40%;
           background:
-            conic-gradient(from 180deg at 50% 50%, rgba(59, 130, 246, 0.25), rgba(59, 130, 246, 0) 60%),
-            radial-gradient(60% 60% at 75% 20%, rgba(14, 165, 233, 0.25), transparent),
-            radial-gradient(55% 55% at 20% 80%, rgba(52, 211, 153, 0.18), transparent);
+            conic-gradient(from 180deg at 50% 50%, color-mix(in oklab, var(--primary) 28%, transparent), transparent 60%),
+            radial-gradient(60% 60% at 75% 20%, color-mix(in oklab, var(--ring) 32%, transparent), transparent),
+            radial-gradient(55% 55% at 20% 80%, color-mix(in oklab, var(--primary) 18%, transparent), transparent);
           filter: blur(120px);
           opacity: 0.75;
           pointer-events: none;
@@ -86,16 +86,17 @@ export default function AuthShell({ title, subtitle, footer, children, errorBann
           grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
           width: min(980px, 100%);
           border-radius: 32px;
-          border: 1px solid rgba(148, 163, 184, 0.18);
+          border: 1px solid color-mix(in oklab, var(--border) 75%, transparent);
           background:
-            radial-gradient(140% 140% at 15% 10%, rgba(37, 99, 235, 0.28), transparent 55%),
-            linear-gradient(135deg, rgba(10, 16, 32, 0.95) 0%, rgba(8, 13, 28, 0.92) 48%, rgba(8, 11, 23, 0.9) 100%);
+            radial-gradient(140% 140% at 15% 10%, color-mix(in oklab, var(--primary) 18%, transparent), transparent 55%),
+            linear-gradient(135deg, color-mix(in oklab, var(--bg2) 96%, var(--bg) 4%), color-mix(in oklab, var(--bg2) 88%, var(--primary) 12%));
           box-shadow:
-            0 48px 140px rgba(15, 23, 42, 0.55),
-            0 12px 40px rgba(59, 130, 246, 0.25);
+            0 48px 140px color-mix(in oklab, rgba(0, 0, 0, 0.7) 35%, transparent),
+            0 12px 40px color-mix(in oklab, var(--primary) 18%, transparent);
           overflow: hidden;
           backdrop-filter: blur(16px);
           isolation: isolate;
+          color: var(--text);
         }
 
         .authShell__brand {
@@ -104,9 +105,9 @@ export default function AuthShell({ title, subtitle, footer, children, errorBann
           flex-direction: column;
           gap: 32px;
           background:
-            radial-gradient(90% 110% at 20% 10%, rgba(59, 130, 246, 0.38), transparent 60%),
-            linear-gradient(140deg, rgba(11, 25, 54, 0.95) 0%, rgba(23, 63, 133, 0.9) 45%, rgba(40, 96, 178, 0.88) 100%);
-          color: #f8fafc;
+            radial-gradient(90% 110% at 20% 10%, color-mix(in oklab, var(--primary) 38%, transparent), transparent 60%),
+            linear-gradient(140deg, color-mix(in oklab, var(--primary) 28%, var(--bg2) 72%), color-mix(in oklab, var(--primary) 46%, var(--bg2) 54%));
+          color: var(--primary-contrast);
           padding: clamp(32px, 6vw, 68px);
         }
 
@@ -114,9 +115,9 @@ export default function AuthShell({ title, subtitle, footer, children, errorBann
           content: "";
           position: absolute;
           inset: 12%;
-          background: radial-gradient(circle at 22% 22%, rgba(255, 255, 255, 0.28), transparent 65%);
+          background: radial-gradient(circle at 22% 22%, color-mix(in oklab, var(--primary-contrast) 32%, transparent), transparent 65%);
           filter: blur(30px);
-          opacity: 0.7;
+          opacity: 0.55;
           pointer-events: none;
         }
 
@@ -132,8 +133,8 @@ export default function AuthShell({ title, subtitle, footer, children, errorBann
           gap: 8px;
           padding: 6px 12px;
           border-radius: 999px;
-          background: rgba(255, 255, 255, 0.22);
-          border: 1px solid rgba(255, 255, 255, 0.35);
+          background: color-mix(in oklab, var(--primary-contrast) 20%, transparent);
+          border: 1px solid color-mix(in oklab, var(--primary-contrast) 35%, transparent);
           font-weight: 600;
           font-size: 0.75rem;
           letter-spacing: 0.16em;
@@ -154,7 +155,7 @@ export default function AuthShell({ title, subtitle, footer, children, errorBann
           font-size: clamp(15px, 2vw, 18px);
           line-height: 1.6;
           max-width: 36ch;
-          color: rgba(248, 250, 252, 0.9);
+          color: color-mix(in oklab, var(--primary-contrast) 88%, transparent);
         }
 
         .authShell__brandList {
@@ -164,7 +165,7 @@ export default function AuthShell({ title, subtitle, footer, children, errorBann
           margin: 0;
           padding: 0;
           list-style: none;
-          color: rgba(248, 250, 252, 0.92);
+          color: color-mix(in oklab, var(--primary-contrast) 92%, transparent);
         }
 
         .authShell__brandList li {
@@ -182,13 +183,11 @@ export default function AuthShell({ title, subtitle, footer, children, errorBann
           top: 0.45em;
           width: 14px;
           height: 14px;
-          border-radius: 50%;
-          background:
-            radial-gradient(circle at 30% 30%, rgba(191, 219, 254, 0.95), rgba(59, 130, 246, 0.35) 70%, transparent),
-            rgba(255, 255, 255, 0.18);
+          border-radius: 999px;
+          background: color-mix(in oklab, var(--primary-contrast) 38%, transparent);
           box-shadow:
-            0 0 12px rgba(191, 219, 254, 0.7),
-            0 0 0 3px rgba(255, 255, 255, 0.15);
+            0 0 0 3px color-mix(in oklab, var(--primary-contrast) 16%, transparent),
+            0 0 12px color-mix(in oklab, var(--primary-contrast) 24%, transparent);
         }
 
         .authShell__brandFoot {
@@ -198,7 +197,7 @@ export default function AuthShell({ title, subtitle, footer, children, errorBann
           font-weight: 600;
           letter-spacing: 0.08em;
           text-transform: uppercase;
-          color: rgba(248, 250, 252, 0.7);
+          color: color-mix(in oklab, var(--primary-contrast) 72%, transparent);
         }
 
         .authShell__form {
@@ -207,19 +206,16 @@ export default function AuthShell({ title, subtitle, footer, children, errorBann
           flex-direction: column;
           gap: 18px;
           padding: clamp(28px, 5vw, 52px);
-          background: linear-gradient(150deg, rgba(6, 12, 24, 0.88), rgba(10, 16, 30, 0.85));
-          color: #e2e8f0;
-        }
-
-        .authShell__form {
-          --text: #e2e8f0;
-          --muted: rgba(148, 163, 184, 0.85);
-          --bg2: rgba(15, 23, 42, 0.65);
-          --border: rgba(148, 163, 184, 0.28);
-          --ring: rgba(96, 165, 250, 0.36);
-          --btn-bg: linear-gradient(135deg, #60a5fa, #3b82f6);
-          --btn-fg: #0b1736;
-          --btn-border: rgba(59, 130, 246, 0.55);
+          background: linear-gradient(150deg, color-mix(in oklab, var(--bg2) 92%, transparent), color-mix(in oklab, var(--bg2) 80%, var(--primary) 20%));
+          color: var(--text);
+          --text: var(--text);
+          --muted: color-mix(in oklab, var(--muted) 86%, transparent);
+          --bg2: color-mix(in oklab, var(--bg2) 96%, transparent);
+          --border: color-mix(in oklab, var(--border) 82%, transparent);
+          --ring: color-mix(in oklab, var(--ring) 92%, transparent);
+          --btn-bg: color-mix(in oklab, var(--primary) 92%, transparent);
+          --btn-fg: var(--primary-contrast);
+          --btn-border: transparent;
         }
 
         .authShell__card {
@@ -238,13 +234,13 @@ export default function AuthShell({ title, subtitle, footer, children, errorBann
           margin: 0;
           font-size: clamp(26px, 3vw, 34px);
           font-weight: 800;
-          color: #f8fafc;
+          color: var(--text);
         }
 
         .authShell__subtitle {
           margin: 0;
           font-size: 0.95rem;
-          color: rgba(203, 213, 225, 0.88);
+          color: var(--muted);
           line-height: 1.55;
         }
 
@@ -257,8 +253,8 @@ export default function AuthShell({ title, subtitle, footer, children, errorBann
         .authShell__footer {
           margin-top: 6px;
           padding-top: 16px;
-          border-top: 1px solid rgba(148, 163, 184, 0.22);
-          color: rgba(203, 213, 225, 0.8);
+          border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+          color: var(--muted);
           font-size: 0.9rem;
           text-align: center;
         }
@@ -266,14 +262,14 @@ export default function AuthShell({ title, subtitle, footer, children, errorBann
         .authShell__banner {
           padding: 12px 18px;
           border-radius: 14px;
-          background: linear-gradient(140deg, rgba(248, 113, 113, 0.22), rgba(249, 115, 22, 0.1));
-          border: 1px solid rgba(248, 113, 113, 0.45);
-          color: #fee2e2;
+          background: linear-gradient(140deg, color-mix(in oklab, var(--primary) 18%, transparent), color-mix(in oklab, var(--ring) 22%, transparent));
+          border: 1px solid color-mix(in oklab, var(--primary) 38%, transparent);
+          color: color-mix(in oklab, var(--primary-contrast) 90%, transparent);
           font-size: 0.9rem;
           text-align: center;
           box-shadow:
-            0 20px 60px rgba(248, 113, 113, 0.28),
-            0 0 0 1px rgba(248, 113, 113, 0.25) inset;
+            0 20px 60px color-mix(in oklab, var(--primary) 28%, transparent),
+            0 0 0 1px color-mix(in oklab, var(--primary) 24%, transparent) inset;
         }
 
         @media (max-width: 960px) {
@@ -297,7 +293,7 @@ export default function AuthShell({ title, subtitle, footer, children, errorBann
           }
 
           .authShell__panel {
-            box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+            box-shadow: 0 24px 60px color-mix(in oklab, rgba(0, 0, 0, 0.7) 22%, transparent);
           }
 
           .authShell__brand {

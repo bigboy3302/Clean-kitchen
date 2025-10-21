@@ -8,6 +8,7 @@ import AuthShell from "@/components/auth/AuthShell";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { auth, db } from "@/lib/firebas1e";
+import ThemePicker from "@/components/theme/ThemePicker";
 
 const USERNAME_PATTERN = /^[a-z0-9_.]{3,20}$/;
 
@@ -236,7 +237,11 @@ export default function OnboardingPage() {
       title="Complete your profile"
       subtitle="Choose your public username and health basics"
     >
-      <form onSubmit={save} className="space-y-5 lg:space-y-6">
+      <div className="themeChooser">
+        <ThemePicker />
+      </div>
+
+      <form onSubmit={save} className="onboardingForm">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Input
             label="First name"
@@ -262,19 +267,19 @@ export default function OnboardingPage() {
             placeholder="e.g., janis_k"
             required
           />
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="helperText">
             Allowed: a-z, 0-9, &quot;_&quot; and &quot;.&quot; (3-20 symbols). Example: <code>name.surname</code>
           </p>
 
           {suggestions.length > 0 ? (
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="suggestionWrap">
               {suggestions.map((suggestion) => (
                 <button
                   key={suggestion}
                   type="button"
                   onClick={() => adoptSuggestion(suggestion)}
                   disabled={checking || busy}
-                  className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50"
+                  className="suggestionBtn"
                 >
                   {suggestion}
                 </button>
@@ -320,40 +325,128 @@ export default function OnboardingPage() {
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+          <label className="genderLabel">
             Gender
           </label>
-          <div className="flex flex-wrap gap-3 text-sm">
-            <label className="inline-flex items-center gap-2 rounded-full border border-gray-300/70 px-3 py-1.5 text-gray-700 transition hover:border-gray-400 dark:border-gray-600 dark:text-gray-200">
+          <div className="genderOptions">
+            <label className="genderOption">
               <input
                 type="radio"
                 name="sex"
                 checked={sex === "male"}
                 onChange={() => setSex("male")}
-                className="accent-gray-900"
+                className="genderInput"
                 required
               />
               <span>Male</span>
             </label>
-            <label className="inline-flex items-center gap-2 rounded-full border border-gray-300/70 px-3 py-1.5 text-gray-700 transition hover:border-gray-400 dark:border-gray-600 dark:text-gray-200">
+            <label className="genderOption">
               <input
                 type="radio"
                 name="sex"
                 checked={sex === "female"}
                 onChange={() => setSex("female")}
-                className="accent-gray-900"
+                className="genderInput"
               />
               <span>Female</span>
             </label>
           </div>
         </div>
 
-        {err ? <p className="rounded-md bg-red-50 p-2 text-sm text-red-700">{err}</p> : null}
+        {err ? <p className="formError">{err}</p> : null}
 
-        <Button type="submit" disabled={!canSubmit || busy}>
+        <Button type="submit" disabled={!canSubmit || busy} className="fullWidth">
           {busy ? "Saving..." : "Save & continue"}
         </Button>
       </form>
+
+      <style jsx>{`
+        .themeChooser {
+          margin-bottom: 24px;
+        }
+        .themeChooser :global(.panel) {
+          max-width: 560px;
+        }
+        .onboardingForm {
+          display: grid;
+          gap: 20px;
+        }
+        .helperText {
+          margin-top: 6px;
+          font-size: 0.78rem;
+          color: var(--muted);
+        }
+        .suggestionWrap {
+          margin-top: 12px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+        .suggestionBtn {
+          border-radius: 999px;
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          background: color-mix(in oklab, var(--bg2) 96%, transparent);
+          color: var(--text);
+          padding: 6px 14px;
+          font-size: 0.85rem;
+          transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+        }
+        .suggestionBtn:hover:not(:disabled) {
+          background: color-mix(in oklab, var(--bg2) 90%, var(--primary) 10%);
+          border-color: color-mix(in oklab, var(--primary) 35%, var(--border));
+        }
+        .suggestionBtn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .genderLabel {
+          display: block;
+          margin-bottom: 8px;
+          font-size: 0.9rem;
+          font-weight: 600;
+          color: var(--text);
+        }
+        .genderOptions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+        }
+        .genderOption {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          border-radius: 999px;
+          border: 1px solid color-mix(in oklab, var(--border) 82%, transparent);
+          padding: 8px 14px;
+          font-size: 0.85rem;
+          color: var(--text);
+          background: color-mix(in oklab, var(--bg2) 96%, transparent);
+          transition: border-color 0.15s ease, background 0.15s ease;
+        }
+        .genderOption:hover {
+          border-color: color-mix(in oklab, var(--primary) 32%, var(--border));
+          background: color-mix(in oklab, var(--bg2) 88%, var(--primary) 12%);
+        }
+        .genderInput {
+          accent-color: var(--primary);
+        }
+        .formError {
+          border-radius: 12px;
+          padding: 10px 12px;
+          font-size: 0.9rem;
+          background: color-mix(in oklab, var(--primary) 10%, var(--bg) 90%);
+          border: 1px solid color-mix(in oklab, var(--primary) 32%, var(--border));
+          color: color-mix(in oklab, var(--primary) 75%, var(--text) 25%);
+        }
+        .fullWidth {
+          width: 100%;
+        }
+        @media (max-width: 640px) {
+          .themeChooser :global(.panel) {
+            max-width: 100%;
+          }
+        }
+      `}</style>
     </AuthShell>
   );
 }

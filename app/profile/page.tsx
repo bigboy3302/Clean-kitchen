@@ -171,7 +171,16 @@ export default function ProfilePage() {
           setLastName(d.lastName || "");
           setUsername(d.username || "");
           setUnits(d.prefs?.units || "metric");
-          setMode(d.prefs?.theme || "system");
+          const docTheme = d.prefs?.theme ?? null;
+          const storedMode =
+            typeof window !== "undefined" ? (localStorage.getItem("theme.mode") as ThemeMode | null) : null;
+          if (docTheme) {
+            if (!storedMode || storedMode === docTheme) {
+              setMode(docTheme);
+            }
+          } else if (!storedMode) {
+            setMode("system");
+          }
           setEmailNotifications(d.prefs?.emailNotifications ?? true);
         }
         setNewEmail(me.email || "");

@@ -145,11 +145,6 @@ export default function LoginPage() {
     }
   }
 
-  // helper classes to make red accent consistent
-  const inputAccent =
-    "focus:ring-2 focus:ring-red-500 focus:border-red-500 dark:focus:ring-red-500";
-  const linkAccent = "text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300";
-
   const handleEmailChange = (event: ChangeEvent<HTMLInputElement>) => {
     setEmail(event.currentTarget.value);
   };
@@ -163,29 +158,29 @@ export default function LoginPage() {
       title="Welcome back"
       subtitle="Sign in to access your pantry and recipes"
       footer={
-        <span>
+        <span className="footerNote">
           No account yet?{" "}
-          <Link className={`underline ${linkAccent}`} href="/auth/register">
+          <Link className="loginLink" href="/auth/register">
             Create one
           </Link>
         </span>
       }
     >
-      <form onSubmit={onSubmit} className="space-y-4">
-        <div>
-          <Input
-            label="Email"
-            type="email"
-            value={email}
+      <div className="loginStack">
+        <form onSubmit={onSubmit} className="loginForm">
+          <div>
+            <Input
+              label="Email"
+              type="email"
+              value={email}
             onBlur={() => setTouchedEmail(true)}
             onChange={handleEmailChange}
             placeholder="you@email.com" aria-invalid={Boolean(emailErr)}
             aria-describedby={emailErr ? "email-error" : undefined}
-            className={inputAccent}
             required
           />
           {emailErr && (
-            <p id="email-error" className="mt-1 text-xs font-medium text-red-600">
+            <p id="email-error" className="fieldError">
               {emailErr}
             </p>
           )}
@@ -200,18 +195,17 @@ export default function LoginPage() {
             onChange={handlePasswordChange}
             placeholder="••••••••" aria-invalid={Boolean(passErr)}
             aria-describedby={passErr ? "password-error" : undefined}
-            className={inputAccent}
             required
           />
           {passErr && (
-            <p id="password-error" className="mt-1 text-xs font-medium text-red-600">
+            <p id="password-error" className="fieldError">
               {passErr}
             </p>
           )}
         </div>
 
         {formErr && (
-          <p className="rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200">
+          <p className="formAlert">
             {formErr}
           </p>
         )}
@@ -219,34 +213,126 @@ export default function LoginPage() {
         <Button
           type="submit"
           disabled={!canSubmit}
-          className="w-full rounded-lg bg-red-600 text-white hover:bg-red-700 focus-visible:ring-2 focus-visible:ring-red-500"
+          className="fullWidth"
         >
           {busy ? "Signing in.." : "Sign in"}
         </Button>
-      </form>
+        </form>
 
-      <div className="my-4 flex items-center gap-3">
-        <div className="h-px flex-1 bg-red-200 dark:bg-red-900/40" />
-        <span className="text-xs text-red-600/80 dark:text-red-300/80">or</span>
-        <div className="h-px flex-1 bg-red-200 dark:bg-red-900/40" />
+        <div className="divider">
+          <span className="divider__line" />
+          <span className="divider__label">or</span>
+          <span className="divider__line" />
+        </div>
+
+        <Button
+          onClick={signInWithGoogle}
+          variant="secondary"
+          disabled={busy}
+          className="authAltButton fullWidth"
+        >
+          <span className="googleLabel">
+            <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden>
+              <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.8 32.6 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.8 6.1 29.7 4 24 4 16 4 9.2 8.5 6.3 14.7z"/>
+              <path fill="#FF3D00" d="M6.3 14.7l6.6 4.9C14.7 16.3 18.9 14 24 14c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.8 6.1 29.7 4 24 4 16 4 9.2 8.5 6.3 14.7z"/>
+              <path fill="#4CAF50" d="M24 44c5.2 0 10-2 13.6-5.3l-6.3-5.2C29.4 35.9 26.9 37 24 37c-5.2 0-9.6-3.3-11.3-7.8l-6.6 5.1C9.1 39.4 16 44 24 44z"/>
+              <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-1.2 3.3-4.7 8-11.3 8-6.6 0-12-5.4-12-12 0-1.9.5-3.7 1.3-5.3l-6.6-5.1C4.7 15.6 4 19 4 24c0 11.1 8.9 20 20 20 10.4 0 19-8.4 19-19 0-1.3-.1-2.2-.4-3.5z"/>
+            </svg>
+            Continue with Google
+          </span>
+        </Button>
       </div>
 
-      <Button
-        onClick={signInWithGoogle}
-        variant="secondary"
-        disabled={busy}
-        className="w-full border-red-200 text-red-700 hover:bg-red-50 dark:border-red-900/40 dark:text-red-300 dark:hover:bg-red-950/30"
-      >
-        <span className="inline-flex w-full items-center justify-center gap-2">
-          <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden>
-            <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.8 32.6 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.8 6.1 29.7 4 24 4 16 4 9.2 8.5 6.3 14.7z"/>
-            <path fill="#FF3D00" d="M6.3 14.7l6.6 4.9C14.7 16.3 18.9 14 24 14c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.8 6.1 29.7 4 24 4 16 4 9.2 8.5 6.3 14.7z"/>
-            <path fill="#4CAF50" d="M24 44c5.2 0 10-2 13.6-5.3l-6.3-5.2C29.4 35.9 26.9 37 24 37c-5.2 0-9.6-3.3-11.3-7.8l-6.6 5.1C9.1 39.4 16 44 24 44z"/>
-            <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-1.2 3.3-4.7 8-11.3 8-6.6 0-12-5.4-12-12 0-1.9.5-3.7 1.3-5.3l-6.6-5.1C4.7 15.6 4 19 4 24c0 11.1 8.9 20 20 20 10.4 0 19-8.4 19-19 0-1.3-.1-2.2-.4-3.5z"/>
-          </svg>
-          Continue with Google
-        </span>
-      </Button>
+      <style jsx>{`
+        .loginStack {
+          display: grid;
+          gap: 18px;
+          width: min(420px, 100%);
+          margin: 0 auto;
+          background: color-mix(in oklab, var(--bg2) 96%, transparent);
+          border: 1px solid color-mix(in oklab, var(--border) 78%, transparent);
+          border-radius: 20px;
+          padding: 24px;
+          box-shadow: 0 18px 40px color-mix(in oklab, var(--primary) 10%, transparent);
+        }
+        .loginForm {
+          display: grid;
+          gap: 18px;
+        }
+        .footerNote {
+          color: var(--muted);
+        }
+        .loginLink {
+          color: var(--primary);
+          font-weight: 600;
+        }
+        .loginLink:hover {
+          text-decoration: underline;
+        }
+        .fieldError {
+          margin-top: 6px;
+          font-size: 0.78rem;
+          font-weight: 600;
+          color: color-mix(in oklab, var(--primary) 78%, var(--text) 22%);
+        }
+        .formAlert {
+          border-radius: 12px;
+          padding: 10px 12px;
+          font-size: 0.9rem;
+          background: color-mix(in oklab, var(--primary) 8%, var(--bg) 92%);
+          border: 1px solid color-mix(in oklab, var(--primary) 32%, var(--border));
+          color: color-mix(in oklab, var(--primary) 75%, var(--text) 25%);
+        }
+        .fullWidth {
+          width: 100%;
+        }
+        .divider {
+          margin: 16px 0;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        .divider__line {
+          flex: 1;
+          height: 1px;
+          background: color-mix(in oklab, var(--border) 85%, transparent);
+        }
+        .divider__label {
+          font-size: 0.75rem;
+          font-weight: 600;
+          color: var(--muted);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+        }
+        .authAltButton {
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          color: var(--text);
+          background: color-mix(in oklab, var(--bg2) 96%, transparent);
+        }
+        .authAltButton:hover {
+          background: color-mix(in oklab, var(--bg2) 92%, var(--primary) 8%);
+        }
+        .googleLabel {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          width: 100%;
+        }
+        @media (max-width: 640px) {
+          .loginStack {
+            padding: 20px 18px;
+            border-radius: 18px;
+            box-shadow: 0 14px 28px color-mix(in oklab, var(--primary) 8%, transparent);
+          }
+          .divider {
+            margin: 12px 0;
+          }
+          .fieldError {
+            font-size: 0.74rem;
+          }
+        }
+      `}</style>
     </AuthShell>
   );
 }

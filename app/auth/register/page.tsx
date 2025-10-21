@@ -306,21 +306,22 @@ export default function RegisterPage() {
       title="Create account"
       subtitle="Personalise your Clean Kitchen experience in seconds."
       footer={
-        <span>
+        <span className="footerNote">
           Already have an account?{" "}
-          <Link className="link" href="/auth/login">
+          <Link className="registerLink" href="/auth/login">
             Sign in
           </Link>
         </span>
       }
       errorBanner={err ? <span>{err}</span> : null}
     >
-      <form onSubmit={onSubmit} className="registerForm">
-        <div className="nameRow">
-          <Input
-            label="Name"
-            value={firstName}
-            onChange={handleFirstName}
+      <div className="registerStack">
+        <form onSubmit={onSubmit} className="registerForm">
+          <div className="nameRow">
+            <Input
+              label="Name"
+              value={firstName}
+              onChange={handleFirstName}
             required
           />
           <Input
@@ -346,16 +347,28 @@ export default function RegisterPage() {
           value={pass}
           onChange={handlePassword}
           required
-        />
+          />
 
-        {info ? <p className="info">{info}</p> : null}
+          {info ? <p className="info">{info}</p> : null}
 
-        <Button type="submit" disabled={busy}>
-          {busy ? "Creating..." : "Create account"}
-        </Button>
-      </form>
+          <Button type="submit" disabled={busy} className="fullWidth">
+            {busy ? "Creating..." : "Create account"}
+          </Button>
+        </form>
+      </div>
 
       <style jsx>{`
+        .registerStack {
+          display: grid;
+          gap: 20px;
+          width: min(460px, 100%);
+          margin: 0 auto;
+          background: color-mix(in oklab, var(--bg2) 96%, transparent);
+          border: 1px solid color-mix(in oklab, var(--border) 78%, transparent);
+          border-radius: 22px;
+          padding: 26px;
+          box-shadow: 0 18px 42px color-mix(in oklab, var(--primary) 10%, transparent);
+        }
         .registerForm {
           display: flex;
           flex-direction: column;
@@ -374,18 +387,38 @@ export default function RegisterPage() {
           }
         }
 
-        .link {
+        .footerNote {
+          color: var(--muted);
+        }
+
+        .registerLink {
           font-weight: 600;
+          color: var(--primary);
+        }
+        .registerLink:hover {
+          text-decoration: underline;
         }
 
         .info {
           border-radius: 14px;
           padding: 14px 16px;
           font-size: 0.95rem;
-          background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(147, 197, 253, 0.12));
-          border: 1px solid rgba(96, 165, 250, 0.3);
-          color: rgba(219, 234, 254, 0.9);
-          box-shadow: 0 14px 46px rgba(59, 130, 246, 0.16);
+          background: color-mix(in oklab, var(--primary) 12%, var(--bg) 88%);
+          border: 1px solid color-mix(in oklab, var(--primary) 32%, var(--border));
+          color: color-mix(in oklab, var(--primary) 70%, var(--text) 30%);
+          box-shadow: 0 14px 46px color-mix(in oklab, var(--primary) 14%, transparent);
+        }
+
+        .fullWidth {
+          width: 100%;
+        }
+
+        @media (max-width: 640px) {
+          .registerStack {
+            padding: 22px 18px;
+            border-radius: 18px;
+            box-shadow: 0 14px 30px color-mix(in oklab, var(--primary) 8%, transparent);
+          }
         }
       `}</style>
     </AuthShell>
@@ -394,7 +427,7 @@ export default function RegisterPage() {
       title="Verify your email"
       subtitle="We&apos;ve sent a verification email so you can activate your Clean Kitchen profile."
       footer={
-        <span>
+        <span className="footerNote">
           Need to change your email?{" "}
           <button className="linkButton" type="button" onClick={cancelRegistration} disabled={busy}>
             Cancel and start again
@@ -403,25 +436,36 @@ export default function RegisterPage() {
       }
       errorBanner={err ? <span>{err}</span> : null}
     >
-      <div className="verify">
-        {info ? <div className="verify__info">{info}</div> : null}
-        <p className="verify__copy">
+      <div className="verifyCard">
+        <div className="verify">
+          {info ? <div className="verify__info">{info}</div> : null}
+          <p className="verify__copy">
           Click the link in the email we just sent. Once you&apos;re verified, we&apos;ll take you straight to your onboarding.
-        </p>
-        <div className="verify__actions">
-          <Button onClick={resendEmail} disabled={busy || cooldown > 0} variant="secondary">
-            {cooldown > 0 ? `Send again (${cooldown}s)` : "Send again"}
-          </Button>
-          <Button onClick={iVerified} disabled={busy}>
-            I&apos;ve verified
-          </Button>
-          <Button onClick={cancelRegistration} disabled={busy} variant="ghost">
-            Cancel
-          </Button>
+          </p>
+          <div className="verify__actions">
+            <Button onClick={resendEmail} disabled={busy || cooldown > 0} variant="secondary" className="fullWidth">
+              {cooldown > 0 ? `Send again (${cooldown}s)` : "Send again"}
+            </Button>
+            <Button onClick={iVerified} disabled={busy} className="fullWidth">
+              I&apos;ve verified
+            </Button>
+            <Button onClick={cancelRegistration} disabled={busy} variant="ghost" className="fullWidth">
+              Cancel
+            </Button>
+          </div>
         </div>
       </div>
 
       <style jsx>{`
+        .verifyCard {
+          width: min(460px, 100%);
+          margin: 0 auto;
+          background: color-mix(in oklab, var(--bg2) 96%, transparent);
+          border: 1px solid color-mix(in oklab, var(--border) 78%, transparent);
+          border-radius: 22px;
+          padding: 26px;
+          box-shadow: 0 18px 42px color-mix(in oklab, var(--primary) 10%, transparent);
+        }
         .verify {
           display: flex;
           flex-direction: column;
@@ -431,16 +475,16 @@ export default function RegisterPage() {
         .verify__info {
           border-radius: 18px;
           padding: 18px 20px;
-          background: linear-gradient(140deg, rgba(59, 130, 246, 0.18), rgba(37, 99, 235, 0.25));
-          border: 1px solid rgba(147, 197, 253, 0.35);
-          color: rgba(226, 232, 240, 0.95);
+          background: color-mix(in oklab, var(--primary) 16%, var(--bg) 84%);
+          border: 1px solid color-mix(in oklab, var(--primary) 35%, var(--border));
+          color: color-mix(in oklab, var(--primary) 70%, var(--text) 30%);
           font-size: 0.95rem;
-          box-shadow: 0 20px 50px rgba(59, 130, 246, 0.22);
+          box-shadow: 0 20px 50px color-mix(in oklab, var(--primary) 18%, transparent);
         }
 
         .verify__copy {
           margin: 0;
-          color: rgba(203, 213, 225, 0.85);
+          color: var(--muted);
           font-size: 0.95rem;
           line-height: 1.6;
         }
@@ -456,14 +500,10 @@ export default function RegisterPage() {
           }
         }
 
-        .link {
-          font-weight: 600;
-        }
-
         .linkButton {
           background: none;
           border: none;
-          color: inherit;
+          color: var(--primary);
           font: inherit;
           font-weight: 600;
           cursor: pointer;
@@ -474,6 +514,13 @@ export default function RegisterPage() {
         .linkButton:disabled {
           opacity: 0.6;
           cursor: not-allowed;
+        }
+        @media (max-width: 640px) {
+          .verifyCard {
+            padding: 22px 18px;
+            border-radius: 18px;
+            box-shadow: 0 14px 30px color-mix(in oklab, var(--primary) 8%, transparent);
+          }
         }
       `}</style>
     </AuthShell>

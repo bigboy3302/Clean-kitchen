@@ -38,7 +38,7 @@ const DARK: Palette = {
 
 type Ctx = {
   mode: ThemeMode;
-  setMode: (m: ThemeMode) => void;
+  setMode: (m: ThemeMode, options?: { palette?: Palette; persistCustom?: boolean }) => void;
   palette: Palette;
   setPalette: (p: Palette, options?: { persist?: boolean }) => void;
 };
@@ -48,7 +48,7 @@ const ThemeCtx = createContext<Ctx | null>(null);
 const LS_MODE = "theme.mode";
 const LS_CUSTOM = "theme.custom";
 
-function applyCssVars(p: Palette, dataTheme?: "light" | "dark" | "custom") {
+function applyCssVars(p: Palette, dataTheme: "light" | "dark" | "custom") {
   const el = document.documentElement;
   if (dataTheme) el.setAttribute("data-theme", dataTheme);
   el.style.setProperty("--primary", p.primary);
@@ -86,82 +86,180 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setModeState] = useState<ThemeMode>("system");
   const [palette, setPaletteState] = useState<Palette>(LIGHT);
   const customRef = useRef<Palette>(LIGHT);
+  const modeRef = useRef<ThemeMode>("system");
+  const mqlRef = useRef<MediaQueryList | null>(null);
+
+  const readSystemPrefersDark = () => {
+    if (typeof window === "undefined") return false;
+    if (!mqlRef.current) {
+      mqlRef.current = window.matchMedia("(prefers-color-scheme: dark)");
+    }
+    return !!mqlRef.current.matches;
+  };
+
+  const applyForMode = (targetMode: ThemeMode, paletteOverride?: Palette) => {
+    const systemIsDark = readSystemPrefersDark();
+    const paletteForMode =
+      targetMode === "dark"
+        ? DARK
+        : targetMode === "light"
+        ? LIGHT
+        : targetMode === "custom"
+        ? paletteOverride ?? customRef.current
+        : systemIsDark
+        ? DARK
+        : LIGHT;
+
+    const attr: "light" | "dark" | "custom" =
+      targetMode === "system"
+        ? systemIsDark
+          ? "dark"
+          : "light"
+        : targetMode === "custom"
+        ? "custom"
+        : targetMode;
+
+    setPaletteState(paletteForMode);
+    if (typeof window !== "undefined") {
+      applyCssVars(paletteForMode, attr);
+    }
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    mqlRef.current = mql;
+
     const savedMode = (localStorage.getItem(LS_MODE) as ThemeMode) || "system";
     const savedCustom = localStorage.getItem(LS_CUSTOM);
     if (savedCustom) {
-      try { customRef.current = JSON.parse(savedCustom); } catch {}
+      try {
+        const parsed = JSON.parse(savedCustom) as Palette;
+        if (parsed && typeof parsed === "object") {
+          customRef.current = { ...LIGHT, ...parsed };
+        }
+      } catch {
+        // ignore parse issues
+      }
     }
-    const mql = window.matchMedia("(prefers-color-scheme: dark)");
     const systemPalette = mql.matches ? DARK : LIGHT;
     const initialPalette =
-      savedMode === "dark" ? DARK :
-      savedMode === "light" ? LIGHT :
-      savedMode === "custom" ? customRef.current :
-      systemPalette;
+      savedMode === "dark"
+        ? DARK
+        : savedMode === "light"
+        ? LIGHT
+        : savedMode === "custom"
+        ? customRef.current
+        : systemPalette;
 
+    modeRef.current = savedMode;
     setModeState(savedMode);
     setPaletteState(initialPalette);
-    applyCssVars(initialPalette, savedMode === "system" ? (mql.matches ? "dark" : "light") : savedMode);
-  }, []);
+    const attr: "light" | "dark" | "custom" =
+      savedMode === "system"
+        ? mql.matches
+          ? "dark"
+          : "light"
+        : savedMode === "custom"
+        ? "custom"
+        : savedMode;
+    applyCssVars(initialPalette, attr);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mql = window.matchMedia("(prefers-color-scheme: dark)");
-    const sync = () => {
-      if (mode === "system") {
-        const next = mql.matches ? DARK : LIGHT;
-        setPaletteState(next);
-      }
+    const handleSystem = (event: MediaQueryListEvent) => {
+      if (modeRef.current !== "system") return;
+      const nextPalette = event.matches ? DARK : LIGHT;
+      setPaletteState(nextPalette);
+      applyCssVars(nextPalette, event.matches ? "dark" : "light");
     };
-    sync();
-    mql.addEventListener?.("change", sync);
-    return () => mql.removeEventListener?.("change", sync);
-  }, [mode]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mql = window.matchMedia("(prefers-color-scheme: dark)");
-    const paletteForMode =
-      mode === "dark" ? DARK :
-      mode === "light" ? LIGHT :
-      mode === "custom" ? palette :
-      (mql.matches ? DARK : LIGHT);
-    const themeAttr: "light" | "dark" | "custom" =
-      mode === "system" ? (mql.matches ? "dark" : "light") :
-      mode === "custom" ? "custom" :
-      mode;
-    applyCssVars(paletteForMode, themeAttr);
-  }, [mode, palette]);
+    mql.addEventListener?.("change", handleSystem);
+    return () => mql.removeEventListener?.("change", handleSystem);
+  }, []);
 
   const value = useMemo<Ctx>(() => ({
     mode,
-    setMode: (m) => {
-      setModeState(m);
-      localStorage.setItem(LS_MODE, m);
-      if (m === "light") {
-        setPaletteState(LIGHT);
-      } else if (m === "dark") {
-        setPaletteState(DARK);
-      } else if (m === "system") {
-        const sys = window.matchMedia("(prefers-color-scheme: dark)").matches ? DARK : LIGHT;
-        setPaletteState(sys);
-      } else {
-        setPaletteState(customRef.current);
+    setMode: (nextMode, options) => {
+      modeRef.current = nextMode;
+      setModeState(nextMode);
+      if (typeof window !== "undefined") {
+        localStorage.setItem(LS_MODE, nextMode);
       }
+
+      let customPalette = customRef.current;
+      if (options?.palette) {
+        customPalette = { ...LIGHT, ...options.palette };
+        customRef.current = customPalette;
+        const shouldPersist = options.persistCustom ?? true;
+        if (shouldPersist && typeof window !== "undefined") {
+          localStorage.setItem(LS_CUSTOM, JSON.stringify(customPalette));
+        }
+      }
+
+      applyForMode(nextMode, customPalette);
     },
     palette,
     setPalette: (p, options) => {
-      setPaletteState(p);
-      const persist = options?.persist ?? mode === "custom";
-      if (persist) {
-        customRef.current = p;
-        localStorage.setItem(LS_CUSTOM, JSON.stringify(p));
+      const nextPalette: Palette = { ...p };
+      const persist = options?.persist ?? modeRef.current === "custom";
+      if (modeRef.current === "custom" || persist) {
+        customRef.current = nextPalette;
+      }
+      if (persist && typeof window !== "undefined") {
+        localStorage.setItem(LS_CUSTOM, JSON.stringify(customRef.current));
+      }
+
+      setPaletteState(nextPalette);
+
+      if (typeof window !== "undefined") {
+        const systemIsDark = readSystemPrefersDark();
+        const activeMode = modeRef.current;
+        const attr: "light" | "dark" | "custom" =
+          activeMode === "system"
+            ? systemIsDark
+              ? "dark"
+              : "light"
+            : activeMode === "custom"
+            ? "custom"
+            : activeMode;
+        const paletteToApply =
+          activeMode === "custom"
+            ? nextPalette
+            : activeMode === "dark"
+            ? DARK
+            : activeMode === "light"
+            ? LIGHT
+            : systemIsDark
+            ? DARK
+            : LIGHT;
+        applyCssVars(paletteToApply, attr);
       }
     },
   }), [mode, palette]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const systemIsDark = readSystemPrefersDark();
+    const paletteForMode =
+      mode === "custom"
+        ? palette
+        : mode === "dark"
+        ? DARK
+        : mode === "light"
+        ? LIGHT
+        : systemIsDark
+        ? DARK
+        : LIGHT;
+    const attr: "light" | "dark" | "custom" =
+      mode === "system"
+        ? systemIsDark
+          ? "dark"
+          : "light"
+        : mode === "custom"
+        ? "custom"
+        : mode;
+    applyCssVars(paletteForMode, attr);
+  }, [mode, palette]);
 
   return <ThemeCtx.Provider value={value}>{children}</ThemeCtx.Provider>;
 }

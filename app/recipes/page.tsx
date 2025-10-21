@@ -34,7 +34,7 @@ import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import type { CommonRecipe, Ingredient } from "@/components/recipes/types";
 import RecipeModal from "@/components/recipes/RecipeModal";
-import RecipeCard, { type IngredientObj } from "@/components/recipes/RecipeCard";
+import RecipeCard, { type IngredientObj, getRecipePlaceholder } from "@/components/recipes/RecipeCard";
 import {
   getRandomMeals,
   searchMealsByIngredient,
@@ -1055,7 +1055,14 @@ function FavOverlay({
                     unoptimized
                   />
                 ) : (
-                  <div className="fimg" aria-hidden="true" />
+                  <Image
+                    className="fimg"
+                    src={getRecipePlaceholder(r.id)}
+                    alt={r.title ?? "Recipe image"}
+                    width={320}
+                    height={120}
+                    unoptimized
+                  />
                 )}
                 <div className="ft">{r.title}</div>
                 <div className="btns">

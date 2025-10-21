@@ -36,7 +36,7 @@ export default function ThemePicker() {
 
   const onColor = (key: keyof typeof palette) => (event: React.ChangeEvent<HTMLInputElement>) => {
     const next = { ...palette, [key]: event.target.value };
-    setPalette(next);
+    setPalette(next, { persist: true });
   };
 
   const handlePreset = (key: typeof PRESETS[number]["key"]) => {

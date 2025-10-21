@@ -21,15 +21,39 @@ export default function PageHeader({ title, subtitle, actions, className = "" }:
 
       <style jsx>{`
         .ph{
-          display:flex; align-items:flex-end; justify-content:space-between; gap:16px;
-          margin: 8px 0 16px;
+          display:flex;
+          align-items:center;
+          justify-content:space-between;
+          gap:18px;
+          padding:12px 0;
+          margin:0 0 20px;
+          border-bottom:1px solid color-mix(in oklab, var(--border) 85%, transparent);
         }
-        .ph-title{ margin:0; font-size:32px; line-height:1.2; font-weight:800; color:var(--text) }
-        .ph-sub{ margin:6px 0 0; color:var(--muted) }
-        .ph-actions{ display:flex; gap:8px; flex-wrap:wrap }
+        .ph-title{
+          margin:0;
+          font-size:32px;
+          line-height:1.18;
+          font-weight:800;
+          letter-spacing:-0.015em;
+          color:var(--text);
+        }
+        .ph-sub{
+          margin:8px 0 0;
+          color:var(--muted);
+          font-size:15px;
+        }
+        .ph-actions{
+          display:flex;
+          gap:10px;
+          flex-wrap:wrap;
+        }
         @media (max-width:720px){
-          .ph{ align-items:flex-start; flex-direction:column }
-          .ph-actions{ width:100% }
+          .ph{
+            flex-direction:column;
+            align-items:flex-start;
+            padding:10px 0;
+          }
+          .ph-actions{ width:100%; justify-content:flex-start }
         }
       `}</style>
     </>
