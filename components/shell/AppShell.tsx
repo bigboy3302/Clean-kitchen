@@ -91,9 +91,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
         .mobileNavBell {
           display: none;
         }
-        .mobileNavBell > :global(*) {
-          margin-left: auto;
-        }
         footer.section {
           padding-top: 12px;
           padding-bottom: 48px;
@@ -116,10 +113,14 @@ export default function AppShell({ children }: { children: ReactNode }) {
           }
           .mobileNavBell {
             display: flex;
-            justify-content: flex-end;
+            justify-content: center;
             position: sticky;
             top: calc(env(safe-area-inset-top) + 8px);
             z-index: 25;
+            padding-bottom: 12px;
+          }
+          .mobileNavBell > :global(*) {
+            margin: 0 auto;
           }
         }
       `}</style>

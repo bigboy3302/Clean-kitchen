@@ -8,7 +8,6 @@ import AuthShell from "@/components/auth/AuthShell";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { auth, db } from "@/lib/firebas1e";
-import ThemePicker from "@/components/theme/ThemePicker";
 
 const USERNAME_PATTERN = /^[a-z0-9_.]{3,20}$/;
 
@@ -237,10 +236,6 @@ export default function OnboardingPage() {
       title="Complete your profile"
       subtitle="Choose your public username and health basics"
     >
-      <div className="themeChooser">
-        <ThemePicker />
-      </div>
-
       <form onSubmit={save} className="onboardingForm">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Input
@@ -361,12 +356,6 @@ export default function OnboardingPage() {
       </form>
 
       <style jsx>{`
-        .themeChooser {
-          margin-bottom: 24px;
-        }
-        .themeChooser :global(.panel) {
-          max-width: 560px;
-        }
         .onboardingForm {
           display: grid;
           gap: 20px;
@@ -440,11 +429,6 @@ export default function OnboardingPage() {
         }
         .fullWidth {
           width: 100%;
-        }
-        @media (max-width: 640px) {
-          .themeChooser :global(.panel) {
-            max-width: 100%;
-          }
         }
       `}</style>
     </AuthShell>

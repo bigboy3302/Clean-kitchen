@@ -289,38 +289,39 @@ export default function AuthShell({ title, subtitle, footer, children, errorBann
 
         @media (max-width: 720px) {
           .authShell {
-            padding: 24px 14px 48px;
+            padding: 20px 12px 36px;
           }
 
           .authShell__panel {
-            box-shadow: 0 24px 60px color-mix(in oklab, rgba(0, 0, 0, 0.7) 22%, transparent);
+            grid-template-columns: 1fr;
+            border-radius: 24px;
+            background: color-mix(in oklab, var(--bg2) 96%, transparent);
+            box-shadow: 0 22px 58px color-mix(in oklab, rgba(0, 0, 0, 0.68) 26%, transparent);
           }
 
           .authShell__brand {
-            padding: 26px 24px 32px;
-            border-radius: 26px 26px 0 0;
-          }
-
-          .authShell__brandList {
-            gap: 10px;
-          }
-
-          .authShell__brandList li {
-            font-size: 0.88rem;
-            padding-left: 24px;
-          }
-
-          .authShell__brandList li::before {
-            width: 12px;
-            height: 12px;
+            display: none;
           }
 
           .authShell__form {
-            padding: 24px 20px 28px;
+            padding: 26px 20px 30px;
+            gap: 22px;
+          }
+
+          .authShell__card {
+            gap: 20px;
+          }
+
+          .authShell__header {
+            text-align: center;
           }
 
           .authShell__footer {
-            text-align: left;
+            text-align: center;
+          }
+
+          .authShell__banner {
+            margin-top: 4px;
           }
         }
 

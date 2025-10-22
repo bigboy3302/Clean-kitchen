@@ -306,12 +306,12 @@ export default function RegisterPage() {
       title="Create account"
       subtitle="Personalise your Clean Kitchen experience in seconds."
       footer={
-        <span className="footerNote">
-          Already have an account?{" "}
-          <Link className="registerLink" href="/auth/login">
+        <div className="accountSwitch">
+          <span className="accountSwitch__label">Already have an account?</span>
+          <Link className="accountSwitch__cta accountSwitch__cta--outline" href="/auth/login">
             Sign in
           </Link>
-        </span>
+        </div>
       }
       errorBanner={err ? <span>{err}</span> : null}
     >
@@ -391,12 +391,49 @@ export default function RegisterPage() {
           color: var(--muted);
         }
 
-        .registerLink {
-          font-weight: 600;
-          color: var(--primary);
+        .accountSwitch {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
         }
-        .registerLink:hover {
-          text-decoration: underline;
+        .accountSwitch__label {
+          color: var(--muted);
+          font-size: 0.9rem;
+        }
+        .accountSwitch__cta {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 8px 18px;
+          border-radius: 999px;
+          font-weight: 600;
+          font-size: 0.95rem;
+          text-decoration: none;
+          background: color-mix(in oklab, var(--primary) 88%, transparent);
+          color: var(--primary-contrast, #ffffff);
+          border: 1px solid color-mix(in oklab, var(--primary) 40%, transparent);
+          box-shadow: 0 16px 32px color-mix(in oklab, var(--primary) 18%, transparent);
+          transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease, background 0.15s ease;
+        }
+        .accountSwitch__cta:hover {
+          transform: translateY(-1px);
+          filter: brightness(1.05);
+          box-shadow: 0 18px 38px color-mix(in oklab, var(--primary) 22%, transparent);
+        }
+        .accountSwitch__cta:focus-visible {
+          outline: 2px solid color-mix(in oklab, var(--ring) 55%, transparent);
+          outline-offset: 3px;
+        }
+        .accountSwitch__cta--outline {
+          background: color-mix(in oklab, var(--bg2) 96%, transparent);
+          color: var(--text);
+          border-color: color-mix(in oklab, var(--border) 78%, transparent);
+          box-shadow: 0 12px 26px color-mix(in oklab, var(--primary) 10%, transparent);
+        }
+        .accountSwitch__cta--outline:hover {
+          background: color-mix(in oklab, var(--bg2) 90%, var(--primary) 10%);
         }
 
         .info {

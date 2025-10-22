@@ -158,12 +158,12 @@ export default function LoginPage() {
       title="Welcome back"
       subtitle="Sign in to access your pantry and recipes"
       footer={
-        <span className="footerNote">
-          No account yet?{" "}
-          <Link className="loginLink" href="/auth/register">
+        <div className="accountSwitch">
+          <span className="accountSwitch__label">No account yet?</span>
+          <Link className="accountSwitch__cta" href="/auth/register">
             Create one
           </Link>
-        </span>
+        </div>
       }
     >
       <div className="loginStack">
@@ -259,15 +259,40 @@ export default function LoginPage() {
           display: grid;
           gap: 18px;
         }
-        .footerNote {
+        .accountSwitch {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+        }
+        .accountSwitch__label {
           color: var(--muted);
+          font-size: 0.9rem;
         }
-        .loginLink {
-          color: var(--primary);
+        .accountSwitch__cta {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 8px 18px;
+          border-radius: 999px;
           font-weight: 600;
+          font-size: 0.95rem;
+          text-decoration: none;
+          background: color-mix(in oklab, var(--primary) 88%, transparent);
+          color: var(--primary-contrast, #ffffff);
+          border: 1px solid color-mix(in oklab, var(--primary) 40%, transparent);
+          box-shadow: 0 16px 32px color-mix(in oklab, var(--primary) 18%, transparent);
+          transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
         }
-        .loginLink:hover {
-          text-decoration: underline;
+        .accountSwitch__cta:hover {
+          transform: translateY(-1px);
+          filter: brightness(1.05);
+          box-shadow: 0 18px 38px color-mix(in oklab, var(--primary) 22%, transparent);
+        }
+        .accountSwitch__cta:focus-visible {
+          outline: 2px solid color-mix(in oklab, var(--ring) 55%, transparent);
+          outline-offset: 3px;
         }
         .fieldError {
           margin-top: 6px;
