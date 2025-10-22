@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import Image from 'next/image';
 import Link from 'next/link';
@@ -352,7 +352,7 @@ export default function PublicProfilePage() {
             {secondaryName ? <p className="muted">{secondaryName}</p> : null}
           </div>
         </div>
-        <Link href="/auth/login" className="btn">
+        <Link href="/dashboard" className="btn">
           Explore
         </Link>
       </header>
