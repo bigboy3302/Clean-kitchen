@@ -464,9 +464,9 @@ export default function PantryPage() {
             <div className="nutTitle">Nutrition (from barcode)</div>
             <div className="nutGrid">
               <div><span className="muted">Name</span> <strong>{normalizeProductName(nutrition?.name || "")}</strong></div>
-              <div><span className="muted">kcal / 100g</span> <strong>{nutrition?.kcalPer100g ?? "ā€”"}</strong></div>
-              <div><span className="muted">kcal / serving</span> <strong>{nutrition?.kcalPerServing ?? "ā€”"}</strong></div>
-              <div><span className="muted">Serving size</span> <strong>{nutrition?.servingSize ?? "ā€”"}</strong></div>
+              <div><span className="muted">kcal / 100g</span> <strong>{nutrition?.kcalPer100g ?? "-"}</strong></div>
+              <div><span className="muted">kcal / serving</span> <strong>{nutrition?.kcalPerServing ?? "-"}</strong></div>
+              <div><span className="muted">Serving size</span> <strong>{nutrition?.servingSize ?? "-"}</strong></div>
             </div>
           </div>
         )}
@@ -474,7 +474,6 @@ export default function PantryPage() {
         {err && <p className="error">{err}</p>}
         <div className="actions">
           <Button onClick={addOrMergeItem} disabled={busy} type="button">{busy ? "Savingā€¦" : "Add / Merge"}</Button>
-          <Button variant="secondary" onClick={()=>setScannerAutoStart((v)=>!v)}>{scannerAutoStart ? "Stop camera" : "Use camera"}</Button>
         </div>
       </section>
 

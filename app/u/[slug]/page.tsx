@@ -353,7 +353,7 @@ export default function PublicProfilePage() {
           </div>
         </div>
         <Link href="/dashboard" className="btn">
-          Explore
+          Dashboard
         </Link>
       </header>
 

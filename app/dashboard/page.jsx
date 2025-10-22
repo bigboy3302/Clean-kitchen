@@ -499,9 +499,6 @@ export default function DashboardPage() {
               <button className="hero-primary" onClick={() => setOpenComposer(true)}>
                 Create post
               </button>
-              <Link href="/profile" className="hero-secondary">
-                View profile
-              </Link>
             </div>
           </div>
           <div className="hero-stats">
@@ -613,7 +610,7 @@ export default function DashboardPage() {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="mHead">
               <div className="mTitle">Create post</div>
-              <button className="x" onClick={() => setOpenComposer(false)}>ā•</button>
+              <button className="x" onClick={() => setOpenComposer(false)}>X</button>
             </div>
 
             <div className="mBody">
@@ -624,7 +621,7 @@ export default function DashboardPage() {
                 rows={4}
                 value={postText}
                 onChange={(e) => setPostText(e.target.value)}
-                placeholder="Whatā€™s on your mind?"
+                placeholder="Whats on your mind?"
               />
 
               <label className="lab">Media (up to 4)</label>
@@ -661,7 +658,7 @@ export default function DashboardPage() {
             <div className="mFoot">
               <button className="btn ghost" onClick={() => setOpenComposer(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={createPost} disabled={busyPost}>
-                {busyPost ? "Publishingā€¦" : "Publish"}
+                {busyPost ? "Publishing..." : "Publish"}
               </button>
             </div>
           </div>
