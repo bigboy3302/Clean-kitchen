@@ -428,11 +428,6 @@ export default function FitnessPage() {
         .cta:active { transform: translateY(1px); }
         .meterWrap :global(.card) { height: 100%; }
         .library { margin-top: 8px; }
-        @media (max-width: 640px) {
-          .fitnessShell { gap: 20px; padding-block: 20px 60px; }
-          .sectionCard { padding: 18px 16px; }
-          .macrosTable th, .macrosTable td { padding: 10px; }
-        }
       `}</style>
     </Container>
   );
