@@ -20,9 +20,9 @@ import WorkoutGrid from "@/components/fitness/WorkoutGrid";
 
 type Form = {
   sex: "male" | "female";
-  age: number;
-  heightCm: number;
-  weightKg: number;
+  age: number | "";
+  heightCm: number | "";
+  weightKg: number | "";
   activity: Activity;
   goal: Goal;
 };
@@ -31,7 +31,12 @@ export default function FitnessPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [f, setF] = useState<Form>({
-    sex: "male", age: 24, heightCm: 178, weightKg: 75, activity: "moderate", goal: "maintain",
+    sex: "male",
+    age: 24,
+    heightCm: 178,
+    weightKg: 75,
+    activity: "moderate",
+    goal: "maintain",
   });
 
   useEffect(() => {
@@ -56,11 +61,17 @@ export default function FitnessPage() {
     })();
   }, []);
 
-  const bmr = useMemo(() => mifflinStJeor(f.sex, f.age, f.heightCm, f.weightKg), [f]);
-  const tdeeVal = useMemo(() => tdee(bmr, f.activity), [bmr, f.activity]);
-  const calTarget = useMemo(() => targetCalories(tdeeVal, f.goal), [tdeeVal, f.goal]);
-  const macros = useMemo(() => macroTargets(f.weightKg, f.goal, calTarget), [f, calTarget]);
-  const suitability = useMemo(() => goalSuitability(f.age, f.goal), [f.age, f.goal]);
+  const bmr = useMemo(() => {
+    if (f.age === "" || f.heightCm === "" || f.weightKg === "") return 0;
+    return mifflinStJeor(f.sex, Number(f.age), Number(f.heightCm), Number(f.weightKg));
+  }, [f]);
+
+  const tdeeVal = useMemo(() => (bmr ? tdee(bmr, f.activity) : 0), [bmr, f.activity]);
+  const calTarget = useMemo(() => (tdeeVal ? targetCalories(tdeeVal, f.goal) : 0), [tdeeVal, f.goal]);
+  const macros = useMemo(() => (calTarget ? macroTargets(Number(f.weightKg || 0), f.goal, calTarget) : {
+    calories: 0, proteinG: 0, fatG: 0, carbsG: 0
+  }), [f, calTarget]);
+  const suitability = useMemo(() => goalSuitability(Number(f.age || 0), f.goal), [f.age, f.goal]);
 
   function update<K extends keyof Form>(key: K, value: Form[K]) {
     setF((prev) => ({ ...prev, [key]: value }));
@@ -70,9 +81,9 @@ export default function FitnessPage() {
     e.preventDefault();
     const payload: Metrics = {
       sex: f.sex,
-      age: f.age,
-      heightCm: f.heightCm,
-      weightKg: f.weightKg,
+      age: Number(f.age) || 0,
+      heightCm: Number(f.heightCm) || 0,
+      weightKg: Number(f.weightKg) || 0,
       activity: f.activity,
       goal: f.goal,
     };
@@ -91,7 +102,7 @@ export default function FitnessPage() {
           <PageHeader
             title="Fitness"
             subtitle="Calories, macros, and your daily workout planner."
-            actions={(
+            actions={
               <Button
                 type="button"
                 variant={editing ? "secondary" : "primary"}
@@ -99,7 +110,7 @@ export default function FitnessPage() {
               >
                 {editing ? "Close" : "Edit my data"}
               </Button>
-            )}
+            }
           />
 
           {editing ? (
@@ -121,6 +132,7 @@ export default function FitnessPage() {
                     ))}
                   </div>
                 </div>
+
                 <div className="field">
                   <label className="fieldLabel" htmlFor="fitness-age">Age</label>
                   <input
@@ -128,9 +140,14 @@ export default function FitnessPage() {
                     className="control"
                     type="number"
                     value={f.age}
-                    onChange={(e) => update("age", Math.max(5, Number(e.target.value || 0)))}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      update("age", val === "" ? "" : Number(val));
+                    }}
+                    placeholder="Enter your age"
                   />
                 </div>
+
                 <div className="field">
                   <label className="fieldLabel" htmlFor="fitness-height">Height (cm)</label>
                   <input
@@ -138,9 +155,14 @@ export default function FitnessPage() {
                     className="control"
                     type="number"
                     value={f.heightCm}
-                    onChange={(e) => update("heightCm", Math.max(80, Number(e.target.value || 0)))}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      update("heightCm", val === "" ? "" : Number(val));
+                    }}
+                    placeholder="Enter your height"
                   />
                 </div>
+
                 <div className="field">
                   <label className="fieldLabel" htmlFor="fitness-weight">Weight (kg)</label>
                   <input
@@ -148,9 +170,14 @@ export default function FitnessPage() {
                     className="control"
                     type="number"
                     value={f.weightKg}
-                    onChange={(e) => update("weightKg", Math.max(20, Number(e.target.value || 0)))}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      update("weightKg", val === "" ? "" : Number(val));
+                    }}
+                    placeholder="Enter your weight"
                   />
                 </div>
+
                 <div className="field">
                   <label className="fieldLabel" htmlFor="fitness-activity">Activity</label>
                   <select
@@ -166,6 +193,7 @@ export default function FitnessPage() {
                     <option value="veryActive">Very active</option>
                   </select>
                 </div>
+
                 <div className="field">
                   <span className="fieldLabel">Goal</span>
                   <div className="chips">
@@ -181,6 +209,7 @@ export default function FitnessPage() {
                     ))}
                   </div>
                 </div>
+
                 <div className="formActions">
                   <Button type="submit">Save</Button>
                 </div>
@@ -190,7 +219,11 @@ export default function FitnessPage() {
 
           <section className="panelRow">
             <div className="meterWrap">
-              <Meter status={suitability.status} label="Goal suitability" message={suitability.message} />
+              <Meter
+                status={suitability.status}
+                label="Goal suitability"
+                message={suitability.message}
+              />
             </div>
             <div className="sectionCard statCard">
               <h3 className="sectionTitle">Energy targets</h3>
@@ -236,7 +269,9 @@ export default function FitnessPage() {
 
             <div className="sectionCard plannerCard">
               <h3 className="sectionTitle">Today&apos;s planner</h3>
-              <p className="muted">Review your checklist, mark workouts complete, and see recipe ideas.</p>
+              <p className="muted">
+                Review your checklist, mark workouts complete, and see recipe ideas.
+              </p>
               <Link className="cta" href="/fitness/day">
                 Open today&apos;s planner
               </Link>
@@ -245,7 +280,13 @@ export default function FitnessPage() {
 
           <section className="library">
             <WorkoutGrid
-              initialBodyPart={f.goal === "bulk" ? "upper legs" : f.goal === "cut" ? "cardio" : "back"}
+              initialBodyPart={
+                f.goal === "bulk"
+                  ? "upper legs"
+                  : f.goal === "cut"
+                  ? "cardio"
+                  : "back"
+              }
               title="Movement library"
               goal={f.goal}
             />
@@ -258,6 +299,12 @@ export default function FitnessPage() {
           display: grid;
           gap: 24px;
           padding-block: 24px 72px;
+        }
+        @media (max-width: 640px) {
+          .fitnessShell {
+            gap: 18px;
+            padding-block: 16px 60px;
+          }
         }
         .muted { color: var(--muted); }
         .loadingState {
@@ -277,6 +324,13 @@ export default function FitnessPage() {
           display: grid;
           gap: 16px;
         }
+        @media (max-width: 640px) {
+          .sectionCard {
+            border-radius: 16px;
+            padding: 16px;
+            gap: 14px;
+          }
+        }
         .sectionTitle {
           margin: 0;
           font-size: 1.05rem;
@@ -290,11 +344,21 @@ export default function FitnessPage() {
           grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
           align-items: stretch;
         }
+        @media (max-width: 720px) {
+          .panelRow {
+            grid-template-columns: 1fr;
+          }
+        }
         .statCard { gap: 18px; }
         .statGrid {
           display: grid;
           gap: 16px;
           grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        }
+        @media (max-width: 600px) {
+          .statGrid {
+            grid-template-columns: 1fr;
+          }
         }
         .statMetric {
           border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
@@ -320,6 +384,11 @@ export default function FitnessPage() {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
           gap: 18px;
+        }
+        @media (max-width: 640px) {
+          .formGrid {
+            gap: 14px;
+          }
         }
         .field {
           display: grid;
@@ -351,7 +420,18 @@ export default function FitnessPage() {
           flex-wrap: wrap;
           gap: 8px;
         }
+        @media (max-width: 500px) {
+          .chips {
+            gap: 6px;
+          }
+          .chip {
+            flex: 1 1 calc(50% - 6px);
+          }
+        }
         .chip {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
           border-radius: 999px;
           border: 1px solid color-mix(in oklab, var(--border) 80%, var(--primary) 20%);
           background: color-mix(in oklab, var(--bg2) 92%, transparent);
@@ -377,12 +457,28 @@ export default function FitnessPage() {
           display: flex;
           justify-content: flex-end;
         }
+        @media (max-width: 640px) {
+          .formActions {
+            justify-content: flex-start;
+          }
+          .formActions :global(button) {
+            width: 100%;
+          }
+        }
         .tableCard table {
           width: 100%;
           border-collapse: separate;
           border-spacing: 0;
           border-radius: 16px;
           overflow: hidden;
+        }
+        @media (max-width: 640px) {
+          .tableCard {
+            overflow-x: auto;
+          }
+          .tableCard table {
+            min-width: 420px;
+          }
         }
         .macrosTable th,
         .macrosTable td {
@@ -423,6 +519,12 @@ export default function FitnessPage() {
           text-decoration: none;
           width: fit-content;
           transition: transform 0.12s ease, filter 0.18s ease;
+        }
+        @media (max-width: 640px) {
+          .cta {
+            width: 100%;
+            justify-content: center;
+          }
         }
         .cta:hover { filter: brightness(1.05); }
         .cta:active { transform: translateY(1px); }

@@ -125,6 +125,14 @@ service cloud.firestore {
       allow delete:  if isSignedIn() && resource.data.uid == request.auth.uid;
     }
 
+    /* -------- consumptionLogs (owner-only) -------- */
+    match /consumptionLogs/{id} {
+      allow read:    if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create:  if creatingAsSelf();
+      allow update:  if isSignedIn() && resource.data.uid == request.auth.uid && ownershipUnchanged();
+      allow delete:  if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
     /* -------- recipes (+ photos) -------- */
     match /recipes/{id} {
       allow read: if true;

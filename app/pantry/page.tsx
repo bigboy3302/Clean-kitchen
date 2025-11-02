@@ -106,6 +106,29 @@ function normalizeProductName(raw: string): string {
     capFirst(s.split(" ").find(Boolean) || original)
   );
 }
+
+function formatRelative(value: TSLike | null): string {
+  const d = toDate(value);
+  if (!d) return "Just now";
+  const diff = Date.now() - d.getTime();
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (diff < minute) return "Just now";
+  if (diff < hour) {
+    const mins = Math.max(1, Math.round(diff / minute));
+    return `${mins} min${mins === 1 ? "" : "s"} ago`;
+  }
+  if (diff < day) {
+    const hours = Math.max(1, Math.round(diff / hour));
+    return `${hours} hr${hours === 1 ? "" : "s"} ago`;
+  }
+  if (diff < day * 7) {
+    const days = Math.max(1, Math.round(diff / day));
+    return `${days} day${days === 1 ? "" : "s"} ago`;
+  }
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(d);
+}
 type PantryItemPage = {
   id: string;
   uid?: string;
@@ -116,6 +139,8 @@ type PantryItemPage = {
   expiresAt?: TSLike | null;
   barcode?: string | null;
   nutrition?: NutritionInfo | null;
+  lastConsumedGrams?: number | null;
+  lastConsumedAt?: TSLike | null;
 };
 
 type ConsumptionLog = {
@@ -155,6 +180,8 @@ export default function PantryPage() {
   const stopRef = useRef<null | (() => void)>(null);
 
   const [logs, setLogs] = useState<ConsumptionLog[]>([]);
+  const [logErr, setLogErr] = useState<string | null>(null);
+  const [logOk, setLogOk] = useState<string | null>(null);
 
   const minDate = todayStr();
   const todayStart = useMemo(startOfToday, []);
@@ -165,7 +192,7 @@ export default function PantryPage() {
   useEffect(() => {
     const stopAuth = onAuthStateChanged(auth, (u) => {
       if (stopRef.current) { stopRef.current(); stopRef.current = null; }
-      if (!u) { router.replace("/auth/login"); setItems([]); setLogs([]); return; }
+      if (!u) { router.replace("/auth/login"); setItems([]); setLogs([]); setLogErr(null); setLogOk(null); return; }
 
       const qy = query(
         collection(db, "pantryItems"),
@@ -226,6 +253,12 @@ export default function PantryPage() {
     }, 280);
     return () => clearTimeout(id);
   }, [barcode]);
+
+  useEffect(() => {
+    if (!logOk) return;
+    const id = setTimeout(() => setLogOk(null), 3200);
+    return () => clearTimeout(id);
+  }, [logOk]);
 
   function handleDetected(code: string) {
     setBarcode(code);
@@ -343,6 +376,7 @@ export default function PantryPage() {
   const fridgeItems = active.map((it) => ({
     id: it.id, uid: it.uid, name: it.name, quantity: it.quantity,
     expiresAt: it.expiresAt ?? null, barcode: it.barcode ?? null, nutrition: it.nutrition ?? null,
+    lastConsumedGrams: it.lastConsumedGrams ?? null,
   }));
   const trashItems = expired.map((it) => ({
     id: it.id,
@@ -354,21 +388,42 @@ export default function PantryPage() {
     const u = auth.currentUser;
     if (!u) { router.replace("/auth/login"); return; }
     try {
+      setLogErr(null);
+      setLogOk(null);
+      const grams = Math.max(0, Number(payload.grams) || 0);
+      const stamp = serverTimestamp();
       await addDoc(collection(db, "consumptionLogs"), {
         uid: u.uid,
         itemId: it.id,
         name: it.name,
-        grams: payload.grams,
+        grams,
         sugars_g: payload.nutrients.sugars_g,
         satFat_g: payload.nutrients.satFat_g,
         sodium_g: payload.nutrients.sodium_g,
         kcal: payload.nutrients.kcal,
-        createdAt: serverTimestamp(),
+        createdAt: stamp,
       });
+      await updateDoc(doc(db, "pantryItems", it.id), {
+        lastConsumedGrams: grams,
+        lastConsumedAt: stamp,
+      });
+      setLogOk(`Logged ${grams} g of ${it.name}.`);
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to log consumption.";
+      setLogErr(message);
       console.error("Failed to log consumption", error);
     }
   }
+
+  const sortedLogs = useMemo(() => {
+    return [...logs].sort((a, b) => {
+      const ta = toDate(a.createdAt)?.getTime() ?? 0;
+      const tb = toDate(b.createdAt)?.getTime() ?? 0;
+      return tb - ta;
+    });
+  }, [logs]);
+
+  const recentLogs = useMemo(() => sortedLogs.slice(0, 8), [sortedLogs]);
 
   const totalsWeek = useMemo(() => {
     const out = { sugars_g: 0, satFat_g: 0, sodium_g: 0, kcal: 0 };
@@ -418,6 +473,52 @@ export default function PantryPage() {
         week={{ title: "This week", totals: totalsWeek }}
         month={{ title: "This month", totals: totalsMonth }}
       />
+
+      <section className="card consumeCard">
+        <div className="consumeHead">
+          <div>
+            <div className="consumeEyebrow">Consumption</div>
+            <h3 className="consumeTitle">Recent logs</h3>
+          </div>
+          <span className="consumeCount">{logs.length} total</span>
+        </div>
+
+        {logOk ? <p className="notice success">{logOk}</p> : null}
+        {logErr ? <p className="notice danger">{logErr}</p> : null}
+
+        {recentLogs.length === 0 ? (
+          <p className="muted small">No consumption logged yet. Use the Consume button on an item to start tracking.</p>
+        ) : (
+          <ul className="consumeList">
+            {recentLogs.map((entry) => {
+              const grams = Math.round(Math.max(0, Number(entry.grams) || 0));
+              const kcal = Math.round(Math.max(0, Number(entry.kcal) || 0));
+              const sugar = Number(entry.sugars_g || 0).toFixed(1);
+              const satFat = Number(entry.satFat_g || 0).toFixed(1);
+              const sodium = Number(entry.sodium_g || 0).toFixed(2);
+              return (
+                <li key={entry.id} className="consumeRow">
+                  <div className="consumeMain">
+                    <div className="consumeNameBlock">
+                      <span className="consumeName">{entry.name}</span>
+                      <span className="consumeMeta">{formatRelative(entry.createdAt)}</span>
+                    </div>
+                    <div className="consumeNumbers">
+                      <span className="consumeNumber">{grams} g</span>
+                      <span className="consumeNumber">{kcal} kcal</span>
+                    </div>
+                  </div>
+                  <div className="consumeMicro">
+                    <span>Sugar {sugar} g</span>
+                    <span>Sat. fat {satFat} g</span>
+                    <span>Sodium {sodium} g</span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       <section className="card addCard">
         <div className="addHead">
@@ -612,6 +713,28 @@ export default function PantryPage() {
         .rowHint { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
         .muted { color: var(--muted); }
         .small { font-size:12px; }
+
+        .consumeCard { margin-bottom: 24px; display:grid; gap:14px; }
+        .consumeHead { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+        .consumeEyebrow { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:800; }
+        .consumeTitle { margin:2px 0 0; font-size:1.1rem; font-weight:900; color:var(--text); letter-spacing:-.01em; }
+        .consumeCount { font-weight:800; color:var(--muted); font-size:0.85rem; }
+        .notice { margin:0; border-radius:12px; padding:10px 12px; font-size:0.88rem; font-weight:700; border:1px solid transparent; }
+        .notice.success { background: color-mix(in oklab, #22c55e 16%, var(--bg)); border-color: color-mix(in oklab, #22c55e 45%, var(--border)); color:#14532d; }
+        .notice.danger { background: color-mix(in oklab, #ef4444 16%, var(--bg)); border-color: color-mix(in oklab, #ef4444 45%, var(--border)); color:#7f1d1d; }
+        .consumeList { list-style:none; margin:0; padding:0; display:grid; gap:12px; }
+        .consumeRow { border:1px solid var(--border); border-radius:14px; padding:12px; background: color-mix(in oklab, var(--bg2) 92%, transparent); display:grid; gap:8px; }
+        .consumeMain { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:flex-start; }
+        .consumeNameBlock { display:grid; gap:2px; min-width:0; }
+        .consumeName { font-weight:800; color:var(--text); }
+        .consumeMeta { font-size:12px; color:var(--muted); }
+        .consumeNumbers { display:flex; flex-wrap:wrap; gap:10px; font-weight:800; font-size:0.9rem; color:var(--text); }
+        .consumeNumber { padding:4px 8px; border-radius:999px; background: color-mix(in oklab, var(--bg) 88%, transparent); border:1px solid color-mix(in oklab, var(--border) 92%, transparent); }
+        .consumeMicro { display:flex; flex-wrap:wrap; gap:12px; font-size:12px; color:var(--muted); }
+        @media (max-width:560px){
+          .consumeMain{ flex-direction:column; align-items:flex-start; }
+          .consumeNumbers{ justify-content:flex-start; }
+        }
 
         .nutri { margin-top: 12px; border:1px dashed var(--border); background: color-mix(in oklab, var(--bg) 92%, var(--primary) 8%); border-radius:14px; padding:10px 12px; }
         .nutTitle { font-weight:900; margin-bottom:6px; color: var(--text); }
