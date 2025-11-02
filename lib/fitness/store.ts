@@ -19,9 +19,11 @@ export type WorkoutItem = {
     imageThumbnailUrl?: string | null;
     gifUrl?: string | null;
     descriptionHtml?: string;
+    description?: string;
     primaryMuscles?: (string | number)[];
     secondaryMuscles?: (string | number)[];
     equipmentList?: (string | number)[];
+    instructions?: (string | number)[];
   };
 };
 
@@ -45,10 +47,17 @@ export type Metrics = {
   goal?: "cut" | "maintain" | "bulk";
 };
 
+import type { Ingredient } from "@/lib/recipesApi";
+
 export type SuggestedMeal = {
   id: string;
   title: string;
   image?: string | null;
+  description?: string | null;
+  instructions?: string | null;
+  ingredients?: Ingredient[];
+  category?: string | null;
+  area?: string | null;
 };
 
 /** Minimal shape we accept when adding from the movement library */
@@ -62,9 +71,11 @@ export type ExerciseLike = {
   imageUrl?: string | null;
   imageThumbnailUrl?: string | null;
   descriptionHtml?: string;
+  description?: string;
   primaryMuscles?: (string | number)[];
   secondaryMuscles?: (string | number)[];
   equipmentList?: (string | number)[];
+  instructions?: (string | number)[];
 };
 
 /* ======================================================================
@@ -164,6 +175,119 @@ function newEmptyWeekPlan(forDate = new Date()): WeekPlan {
 }
 const planKey = (weekId: string) => key(`plan:${weekId}`);
 
+type ApiWorkoutSeed = {
+  id?: string;
+  name?: string;
+  bodyPart?: string;
+  target?: string;
+  equipment?: string;
+  gifUrl?: string;
+  description?: string;
+  descriptionHtml?: string;
+  imageUrl?: string | null;
+  imageThumbnailUrl?: string | null;
+  primaryMuscles?: (string | number)[];
+  secondaryMuscles?: (string | number)[];
+  equipmentList?: (string | number)[];
+  instructions?: (string | number)[];
+};
+
+function toStringArray(value: (string | number)[] | undefined): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (typeof entry === "string") return entry.trim();
+      if (typeof entry === "number") return String(entry);
+      return "";
+    })
+    .filter(Boolean);
+}
+
+function randomId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+async function seedWeekPlanIfEmpty(plan: WeekPlan): Promise<WeekPlan> {
+  if (typeof window === "undefined") return plan;
+  const hasItems = DAY_KEYS.some((day) => plan.days?.[day]?.items?.length);
+  if (hasItems) return plan;
+
+  try {
+    const res = await fetch("/api/workouts?limit=28", { cache: "no-store" });
+    if (!res.ok) return plan;
+    const json = (await res.json()) as ApiWorkoutSeed[] | null;
+    if (!Array.isArray(json) || json.length === 0) return plan;
+
+    const next: WeekPlan = {
+      ...plan,
+      days: { ...plan.days },
+    };
+
+    const perDay = Math.max(3, Math.min(4, Math.ceil(json.length / DAY_KEYS.length)));
+    let cursor = 0;
+
+    for (const day of DAY_KEYS) {
+      const baseDay = next.days[day] || { date: fmtDate(addDays(new Date(next.startIsoDate), DAY_KEYS.indexOf(day))), items: [] };
+      const items: WorkoutItem[] = [];
+      for (let i = 0; i < perDay; i += 1) {
+        const workout = json[cursor % json.length];
+        cursor += 1;
+        if (!workout) continue;
+        const name = (workout.name || "Workout").toString();
+        const bodyPart = (workout.bodyPart || workout.target || "full body").toString();
+        const target = (workout.target || workout.bodyPart || "full body").toString();
+        const equipment = (workout.equipment || "body weight").toString();
+        const gifUrl = typeof workout.gifUrl === "string" ? workout.gifUrl : "";
+        const primaryMuscles = toStringArray(workout.primaryMuscles);
+        const secondaryMuscles = toStringArray(workout.secondaryMuscles);
+        const equipmentList = toStringArray(workout.equipmentList);
+        if (!equipmentList.length && equipment) equipmentList.push(equipment);
+        const instructions = toStringArray(workout.instructions);
+        const description =
+          (typeof workout.description === "string" && workout.description.trim()) ||
+          (instructions.length ? instructions.join(" ") : "Follow the GIF demo.");
+        const descriptionHtml =
+          (typeof workout.descriptionHtml === "string" && workout.descriptionHtml.trim()) ||
+          (instructions.length ? instructions.map((step) => `<p>${step}</p>`).join("") : `<p>${description}</p>`);
+
+        items.push({
+          id: randomId(),
+          name,
+          done: false,
+          exercise: {
+            id: workout.id ?? randomId(),
+            name,
+            bodyPart,
+            target,
+            equipment,
+            imageUrl: (typeof workout.imageUrl === "string" && workout.imageUrl) || gifUrl || null,
+            imageThumbnailUrl:
+              (typeof workout.imageThumbnailUrl === "string" && workout.imageThumbnailUrl) ||
+              (typeof workout.imageUrl === "string" && workout.imageUrl) ||
+              gifUrl ||
+              null,
+            gifUrl: gifUrl || null,
+            description,
+            descriptionHtml,
+            primaryMuscles: primaryMuscles.length ? primaryMuscles : target ? [target] : [],
+            secondaryMuscles,
+            equipmentList,
+            instructions,
+          },
+        });
+      }
+      next.days[day] = { ...baseDay, items };
+    }
+
+    lsSet(planKey(next.weekId), JSON.stringify(next));
+    return next;
+  } catch (error) {
+    console.warn("seedWeekPlanIfEmpty failed", error);
+    return plan;
+  }
+}
+
 export async function getWeekPlan(targetWeekId?: string): Promise<WeekPlan> {
   const weekId = targetWeekId || isoWeekId(new Date());
   const cached = safeParse<WeekPlan>(lsGet(planKey(weekId)));
@@ -183,11 +307,11 @@ export async function getWeekPlan(targetWeekId?: string): Promise<WeekPlan> {
       }
     }
     if (mutated) lsSet(planKey(weekId), JSON.stringify(cached));
-    return cached;
+    return seedWeekPlanIfEmpty(cached);
   }
   const fresh = newEmptyWeekPlan(new Date());
   lsSet(planKey(fresh.weekId), JSON.stringify(fresh));
-  return fresh;
+  return seedWeekPlanIfEmpty(fresh);
 }
 
 export async function upsertDayItem(weekId: string, day: DayKey, item: WorkoutItem): Promise<void> {
@@ -244,9 +368,11 @@ export async function addExerciseToToday(ex: ExerciseLike, day?: DayKey) {
       imageThumbnailUrl: ex.imageThumbnailUrl ?? ex.imageUrl ?? ex.gifUrl ?? null,
       gifUrl: ex.gifUrl ?? null,
       descriptionHtml: ex.descriptionHtml,
+      description: ex.description,
       primaryMuscles: ex.primaryMuscles,
       secondaryMuscles: ex.secondaryMuscles,
       equipmentList: ex.equipmentList,
+      instructions: ex.instructions,
     },
   };
 
@@ -258,15 +384,62 @@ export async function addExerciseToToday(ex: ExerciseLike, day?: DayKey) {
    Daily meals (client)
 ====================================================================== */
 const FALLBACK_MEALS: SuggestedMeal[] = [
-  { id: "52772", title: "Teriyaki Chicken Casserole", image: "https://www.themealdb.com/images/media/meals/wvpsxx1468256321.jpg" },
-  { id: "52804", title: "Poutine", image: "https://www.themealdb.com/images/media/meals/uuyrrx1487327597.jpg" },
-  { id: "52977", title: "Corba", image: "https://www.themealdb.com/images/media/meals/58oia61564916529.jpg" },
+  {
+    id: "52772",
+    title: "Teriyaki Chicken Casserole",
+    image: "https://www.themealdb.com/images/media/meals/wvpsxx1468256321.jpg",
+    description: "Oven-baked chicken casserole coated in a sweet teriyaki glaze with tender vegetables and rice.",
+    instructions:
+      "Preheat oven to 180°C. Combine cooked rice, steamed vegetables, shredded chicken, and teriyaki sauce in a baking dish. Top with sesame seeds and bake 15 minutes until bubbly.",
+    ingredients: [
+      { name: "Cooked rice", measure: "3 cups" },
+      { name: "Chicken breast", measure: "2 cups, shredded" },
+      { name: "Mixed vegetables", measure: "2 cups" },
+      { name: "Teriyaki sauce", measure: "1 cup" },
+      { name: "Sesame seeds", measure: "1 tbsp" },
+    ],
+    category: "Dinner",
+    area: "Japanese",
+  },
+  {
+    id: "52804",
+    title: "Poutine",
+    image: "https://www.themealdb.com/images/media/meals/uuyrrx1487327597.jpg",
+    description: "Crispy fries covered in rich gravy and squeaky cheese curds — the ultimate Canadian comfort food.",
+    instructions:
+      "Bake French fries until crisp. Warm beef gravy on the stove. Assemble fries on a platter, scatter cheese curds, and ladle hot gravy over the top. Serve immediately.",
+    ingredients: [
+      { name: "French fries", measure: "500 g" },
+      { name: "Cheese curds", measure: "200 g" },
+      { name: "Beef gravy", measure: "400 ml" },
+    ],
+    category: "Snack",
+    area: "Canadian",
+  },
+  {
+    id: "52977",
+    title: "Corba",
+    image: "https://www.themealdb.com/images/media/meals/58oia61564916529.jpg",
+    description: "A warming Turkish red lentil soup with tomato, mint, and a hint of spice.",
+    instructions:
+      "Sauté onion, garlic, and carrot in olive oil. Stir in red lentils, tomato paste, cumin, and paprika. Pour in stock and simmer 20 minutes. Blend until smooth and finish with lemon juice and dried mint.",
+    ingredients: [
+      { name: "Red lentils", measure: "1 cup" },
+      { name: "Onion", measure: "1, diced" },
+      { name: "Tomato paste", measure: "2 tbsp" },
+      { name: "Vegetable stock", measure: "4 cups" },
+      { name: "Dried mint", measure: "1 tsp" },
+    ],
+    category: "Soup",
+    area: "Turkish",
+  },
 ];
 
 function mealsKey(dateIso: string, goal: "cut" | "maintain" | "bulk") {
   return key(`meals:${dateIso}:${goal}`);
 }
 function todayIso() { return fmtDate(new Date()); }
+const MEALS_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours
 
 export async function getOrCreateDailyMeals(
   dateIso?: string,
@@ -278,24 +451,53 @@ export async function getOrCreateDailyMeals(
   const safeCount = Math.min(Math.max(count, 1), 6);
   const cacheId = mealsKey(day, goal);
 
-  const cached = safeParse<SuggestedMeal[]>(lsGet(cacheId));
-  if (Array.isArray(cached) && cached.length >= safeCount) return cached.slice(0, safeCount);
+  const cached = safeParse<{ items?: SuggestedMeal[]; expiresAt?: number }>(lsGet(cacheId));
+  if (
+    cached &&
+    Array.isArray(cached.items) &&
+    cached.items.length >= safeCount &&
+    typeof cached.expiresAt === "number" &&
+    cached.expiresAt > Date.now()
+  ) {
+    return cached.items.slice(0, safeCount);
+  }
 
   try {
     const params = new URLSearchParams({ count: String(safeCount), goal, date: day });
     const res = await fetch(`/api/recipes/random?${params.toString()}`, { cache: "no-store" });
     if (res.ok) {
-      const list = (await res.json()) as SuggestedMeal[];
+      const list = (await res.json()) as Array<{
+        id?: string | number;
+        title?: string;
+        image?: string | null;
+        description?: string | null;
+        instructions?: string | null;
+        ingredients?: Ingredient[];
+        category?: string | null;
+        area?: string | null;
+      }>;
       if (Array.isArray(list) && list.length) {
-        lsSet(cacheId, JSON.stringify(list));
-        return list.slice(0, safeCount);
+        const shaped: SuggestedMeal[] = list.map((item, idx) => ({
+          id: item?.id ? String(item.id) : `meal-${day}-${goal}-${idx}`,
+          title: item?.title ?? "Recipe",
+          image: item?.image ?? null,
+          description: item?.description ?? null,
+          instructions: item?.instructions ?? null,
+          ingredients: Array.isArray(item?.ingredients) ? item.ingredients : [],
+          category: item?.category ?? null,
+          area: item?.area ?? null,
+        }));
+        const payload = { items: shaped, expiresAt: Date.now() + MEALS_TTL_MS };
+        lsSet(cacheId, JSON.stringify(payload));
+        return shaped.slice(0, safeCount);
       }
     }
   } catch {
-    // ignore â€” use fallback
+    // ignore — use fallback
   }
 
-  lsSet(cacheId, JSON.stringify(FALLBACK_MEALS));
+  const fallbackPayload = { items: FALLBACK_MEALS, expiresAt: Date.now() + MEALS_TTL_MS };
+  lsSet(cacheId, JSON.stringify(fallbackPayload));
   return FALLBACK_MEALS.slice(0, safeCount);
 }
 
@@ -318,4 +520,3 @@ export async function requireSignedIn(): Promise<string> {
   if (!uid) throw new Error("AUTH_REQUIRED");
   return uid;
 }
-

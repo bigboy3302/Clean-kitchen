@@ -7,8 +7,10 @@ export type Exercise = {
   gifUrl: string;
   imageUrl: string | null;
   imageThumbnailUrl: string | null;
+  description: string;
   descriptionHtml: string;
   primaryMuscles: string[];
   secondaryMuscles: string[];
   equipmentList: string[];
+  instructions?: string[];
 };

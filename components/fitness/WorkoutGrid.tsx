@@ -22,7 +22,9 @@ type Exercise = {
   gifUrl: string;
   imageUrl: string | null;
   imageThumbnailUrl: string | null;
+  description: string;
   descriptionHtml: string;
+  instructions?: string[];
   primaryMuscles: string[];
   secondaryMuscles: string[];
   equipmentList: string[];
@@ -161,7 +163,9 @@ export default function WorkoutGrid({
         gifUrl: ex.gifUrl,
         imageUrl: ex.imageUrl || ex.gifUrl || null,
         imageThumbnailUrl: ex.imageThumbnailUrl || ex.gifUrl || null,
+        description: ex.description,
         descriptionHtml: ex.descriptionHtml,
+        instructions: ex.instructions,
         primaryMuscles: ex.primaryMuscles,
         secondaryMuscles: ex.secondaryMuscles,
       };
@@ -208,15 +212,20 @@ export default function WorkoutGrid({
     return "/placeholder.png";
   }
 
-  function snippet(html: string) {
-    const text = (html || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-    return text.length > 160 ? `${text.slice(0, 160)}â€¦` : text || "No description available.";
+  function snippet(ex: Exercise) {
+    const base = (ex.description || "").trim();
+    if (base.length) {
+      return base.length > 160 ? `${base.slice(0, 160)}…` : base;
+    }
+    const html = ex.descriptionHtml || "";
+    const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    return text.length > 160 ? `${text.slice(0, 160)}…` : text || "No description available.";
   }
 
   return (
     <section className="card">
       <div className="head">
-        <div>
+        <div className="headLeft">
           <h3 className="h3">{title}</h3>
           <div className="sub">{heading}</div>
         </div>
@@ -231,18 +240,20 @@ export default function WorkoutGrid({
       </div>
 
       {targets.length > 0 && (
-        <div className="tabs" role="tablist" aria-label="Targets">
-          {targets.map((t) => (
-            <button
-              key={t}
-              className={`tab ${sel === t ? "on" : ""}`}
-              onClick={() => onPick(t)}
-              role="tab"
-              aria-selected={sel === t}
-            >
-              {cap(t)}
-            </button>
-          ))}
+        <div className="tabsWrap">
+          <div className="tabs" role="tablist" aria-label="Targets">
+            {targets.map((t) => (
+              <button
+                key={t}
+                className={`tab ${sel === t ? "on" : ""}`}
+                onClick={() => onPick(t)}
+                role="tab"
+                aria-selected={sel === t}
+              >
+                {cap(t)}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -270,7 +281,7 @@ export default function WorkoutGrid({
             />
             <div className="meta">
               <div className="name">{cap(ex.name)}</div>
-              <p className="desc">{snippet(ex.descriptionHtml)}</p>
+            <p className="desc">{snippet(ex)}</p>
               <div className="row">
                 <span className="chip">{cap(ex.bodyPart || ex.target)}</span>
                 {ex.primaryMuscles?.slice(0, 2).map((mus) => (
@@ -356,14 +367,21 @@ export default function WorkoutGrid({
 
       <style jsx>{`
         .card{border:1px solid var(--border);background:var(--card-bg);border-radius:18px;padding:18px;box-shadow:0 18px 36px rgba(15,23,42,.06);display:flex;flex-direction:column;gap:14px}
-        .head{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+        @media (max-width:540px){.card{padding:14px;gap:12px}}
+        .head{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+        .headLeft{min-width:0;flex:1 1 auto;display:grid;gap:4px}
         .h3{margin:0;font-size:20px;font-weight:800;color:var(--text)}
+        @media (max-width:480px){.h3{font-size:1rem}}
         .sub{color:var(--muted);font-size:13px;margin-top:2px}
-        .search{flex:1;max-width:320px}
+        @media (max-width:480px){.sub{font-size:12px}}
+        .search{flex:0 0 280px;max-width:100%}
+        @media (max-width:640px){.search{flex:1 1 100%}}
         .search .inp{width:100%;border:1px solid var(--border);border-radius:12px;padding:9px 12px;background:var(--bg2);color:var(--text)}
         .search .inp::placeholder{color:var(--muted)}
 
-        .tabs{display:flex;gap:8px;overflow:auto;padding:6px 0 4px;margin-top:-4px}
+        .tabsWrap{overflow-x:auto;padding-bottom:4px;margin-top:-4px}
+        .tabsWrap::-webkit-scrollbar{height:4px}
+        .tabs{display:flex;gap:8px;min-width:max-content;padding:6px 0}
         .tab{border:1px solid var(--border);background:var(--bg2);color:var(--text);border-radius:999px;padding:6px 12px;cursor:pointer;white-space:nowrap;font-weight:600;font-size:13px;transition:all .15s ease}
         .tab.on{background:var(--primary);border-color:var(--primary);color:var(--primary-contrast);box-shadow:0 8px 20px rgba(37,99,235,.22)}
         .tab:not(.on):hover{border-color:color-mix(in oklab,var(--primary) 30%,var(--border));color:color-mix(in oklab,var(--primary) 40%,var(--text))}
@@ -374,7 +392,8 @@ export default function WorkoutGrid({
         .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
         @media (max-width:1200px){ .grid{grid-template-columns:repeat(3,minmax(0,1fr));} }
         @media (max-width:880px){ .grid{grid-template-columns:repeat(2,minmax(0,1fr));} }
-        @media (max-width:560px){ .grid{grid-template-columns:minmax(0,1fr);} }
+        @media (max-width:640px){ .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;} }
+        @media (max-width:520px){ .grid{grid-template-columns:minmax(0,1fr);} }
 
         .item{border:1px solid var(--border);border-radius:16px;overflow:hidden;background:var(--bg);display:flex;flex-direction:column;transition:transform .18s ease, box-shadow .18s ease}
         .item:hover{transform:translateY(-2px);box-shadow:0 16px 32px rgba(15,23,42,.14)}
@@ -421,8 +440,3 @@ function getTodayKey(date = new Date()): DayKey {
   const js = date.getDay();
   return (["sun", "mon", "tue", "wed", "thu", "fri", "sat"][js] as DayKey) || "mon";
 }
-
-
-
-
-

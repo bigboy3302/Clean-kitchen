@@ -313,6 +313,8 @@ export default function ProfilePage() {
     setErr(null);
     setMsg(null);
     setBusySave(true);
+    const trimmedFirst = firstName.trim();
+    const trimmedLast = lastName.trim();
     const requestedUsername = slugifyUsername(username);
     const previousUsername = userDoc.username || null;
     const previousDisplayName = fullName(userDoc.firstName, userDoc.lastName);
@@ -346,8 +348,8 @@ export default function ProfilePage() {
         trx.set(
           uref,
           {
-            firstName: firstName.trim() || null,
-            lastName: lastName.trim() || null,
+            firstName: trimmedFirst || null,
+            lastName: trimmedLast || null,
             username: nextUsername || null,
             prefs: { units, theme: mode, emailNotifications },
           },
@@ -356,7 +358,7 @@ export default function ProfilePage() {
         appliedUsername = nextUsername || null;
       });
 
-      const displayNameNext = fullName(firstName, lastName);
+      const displayNameNext = fullName(trimmedFirst, trimmedLast);
       await updateProfile(me, { displayName: displayNameNext || undefined });
 
       const nextPhotoURL = userDoc.photoURL ?? me.photoURL ?? null;
@@ -394,8 +396,8 @@ export default function ProfilePage() {
         prev
           ? {
               ...prev,
-              firstName: firstName.trim() || null,
-              lastName: lastName.trim() || null,
+              firstName: trimmedFirst || null,
+              lastName: trimmedLast || null,
               username: appliedUsername,
               prefs: { units, theme: mode, emailNotifications },
             }

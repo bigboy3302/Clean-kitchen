@@ -306,6 +306,12 @@ export default function FitnessPage() {
             padding-block: 16px 60px;
           }
         }
+        @media (max-width: 480px) {
+          .fitnessShell {
+            gap: 16px;
+            padding-block: 14px 48px;
+          }
+        }
         .muted { color: var(--muted); }
         .loadingState {
           min-height: 200px;
@@ -331,12 +337,23 @@ export default function FitnessPage() {
             gap: 14px;
           }
         }
+        @media (max-width: 480px) {
+          .sectionCard {
+            padding: 14px;
+            gap: 12px;
+          }
+        }
         .sectionTitle {
           margin: 0;
           font-size: 1.05rem;
           font-weight: 800;
           color: var(--text);
           letter-spacing: -0.01em;
+        }
+        @media (max-width: 480px) {
+          .sectionTitle {
+            font-size: 0.95rem;
+          }
         }
         .panelRow {
           display: grid;
@@ -347,7 +364,38 @@ export default function FitnessPage() {
         @media (max-width: 720px) {
           .panelRow {
             grid-template-columns: 1fr;
+            gap: 16px;
           }
+        }
+        @media (max-width: 480px) {
+          .panelRow {
+            gap: 14px;
+          }
+        }
+        @media (max-width: 360px) {
+          .panelRow {
+            gap: 12px;
+          }
+        }
+        .panelRow > * {
+          min-width: 0;
+        }
+        @media (max-width: 640px) {
+          .panelRow .statCard {
+            order: 2;
+          }
+          .panelRow .meterWrap {
+            order: 1;
+          }
+        }
+        @media (max-width: 480px) {
+          .panelRow .statCard,
+          .panelRow .meterWrap {
+            order: unset;
+          }
+        }
+        .meterWrap {
+          min-width: 0;
         }
         .statCard { gap: 18px; }
         .statGrid {
@@ -368,6 +416,17 @@ export default function FitnessPage() {
           display: grid;
           gap: 8px;
         }
+        @media (max-width: 480px) {
+          .statMetric {
+            padding: 12px;
+            gap: 6px;
+          }
+        }
+        @media (max-width: 360px) {
+          .statMetric {
+            padding: 10px;
+          }
+        }
         .statLabel {
           font-size: 0.75rem;
           font-weight: 700;
@@ -380,6 +439,16 @@ export default function FitnessPage() {
           font-weight: 800;
           color: var(--text);
         }
+        @media (max-width: 480px) {
+          .statValue {
+            font-size: 1.35rem;
+          }
+        }
+        @media (max-width: 360px) {
+          .statValue {
+            font-size: 1.2rem;
+          }
+        }
         .formGrid {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -388,6 +457,11 @@ export default function FitnessPage() {
         @media (max-width: 640px) {
           .formGrid {
             gap: 14px;
+          }
+        }
+        @media (max-width: 540px) {
+          .formGrid {
+            grid-template-columns: 1fr;
           }
         }
         .field {
@@ -414,6 +488,12 @@ export default function FitnessPage() {
           border-color: color-mix(in oklab, var(--primary) 40%, var(--border));
           box-shadow: 0 0 0 4px color-mix(in oklab, var(--ring) 45%, transparent);
           background: var(--bg);
+        }
+        @media (max-width: 480px) {
+          .control {
+            padding: 9px 12px;
+            font-size: 0.95rem;
+          }
         }
         .chips {
           display: flex;
@@ -480,6 +560,16 @@ export default function FitnessPage() {
             min-width: 420px;
           }
         }
+        @media (max-width: 480px) {
+          .tableCard table {
+            min-width: 360px;
+          }
+        }
+        @media (max-width: 360px) {
+          .tableCard table {
+            min-width: 320px;
+          }
+        }
         .macrosTable th,
         .macrosTable td {
           padding: 12px;
@@ -500,11 +590,35 @@ export default function FitnessPage() {
           color: var(--text);
           background: color-mix(in oklab, var(--bg2) 90%, transparent);
         }
+        @media (max-width: 480px) {
+          .macrosTable th,
+          .macrosTable td {
+            padding: 10px;
+            font-size: 0.95rem;
+          }
+        }
+        @media (max-width: 360px) {
+          .macrosTable th,
+          .macrosTable td {
+            padding: 8px;
+            font-size: 0.9rem;
+          }
+        }
         .plannerCard {
           justify-content: space-between;
         }
         .plannerCard p {
           margin: 0;
+        }
+        @media (max-width: 540px) {
+          .plannerCard {
+            gap: 12px;
+          }
+        }
+        @media (max-width: 480px) {
+          .plannerCard {
+            align-items: stretch;
+          }
         }
         .cta {
           display: inline-flex;
@@ -529,6 +643,11 @@ export default function FitnessPage() {
         .cta:hover { filter: brightness(1.05); }
         .cta:active { transform: translateY(1px); }
         .meterWrap :global(.card) { height: 100%; }
+        @media (max-width: 720px) {
+          .meterWrap :global(.card) {
+            height: auto;
+          }
+        }
         .library { margin-top: 8px; }
       `}</style>
     </Container>

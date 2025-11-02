@@ -1,0 +1,296 @@
+[
+  {
+    "id": "push-up-standard",
+    "name": "Push-Up",
+    "bodyPart": "chest",
+    "target": "pectorals",
+    "equipment": "body weight",
+    "gifUrl": "https://d205bpvrqc9yn1.cloudfront.net/0662.gif",
+    "instructions": [
+      "Start in a high plank with hands slightly wider than shoulders.",
+      "Brace your core and keep a straight line from head to heels.",
+      "Lower until your chest nearly touches the ground.",
+      "Press through the floor to return to the plank."
+    ]
+  },
+  {
+    "id": "bodyweight-squat",
+    "name": "Bodyweight Squat",
+    "bodyPart": "upper legs",
+    "target": "quads",
+    "equipment": "body weight",
+    "gifUrl": "https://d205bpvrqc9yn1.cloudfront.net/1545.gif",
+    "instructions": [
+      "Stand with feet shoulder-width apart and toes slightly out.",
+      "Push hips back and bend knees to sit into a squat.",
+      "Keep chest lifted and weight in heels.",
+      "Drive through heels to stand tall."
+    ]
+  },
+  {
+    "id": "walking-lunge",
+    "name": "Walking Lunge",
+    "bodyPart": "upper legs",
+    "target": "glutes",
+    "equipment": "body weight",
+    "gifUrl": "https://d205bpvrqc9yn1.cloudfront.net/1466.gif",
+    "instructions": [
+      "Stand tall with feet hip-width apart.",
+      "Step forward and lower until both knees are at 90 degrees.",
+      "Push through the front heel to stand and step forward with the other leg.",
+      "Continue alternating legs while keeping your torso upright."
+    ]
+  },
+  {
+    "id": "plank-standard",
+    "name": "Forearm Plank",
+    "bodyPart": "waist",
+    "target": "abs",
+    "equipment": "body weight",
+    "gifUrl": "https://d205bpvrqc9yn1.cloudfront.net/0668.gif",
+    "instructions": [
+      "Place forearms on the floor with elbows under shoulders.",
+      "Extend legs behind and balance on toes.",
+      "Keep body in a straight line and squeeze glutes.",
+      "Hold while breathing steadily without dropping hips."
+    ]
+  },
+  {
+    "id": "glute-bridge",
+    "name": "Glute Bridge",
+    "bodyPart": "upper legs",
+    "target": "glutes",
+    "equipment": "body weight",
+    "gifUrl": "https://d205bpvrqc9yn1.cloudfront.net/0870.gif",
+    "instructions": [
+      "Lie on your back with knees bent and feet flat on the floor.",
+      "Press arms into the ground for stability.",
+      "Drive through heels to lift hips until your body forms a straight line.",
+      "Lower hips with control and repeat."
+    ]
+  },
+  {
+    "id": "mountain-climber",
+    "name": "Mountain Climber",
+    "bodyPart": "cardio",
+    "target": "abs",
+    "equipment": "body weight",
+    "gifUrl": "https://d205bpvrqc9yn1.cloudfront.net/0669.gif",
+    "instructions": [
+      "Start in a high plank with shoulders over wrists.",
+      "Drive one knee toward chest while keeping hips low.",
+      "Switch legs quickly in a running motion.",
+      "Maintain a steady rhythm and stable upper body."
+    ]
+  },
+  {
+    "id": "burpee-no-push-up",
+    "name": "Burpee",
+    "bodyPart": "cardio",
+    "target": "full body",
+    "equipment": "body weight",
+    "gifUrl": "https://d205bpvrqc9yn1.cloudfront.net/1167.gif",
+    "instructions": [
+      "Stand with feet shoulder-width apart.",
+      "Squat down, place hands on floor, and jump feet back to a plank.",
+      "Jump feet forward to hands and explode up reaching overhead.",
+      "Land softly and immediately move into the next rep."
+    ]
+  },
+  {
+    "id": "dumbbell-row-one-arm",
+    "name": "Dumbbell Row",
+    "bodyPart": "back",
+    "target": "lats",
+    "equipment": "dumbbell",
+    "gifUrl": "https://d205bpvrqc9yn1.cloudfront.net/0292.gif",
+    "instructions": [
+      "Place one knee and hand on a bench with the opposite foot on floor.",
+      "Hold a dumbbell with the free hand and let it hang toward the floor.",
+      "Pull the weight toward ribcage, squeezing shoulder blade back.",
+      "Lower with control and repeat before switching sides."
+    ]
+  },
+  {
+    "id": "jumping-jack",
+    "name": "Jumping Jack",
+    "bodyPart": "cardio",
+    "target": "full body",
+    "equipment": "body weight",
+    "gifUrl": "https://d205bpvrqc9yn1.cloudfront.net/JumpingJack.gif",
+    "instructions": [
+      "Stand tall with arms by your sides and feet together.",
+      "Jump feet out while raising arms overhead.",
+      "Quickly reverse to the starting position.",
+      "Stay light on your feet and maintain a brisk pace."
+    ]
+  },
+  {
+    "id": "bicycle-crunch",
+    "name": "Bicycle Crunch",
+    "bodyPart": "waist",
+    "target": "abs",
+    "equipment": "body weight",
+    "gifUrl": "https://d205bpvrqc9yn1.cloudfront.net/1271.gif",
+    "instructions": [
+      "Lie on your back with hands behind head and legs lifted.",
+      "Bring right elbow toward left knee while extending right leg.",
+      "Switch sides in a pedaling motion, rotating through torso.",
+      "Keep lower back pressed into the floor."
+    ]
+  },
+  {
+    "id": "tricep-dip-bench",
+    "name": "Bench Tricep Dip",
+    "bodyPart": "upper arms",
+    "target": "triceps",
+    "equipment": "body weight",
+    "gifUrl": "https://d205bpvrqc9yn1.cloudfront.net/1399.gif",
+    "instructions": [
+      "Sit on the edge of a bench with hands gripping beside hips.",
+      "Walk feet forward and extend legs, supporting weight on arms.",
+      "Lower body by bending elbows until upper arms are parallel to floor.",
+      "Press back up to straighten arms without locking elbows."
+    ]
+  },
+  {
+    "id": "reverse-lunge",
+    "name": "Reverse Lunge",
+    "bodyPart": "upper legs",
+    "target": "glutes",
+    "equipment": "body weight",
+    "gifUrl": "https://d205bpvrqc9yn1.cloudfront.net/1461.gif",
+    "instructions": [
+      "Stand tall with hands on hips or at sides.",
+      "Step one foot back and lower until both knees form 90-degree angles.",
+      "Keep front knee stacked over ankle.",
+      "Push through front heel to return and alternate legs."
+    ]
+  },
+  {
+    "id": "high-knee-run",
+    "name": "High Knees",
+    "bodyPart": "cardio",
+    "target": "full body",
+    "equipment": "body weight",
+    "gifUrl": "https://d205bpvrqc9yn1.cloudfront.net/1170.gif",
+    "instructions": [
+      "Stand with feet hip-width apart and arms at sides.",
+      "Run in place, driving knees toward chest.",
+      "Pump arms to match leg speed.",
+      "Maintain an upright posture and quick rhythm."
+    ]
+  },
+  {
+    "id": "side-plank",
+    "name": "Side Plank",
+    "bodyPart": "waist",
+    "target": "obliques",
+    "equipment": "body weight",
+    "gifUrl": "https://d205bpvrqc9yn1.cloudfront.net/2293.gif",
+    "instructions": [
+      "Lie on your side with elbow under shoulder and legs stacked.",
+      "Lift hips off the floor to form a straight line from head to feet.",
+      "Keep core braced and hold position.",
+      "Repeat on the opposite side."
+    ]
+  },
+  {
+    "id": "shoulder-tap-plank",
+    "name": "Plank Shoulder Tap",
+    "bodyPart": "waist",
+    "target": "abs",
+    "equipment": "body weight",
+    "gifUrl": "https://d205bpvrqc9yn1.cloudfront.net/0671.gif",
+    "instructions": [
+      "Start in a high plank with feet hip-width apart.",
+      "Lift one hand to tap the opposite shoulder while keeping hips stable.",
+      "Alternate sides, minimizing sway through the torso.",
+      "Keep glutes and core tight the entire time."
+    ]
+  },
+  {
+    "id": "standing-calf-raise",
+    "name": "Standing Calf Raise",
+    "bodyPart": "lower legs",
+    "target": "calves",
+    "equipment": "body weight",
+    "gifUrl": "https://d205bpvrqc9yn1.cloudfront.net/1368.gif",
+    "instructions": [
+      "Stand with feet hip-width apart, near a wall for balance if needed.",
+      "Rise onto the balls of your feet, squeezing calves.",
+      "Pause briefly at the top before lowering heels slowly.",
+      "Repeat without letting heels slam to the ground."
+    ]
+  },
+  {
+    "id": "jump-rope-basic",
+    "name": "Jump Rope",
+    "bodyPart": "cardio",
+    "target": "full body",
+    "equipment": "rope",
+    "gifUrl": "https://d205bpvrqc9yn1.cloudfront.net/JumpRope.gif",
+    "instructions": [
+      "Hold rope handles with elbows close to sides.",
+      "Swing rope overhead and jump as it passes under feet.",
+      "Land softly on balls of feet and keep a steady rhythm.",
+      "Maintain an upright posture and engage the core."
+    ]
+  },
+  {
+    "id": "dumbbell-shoulder-press",
+    "name": "Dumbbell Shoulder Press",
+    "bodyPart": "shoulders",
+    "target": "delts",
+    "equipment": "dumbbell",
+    "gifUrl": "https://d205bpvrqc9yn1.cloudfront.net/0363.gif",
+    "instructions": [
+      "Sit or stand with dumbbells at shoulder height, palms facing forward.",
+      "Brace core and press weights overhead until arms extend.",
+      "Lower weights back to starting position with control.",
+      "Avoid arching your lower back."
+    ]
+  },
+  {
+    "id": "renegade-row",
+    "name": "Renegade Row",
+    "bodyPart": "back",
+    "target": "lats",
+    "equipment": "dumbbell",
+    "gifUrl": "https://d205bpvrqc9yn1.cloudfront.net/1326.gif",
+    "instructions": [
+      "Start in a plank with hands gripping dumbbells under shoulders.",
+      "Row one dumbbell toward ribcage while balancing on the other hand and feet.",
+      "Lower with control and switch sides.",
+      "Keep hips square and core tight throughout."
+    ]
+  },
+  {
+    "id": "russian-twist",
+    "name": "Russian Twist",
+    "bodyPart": "waist",
+    "target": "obliques",
+    "equipment": "medicine ball",
+    "gifUrl": "https://d205bpvrqc9yn1.cloudfront.net/1160.gif",
+    "instructions": [
+      "Sit on the floor with knees bent and heels lifted or anchored.",
+      "Hold a weight at chest level and lean back slightly.",
+      "Rotate torso to tap the weight beside hip, then switch sides.",
+      "Keep core braced and move in a controlled tempo."
+    ]
+  },
+  {
+    "id": "hip-thrust",
+    "name": "Barbell Hip Thrust",
+    "bodyPart": "upper legs",
+    "target": "glutes",
+    "equipment": "barbell",
+    "gifUrl": "https://d205bpvrqc9yn1.cloudfront.net/3644.gif",
+    "instructions": [
+      "Sit on the floor with shoulder blades against a bench and barbell across hips.",
+      "Plant feet shoulder-width apart.",
+      "Drive through heels to lift hips until torso is parallel to the floor.",
+      "Squeeze glutes at the top, then lower with control."
+    ]
+  }
+]

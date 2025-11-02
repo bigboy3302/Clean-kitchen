@@ -18,11 +18,13 @@ import {
   limit as fsLimit,
   addDoc,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 
 import { auth, db, storage } from "@/lib/firebas1e";
 import PostCard from "@/components/posts/PostCard";
+import { getWeekPlan, getOrCreateDailyMeals, getMetrics } from "@/lib/fitness/store";
 
 
 function getImageDims(file) {
@@ -105,6 +107,8 @@ export default function DashboardPage() {
   const [recentPosts, setRecentPosts] = useState([]);
   const [trending, setTrending] = useState([]);
   const [trendingReposts, setTrendingReposts] = useState({});
+  const [meAuthor, setMeAuthor] = useState(null);
+  const meAuthorRef = useRef(null);
   const trendingSorted = useMemo(() => {
     const withIndex = trending.map((post, idx) => ({ post, idx }));
     return withIndex
@@ -158,6 +162,20 @@ export default function DashboardPage() {
     return ago ? `Last post Ā· ${ago} ago` : "Last post";
   }, [myPosts.length, lastPostMs]);
 
+  const [pantryCount, setPantryCount] = useState(null);
+  const [recentPantry, setRecentPantry] = useState([]);
+  const [todayRecipe, setTodayRecipe] = useState(null);
+  const [workoutOfDay, setWorkoutOfDay] = useState(null);
+  const [weekSummary, setWeekSummary] = useState({ workouts: 0, meals: 0 });
+
+  const pantryDisplay = pantryCount ?? 12;
+  const pantryDisplayValue = pantryDisplay.toLocaleString();
+  const workoutSnippet = workoutOfDay?.description
+    ? workoutOfDay.description.length > 110
+      ? `${workoutOfDay.description.slice(0, 107)}…`
+      : workoutOfDay.description
+    : "We keep a fresh move ready for your planner.";
+
 
   const [openComposer, setOpenComposer] = useState(false);
   const [postText, setPostText] = useState("");
@@ -183,6 +201,46 @@ export default function DashboardPage() {
     return () => stop();
   }, [router]);
 
+  const mergeAuthorIntoPosts = (list) => {
+    const patch = meAuthorRef.current;
+    if (!patch || !uid) return list;
+    return list.map((post) =>
+      post?.uid === uid ? { ...post, author: { ...post.author, ...patch } } : post
+    );
+  };
+
+  useEffect(() => {
+    if (!uid) {
+      setMeAuthor(null);
+      meAuthorRef.current = null;
+      return;
+    }
+    const userRef = doc(db, "users", uid);
+    const stop = onSnapshot(userRef, (snap) => {
+      if (!snap.exists()) {
+        setMeAuthor(null);
+        meAuthorRef.current = null;
+        return;
+      }
+      const data = snap.data() || {};
+      const displayName = [data.firstName, data.lastName].filter(Boolean).join(" ").trim()
+        || data.username
+        || data.email
+        || "You";
+      const avatarURL = data.photoURL || data.avatarURL || null;
+      const authorPatch = {
+        displayName,
+        username: data.username ?? null,
+        avatarURL: avatarURL ?? null,
+      };
+      setMeAuthor(authorPatch);
+      meAuthorRef.current = authorPatch;
+      setRecentPosts((prev) => mergeAuthorIntoPosts(prev));
+      setTrending((prev) => mergeAuthorIntoPosts(prev));
+    });
+    return () => stop();
+  }, [uid]);
+
   useEffect(() => {
     const qy = query(
       collection(db, "posts"),
@@ -193,10 +251,10 @@ export default function DashboardPage() {
       const list = snap.docs
         .map((d) => ({ id: d.id, ...(d.data() || {}) }))
         .filter((p) => p.isRepost !== true);
-      setRecentPosts(list);
+      setRecentPosts(mergeAuthorIntoPosts(list));
     });
     return () => stop();
-  }, []);
+  }, [uid]);
 
   useEffect(() => {
     const ids = trending.map((p) => p.id).filter(Boolean);
@@ -235,9 +293,145 @@ export default function DashboardPage() {
       fsLimit(5)
     );
     const stop = onSnapshot(tQ, (snap) => {
-      setTrending(snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) })));
+      const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) }));
+      setTrending(mergeAuthorIntoPosts(list));
     });
     return () => stop();
+  }, [uid]);
+
+  useEffect(() => {
+    if (!uid) {
+      setPantryCount(null);
+      setRecentPantry([]);
+      return;
+    }
+    const pantryQuery = query(
+      collection(db, "pantryItems"),
+      where("uid", "==", uid),
+      orderBy("createdAt", "desc"),
+      fsLimit(12)
+    );
+    const stop = onSnapshot(
+      pantryQuery,
+      (snap) => {
+        const docs = snap.docs.map((docSnap) => {
+          const data = docSnap.data() || {};
+          const nutrition = data.nutrition || {};
+          const calories =
+            typeof nutrition?.kcalPer100g === "number"
+              ? Math.round(nutrition.kcalPer100g)
+              : typeof nutrition?.kcalPerServing === "number"
+              ? Math.round(nutrition.kcalPerServing)
+              : null;
+          return {
+            id: docSnap.id,
+            name: data.name || "Pantry item",
+            calories,
+          };
+        });
+        setPantryCount(snap.size);
+        setRecentPantry(docs.slice(0, 3));
+      },
+      (error) => {
+        console.warn("Failed to read pantry items", error);
+        setPantryCount(null);
+        setRecentPantry([]);
+      }
+    );
+    return () => stop();
+  }, [uid]);
+
+  useEffect(() => {
+    let ignore = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/recipes/random?count=1", { cache: "no-store" });
+        if (!res.ok) throw new Error(`recipes-${res.status}`);
+        const payload = await res.json();
+        if (ignore) return;
+        if (Array.isArray(payload) && payload.length) {
+          const recipe = payload[0];
+          setTodayRecipe({
+            id: recipe?.id || "",
+            title: recipe?.title || "Daily recipe",
+            image: recipe?.image || null,
+            description: recipe?.description || null,
+          });
+        } else {
+          setTodayRecipe(null);
+        }
+      } catch (error) {
+        if (!ignore) {
+          console.warn("Failed to fetch daily recipe", error);
+          setTodayRecipe(null);
+        }
+      }
+    })();
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/workouts?limit=1", { cache: "no-store" });
+        if (!res.ok) throw new Error(`workouts-${res.status}`);
+        const payload = await res.json();
+        if (ignore) return;
+        if (Array.isArray(payload) && payload.length) {
+          const workout = payload[0];
+          const snippet = (workout?.description || "Follow the GIF demo.").toString();
+          setWorkoutOfDay({
+            id: workout?.id || "",
+            name: workout?.name || "Workout",
+            bodyPart: workout?.bodyPart || "full body",
+            description: snippet,
+            gifUrl: workout?.gifUrl || "",
+          });
+        } else {
+          setWorkoutOfDay(null);
+        }
+      } catch (error) {
+        if (!ignore) {
+          console.warn("Failed to fetch workout of the day", error);
+          setWorkoutOfDay(null);
+        }
+      }
+    })();
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+    (async () => {
+      try {
+        const metrics = await getMetrics().catch(() => null);
+        if (ignore) return;
+        const goal = metrics?.goal ?? "maintain";
+        const plan = await getWeekPlan();
+        if (ignore) return;
+        const workouts = Object.values(plan?.days || {}).reduce((total, day) => {
+          const items = Array.isArray(day?.items) ? day.items.length : 0;
+          return total + items;
+        }, 0);
+        const meals = await getOrCreateDailyMeals(undefined, goal, 3);
+        if (!ignore) {
+          setWeekSummary({ workouts, meals: Array.isArray(meals) ? meals.length : 0 });
+        }
+      } catch (error) {
+        if (!ignore) {
+          console.warn("Failed to compute weekly summary", error);
+          setWeekSummary({ workouts: 0, meals: 0 });
+        }
+      }
+    })();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   async function handleToggleLike(post, liked) {
@@ -519,6 +713,69 @@ export default function DashboardPage() {
         </div>
       </section>
 
+      <section className="today container">
+        <div className="today-head">
+          <div>
+            <h2>Today</h2>
+            <p>Quick snapshot to jump back into your routine.</p>
+          </div>
+        </div>
+        <div className="today-grid">
+          <article className="today-card">
+            <span className="today-label">Pantry items</span>
+            <span className="today-value">{pantryDisplayValue}</span>
+            <p className="today-copy">Currently tracked in your pantry.</p>
+          </article>
+
+          <article className="today-card today-media">
+            <div className="today-card-body">
+              <div className="today-card-text">
+                <span className="today-label">Today&apos;s recipe</span>
+                <div className="today-title">{todayRecipe?.title ?? "Fetching a meal..."}</div>
+                <p className="today-copy">
+            {todayRecipe?.description
+              ? todayRecipe.description.length > 110
+                ? `${todayRecipe.description.slice(0, 107)}…`
+                : todayRecipe.description
+              : "We refresh this suggestion every few hours."}
+                </p>
+              </div>
+              <div className="today-thumb">
+                {todayRecipe?.image ? (
+                  <NextImage
+                    src={todayRecipe.image}
+                    alt={todayRecipe.title}
+                    fill
+                    sizes="120px"
+                    className="today-thumb-img"
+                    priority
+                  />
+                ) : (
+                  <span className="today-thumb-fallback" aria-hidden>
+                    🍽️
+                  </span>
+                )}
+              </div>
+            </div>
+            <Link className="today-link" href="/recipes">
+              Browse recipes
+            </Link>
+          </article>
+
+          <article className="today-card today-workout">
+            <span className="today-label">Workout of the day</span>
+            <div className="today-title">{workoutOfDay?.name ?? "Loading workout..."}</div>
+            <p className="today-copy">
+              {workoutOfDay?.bodyPart ? `${workoutOfDay.bodyPart.toUpperCase()} · ` : ""}
+              {workoutSnippet}
+            </p>
+            <Link className="today-link" href="/fitness/day">
+              Open planner
+            </Link>
+          </article>
+        </div>
+      </section>
+
       <div className="container layout">
         <section className="stream">
           <div className="stream-head">
@@ -547,6 +804,50 @@ export default function DashboardPage() {
         </section>
 
         <aside className="sidebar">
+          <div className="aside-card">
+            <div className="aside-head">
+              <div>
+                <h2>Recently scanned</h2>
+                <p>Last three pantry items with saved nutrition.</p>
+              </div>
+            </div>
+            {recentPantry.length === 0 ? (
+              <p className="aside-empty">No items scanned recently.</p>
+            ) : (
+              <ul className="recent-list">
+                {recentPantry.map((item) => (
+                  <li key={item.id} className="recent-item">
+                    <span className="recent-name">{item.name}</span>
+                    <span className="recent-kcal">
+                      {typeof item.calories === "number"
+                        ? `${item.calories} kcal / 100g`
+                        : "No nutrition saved"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="aside-card">
+            <div className="aside-head">
+              <div>
+                <h2>Your week</h2>
+                <p>Planned workouts and today&apos;s suggested meals.</p>
+              </div>
+            </div>
+            <div className="week-grid">
+              <div className="week-pod">
+                <span className="week-value">{weekSummary.workouts}</span>
+                <span className="week-label">Workouts planned</span>
+              </div>
+              <div className="week-pod">
+                <span className="week-value">{weekSummary.meals}</span>
+                <span className="week-label">Meals suggested today</span>
+              </div>
+            </div>
+          </div>
+
           <div className="trend-card">
             <div className="trend-head">
               <div>
@@ -821,6 +1122,111 @@ export default function DashboardPage() {
             min-height: 104px;
           }
         }
+        .today {
+          display: grid;
+          gap: 18px;
+          margin: 40px auto;
+        }
+        .today-head h2 {
+          margin: 0;
+          font-size: 22px;
+          font-weight: 800;
+        }
+        .today-head p {
+          margin: 4px 0 0;
+          color: var(--muted);
+          font-size: 14px;
+        }
+        .today-grid {
+          display: grid;
+          gap: 18px;
+          grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        }
+        .today-card {
+          border: 1px solid var(--border);
+          border-radius: var(--radius-card);
+          background: var(--card-bg);
+          box-shadow: var(--shadow);
+          padding: 18px;
+          display: grid;
+          gap: 10px;
+        }
+        .today-label {
+          font-size: 0.75rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: var(--muted);
+        }
+        .today-value {
+          font-size: 2.4rem;
+          font-weight: 800;
+          color: var(--text);
+          line-height: 1;
+        }
+        .today-title {
+          font-size: 1.05rem;
+          font-weight: 700;
+          color: var(--text);
+        }
+        .today-copy {
+          margin: 0;
+          color: var(--muted);
+          font-size: 0.9rem;
+          line-height: 1.45;
+        }
+        .today-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          color: var(--primary);
+          font-weight: 700;
+          text-decoration: none;
+        }
+        .today-link:hover {
+          text-decoration: underline;
+        }
+        .today-media .today-card-body {
+          display: flex;
+          align-items: center;
+          gap: 18px;
+        }
+        .today-card-text {
+          display: grid;
+          gap: 6px;
+          flex: 1;
+        }
+        .today-thumb {
+          position: relative;
+          width: 100px;
+          height: 100px;
+          border-radius: 20px;
+          border: 1px solid var(--border);
+          background: var(--bg2);
+          overflow: hidden;
+          display: grid;
+          place-items: center;
+          flex-shrink: 0;
+        }
+        .today-thumb-img {
+          object-fit: cover;
+          width: 100%;
+          height: 100%;
+        }
+        .today-thumb-fallback {
+          font-size: 32px;
+        }
+        .today-workout .today-copy {
+          min-height: 48px;
+        }
+        @media (max-width: 720px) {
+          .today-grid {
+            grid-template-columns: 1fr;
+          }
+          .today {
+            margin: 28px auto;
+          }
+        }
         .layout {
           display: grid;
           gap: 32px;
@@ -896,6 +1302,83 @@ export default function DashboardPage() {
         .sidebar {
           display: grid;
           gap: 20px;
+        }
+        .aside-card {
+          display: grid;
+          gap: 14px;
+          padding: 20px;
+          border-radius: var(--radius-card);
+          border: 1px solid var(--border);
+          background: var(--bg-raised);
+          box-shadow: var(--shadow);
+        }
+        .aside-head h2 {
+          margin: 0;
+          font-size: 18px;
+          font-weight: 800;
+        }
+        .aside-head p {
+          margin: 4px 0 0;
+          color: var(--muted);
+          font-size: 13px;
+        }
+        .aside-empty {
+          margin: 0;
+          color: var(--muted);
+          font-size: 13px;
+        }
+        .recent-list {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: grid;
+          gap: 10px;
+        }
+        .recent-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+          padding: 6px 0;
+          border-bottom: 1px dashed color-mix(in oklab, var(--border) 80%, transparent);
+        }
+        .recent-item:last-of-type {
+          border-bottom: none;
+        }
+        .recent-name {
+          font-weight: 700;
+          color: var(--text);
+        }
+        .recent-kcal {
+          font-size: 0.85rem;
+          color: var(--muted);
+          text-align: right;
+        }
+        .week-grid {
+          display: grid;
+          gap: 12px;
+          grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        }
+        .week-pod {
+          border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+          border-radius: var(--radius-button);
+          padding: 14px;
+          background: color-mix(in oklab, var(--bg2) 94%, transparent);
+          display: grid;
+          gap: 6px;
+        }
+        .week-value {
+          font-size: 1.8rem;
+          font-weight: 800;
+          color: var(--text);
+          line-height: 1;
+        }
+        .week-label {
+          font-size: 0.75rem;
+          font-weight: 600;
+          color: var(--muted);
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
         }
         .trend-card {
           position: sticky;
