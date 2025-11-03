@@ -5,9 +5,10 @@ import { useEffect, useRef } from "react";
 type Props = {
   search: string;
   onSearchChange: (value: string) => void;
+  onClearSearch?: () => void;
 };
 
-export default function FitnessHeader({ search, onSearchChange }: Props) {
+export default function FitnessHeader({ search, onSearchChange, onClearSearch }: Props) {
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -34,13 +35,26 @@ export default function FitnessHeader({ search, onSearchChange }: Props) {
             onChange={(event) => onSearchChange(event.target.value)}
             aria-label="Search workouts"
           />
+          {search ? (
+            <button
+              type="button"
+              className="clear"
+              aria-label="Clear search"
+              onClick={() => {
+                onClearSearch?.();
+                requestAnimationFrame(() => searchRef.current?.focus());
+              }}
+            >
+              ✕
+            </button>
+          ) : null}
         </label>
       </div>
 
       <style jsx>{`
         .fitnessHeader {
-          position: sticky;
-          top: calc(env(safe-area-inset-top) + 12px);
+          /* Non-sticky: header scrolls with the page */
+          position: static;
           z-index: 60;
           display: flex;
           flex-direction: column;
@@ -105,6 +119,15 @@ export default function FitnessHeader({ search, onSearchChange }: Props) {
         }
         .search input:focus {
           outline: none;
+        }
+        .clear {
+          border: none;
+          background: transparent;
+          color: var(--muted);
+          font-size: 18px;
+          cursor: pointer;
+          padding: 0;
+          line-height: 1;
         }
         @media (max-width: 720px) {
           .fitnessHeader {

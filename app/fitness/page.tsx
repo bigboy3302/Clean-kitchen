@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import Image from "next/image";
 import Container from "@/components/Container";
 import FitnessHeader from "@/components/fitness/FitnessHeader";
 import WorkoutGrid from "@/components/fitness/WorkoutGrid";
 import Meter from "@/components/ui/Meter";
 import Button from "@/components/ui/Button";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useTodayPlanner } from "@/hooks/useTodayPlanner";
 import {
   Goal,
   Activity,
@@ -51,6 +54,8 @@ export default function FitnessPage() {
     goal: "maintain",
   });
   const ageRef = useRef<HTMLInputElement | null>(null);
+
+  const planner = useTodayPlanner(form.goal);
 
   useEffect(() => {
     let alive = true;
@@ -147,7 +152,7 @@ export default function FitnessPage() {
 
   return (
     <Container as="main" className="fitnessPage">
-      <FitnessHeader search={search} onSearchChange={setSearch} />
+      <FitnessHeader search={search} onSearchChange={setSearch} onClearSearch={() => setSearch("")} />
 
       {loading ? (
         <div className="loading">
@@ -163,13 +168,18 @@ export default function FitnessPage() {
                   <p className="eyebrow">Personal plan</p>
                   <h2>Your daily targets</h2>
                 </div>
-                <Button
-                  type="button"
-                  variant={editing ? "secondary" : "primary"}
-                  onClick={() => setEditing((prev) => !prev)}
-                >
-                  {editing ? "Close" : "Edit metrics"}
-                </Button>
+                <div className="heroActions">
+                  <Link href="/fitness/day" className="heroPlanner">
+                    Today&apos;s planner
+                  </Link>
+                  <Button
+                    type="button"
+                    variant={editing ? "secondary" : "primary"}
+                    onClick={() => setEditing((prev) => !prev)}
+                  >
+                    {editing ? "Close" : "Edit metrics"}
+                  </Button>
+                </div>
               </div>
               <div className="heroContent">
                 <div className="heroSummary">
@@ -219,7 +229,109 @@ export default function FitnessPage() {
 
           </section>
 
-          <WorkoutGrid searchTerm={debouncedSearch} />
+          <section className="todaySection">
+            <article className="card todayCard">
+              <div className="todayHead">
+                <div>
+                  <p className="eyebrow">Today&apos;s planner</p>
+                  <h3>Workouts for {planner.goal}</h3>
+                </div>
+                <Link href="/fitness/day" className="manageLink">
+                  Open planner
+                </Link>
+              </div>
+              {planner.error ? <div className="alertInline">{planner.error}</div> : null}
+              <div className="todayBody">
+                {planner.loading ? (
+                  <p className="muted">Loading today&apos;s plan…</p>
+                ) : planner.items.length ? (
+                  <ul className="todayList">
+                    {planner.items.map((item) => (
+                      <li key={item.id} className={item.done ? "done" : ""}>
+                        <div className="itemRow">
+                          <span className="dot" aria-hidden="true" />
+                          <span className="name">{item.name}</span>
+                        </div>
+                        {item.tags.length ? (
+                          <div className="tagRow">
+                            {item.tags.map((tag) => (
+                              <span key={tag} className="tag">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="muted">We&apos;ll keep this updated with goal-based movements.</p>
+                )}
+              </div>
+              {planner.populating ? <p className="muted small">Personalizing your plan…</p> : null}
+              {planner.suggestions.length ? (
+                <div className="suggestions">
+                  <div className="suggestHead">
+                    <h4>Suggested add-ons</h4>
+                    <span className="muted small">Tap to schedule</span>
+                  </div>
+                  <div className="suggestGrid">
+                    {planner.suggestions.slice(0, 6).map((workout) => (
+                      <button
+                        key={workout.id}
+                        type="button"
+                        className="suggestBtn"
+                        disabled={planner.adding}
+                        onClick={() => planner.addToPlanner(workout)}
+                      >
+                        <span className="title">{workout.title}</span>
+                        <span className="meta">
+                          {[workout.bodyPart, workout.target, workout.equipment]
+                            .filter(Boolean)
+                            .slice(0, 2)
+                            .join(" • ")}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </article>
+
+            <article className="card recipesCard">
+              <div className="todayHead">
+                <div>
+                  <p className="eyebrow">Daily fuel</p>
+                  <h3>Today&apos;s recipes</h3>
+                </div>
+                <Link href="/fitness/day#meals" className="manageLink">
+                  View meals
+                </Link>
+              </div>
+              {planner.loading ? (
+                <p className="muted">Loading recipes…</p>
+              ) : (
+                <ul className="recipeList">
+                  {planner.recipes.map((recipe) => (
+                    <li key={recipe.id}>
+                      <div className="recipeMedia">
+                        {recipe.image ? (
+                          <Image src={recipe.image} alt={recipe.title} fill sizes="64px" />
+                        ) : (
+                          <span className="placeholder" aria-hidden="true">🍽️</span>
+                        )}
+                      </div>
+                      <div>
+                        <span className="recipeTitle">{recipe.title}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </article>
+          </section>
+
+          <WorkoutGrid searchTerm={debouncedSearch} onClearSearch={() => setSearch("")} />
         </>
       )}
 
@@ -373,6 +485,28 @@ export default function FitnessPage() {
           align-items: center;
           gap: 16px;
           flex-wrap: wrap;
+        }
+        .heroActions {
+          display: flex;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .heroPlanner {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          padding: 8px 16px;
+          font-weight: 600;
+          color: var(--text);
+          background: color-mix(in oklab, var(--bg) 94%, transparent);
+          text-decoration: none;
+          transition: transform .12s ease, box-shadow .18s ease;
+        }
+        .heroPlanner:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
         }
         .heroHead h2 {
           margin: 4px 0 0;
@@ -539,6 +673,164 @@ export default function FitnessPage() {
           gap: 12px;
           flex-wrap: wrap;
         }
+        .todaySection {
+          display: grid;
+          gap: 20px;
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        }
+        .todayCard,
+        .recipesCard {
+          display: grid;
+          gap: 18px;
+        }
+        .todayHead {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 12px;
+        }
+        .todayHead h3 {
+          margin: 4px 0 0;
+          font-size: 1.18rem;
+          color: var(--text);
+        }
+        .manageLink {
+          font-size: 0.85rem;
+          color: var(--primary);
+          font-weight: 600;
+        }
+        .todayBody {
+          display: grid;
+          gap: 12px;
+        }
+        .todayList {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: grid;
+          gap: 12px;
+        }
+        .todayList li {
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          border-radius: 16px;
+          padding: 12px 14px;
+          background: color-mix(in oklab, var(--bg2) 92%, transparent);
+          display: grid;
+          gap: 6px;
+        }
+        .todayList li.done {
+          opacity: 0.7;
+        }
+        .itemRow {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 999px;
+          background: var(--primary);
+          flex-shrink: 0;
+        }
+        .name {
+          font-weight: 700;
+          color: var(--text);
+        }
+        .tagRow {
+          display: flex;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+        .tag {
+          font-size: 0.72rem;
+          border-radius: 999px;
+          padding: 3px 8px;
+          background: color-mix(in oklab, var(--primary) 12%, transparent);
+          border: 1px solid color-mix(in oklab, var(--primary) 30%, var(--border));
+        }
+        .suggestions {
+          display: grid;
+          gap: 10px;
+          margin-top: 8px;
+        }
+        .suggestHead {
+          display: flex;
+          justify-content: space-between;
+          align-items: baseline;
+        }
+        .suggestGrid {
+          display: grid;
+          gap: 10px;
+        }
+        .suggestBtn {
+          border-radius: 16px;
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          background: linear-gradient(180deg, color-mix(in oklab, var(--bg) 94%, transparent), var(--bg2));
+          padding: 12px 14px;
+          text-align: left;
+          display: grid;
+          gap: 4px;
+          cursor: pointer;
+        }
+        .suggestBtn:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12);
+        }
+        .suggestBtn .title {
+          font-weight: 700;
+          color: var(--text);
+        }
+        .suggestBtn .meta {
+          font-size: 0.78rem;
+          color: var(--muted);
+        }
+        .recipesCard .recipeList {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: grid;
+          gap: 12px;
+        }
+        .recipeList li {
+          display: grid;
+          grid-template-columns: 56px 1fr;
+          gap: 12px;
+          align-items: center;
+        }
+        .recipeMedia {
+          position: relative;
+          width: 56px;
+          height: 56px;
+          border-radius: 16px;
+          overflow: hidden;
+          background: color-mix(in oklab, var(--bg) 88%, transparent);
+        }
+        .recipeMedia :global(img) {
+          object-fit: cover;
+        }
+        .placeholder {
+          display: grid;
+          place-items: center;
+          width: 100%;
+          height: 100%;
+          font-size: 24px;
+        }
+        .recipeTitle {
+          font-weight: 600;
+          color: var(--text);
+        }
+        .alertInline {
+          border-radius: 14px;
+          border: 1px solid color-mix(in oklab, #ef4444 35%, transparent);
+          background: color-mix(in oklab, #fee2e2 45%, transparent);
+          color: #991b1b;
+          padding: 10px 12px;
+          font-size: 0.85rem;
+        }
+        .muted.small {
+          font-size: 0.8rem;
+        }
         @media (max-width: 720px) {
           .metricsModal {
             max-height: 100vh;
@@ -548,6 +840,12 @@ export default function FitnessPage() {
           }
           .modalActions :global(button) {
             flex: 1 1 auto;
+          }
+          .todaySection {
+            grid-template-columns: 1fr;
+          }
+          .suggestBtn {
+            padding: 12px;
           }
         }
       `}</style>

@@ -16,6 +16,7 @@ import { addExerciseToToday } from "@/lib/fitness/store";
 
 type Props = {
   searchTerm: string;
+  onClearSearch?: () => void;
 };
 
 type ViewKey = "explore" | "saved" | "community";
@@ -39,11 +40,14 @@ const DEFAULT_FILTERS: WorkoutSearchFilters = {
   equipment: "",
 };
 
-export default function WorkoutGrid({ searchTerm }: Props) {
+const MIN_SEARCH_LENGTH = 2;
+
+export default function WorkoutGrid({ searchTerm, onClearSearch }: Props) {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [view, setView] = useState<ViewKey>("explore");
   const [toast, setToast] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [showSearchOverlay, setShowSearchOverlay] = useState(false);
 
   const mergedFilters = useMemo<WorkoutSearchFilters>(
     () => ({ ...filters, q: searchTerm }),
@@ -84,6 +88,20 @@ export default function WorkoutGrid({ searchTerm }: Props) {
   );
 
   const activeList = view === "explore" ? exploreList : view === "saved" ? savedList : communityList;
+
+  useEffect(() => {
+    const active = view === "explore" && searchTerm.trim().length >= MIN_SEARCH_LENGTH;
+    setShowSearchOverlay(active);
+  }, [searchTerm, view]);
+
+  useEffect(() => {
+    if (!showSearchOverlay) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [showSearchOverlay]);
 
   useEffect(() => {
     if (!toast) return;
@@ -241,10 +259,57 @@ export default function WorkoutGrid({ searchTerm }: Props) {
       ) : null}
 
       {view === "explore" && hasMore ? (
-        <div className="loadMore">
-          <button type="button" onClick={loadMore} disabled={loading}>
-            {loading ? "Loading…" : "Load more"}
-          </button>
+      <div className="loadMore">
+        <button type="button" onClick={loadMore} disabled={loading}>
+          {loading ? "Loading…" : "Load more"}
+        </button>
+      </div>
+    ) : null}
+
+      {showSearchOverlay ? (
+        <div
+          className="searchOverlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Search workouts for ${searchTerm}`}
+          onClick={() => {
+            if (onClearSearch) onClearSearch();
+          }}
+        >
+          <div className="searchPanel" onClick={(event) => event.stopPropagation()}>
+            <div className="searchHead">
+              <h3>
+                Results for
+                <span>“{searchTerm.trim()}”</span>
+              </h3>
+              <button type="button" className="close" onClick={() => onClearSearch?.()}>
+                Close
+              </button>
+            </div>
+            <div className="searchBody">
+              {loading ? (
+                <p className="muted">Finding workouts…</p>
+              ) : exploreList.length ? (
+                <div className="searchGrid">
+                  {exploreList.map(({ workout, saved, community }) => (
+                    <WorkoutCard
+                      key={`overlay-${workout.id}-${saved?.id ?? community?.id ?? "base"}`}
+                      workout={workout}
+                      saved={saved}
+                      community={community}
+                      view="explore"
+                      busyId={busyId}
+                      onOpen={() => setDetail({ workout, saved, community })}
+                      onSave={(visibility) => handleSave(workout, visibility, saved)}
+                      onDelete={saved ? () => handleDelete(saved) : undefined}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="muted">{emptyStateMessage}</p>
+              )}
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -350,6 +415,61 @@ export default function WorkoutGrid({ searchTerm }: Props) {
           padding: 12px 24px;
           cursor: pointer;
         }
+        .searchOverlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(2, 6, 23, 0.68);
+          display: grid;
+          place-items: center;
+          padding: 20px;
+          z-index: 2400;
+        }
+        .searchPanel {
+          width: min(960px, 100%);
+          max-height: 90vh;
+          overflow: hidden auto;
+          background: var(--bg2);
+          border-radius: 24px;
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          box-shadow: 0 40px 120px rgba(15, 23, 42, 0.32);
+          display: grid;
+          gap: 18px;
+          padding: 24px;
+        }
+        .searchHead {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+        }
+        .searchHead h3 {
+          margin: 0;
+          font-size: 1.2rem;
+          color: var(--text);
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .searchHead h3 span {
+          color: var(--primary);
+        }
+        .searchHead .close {
+          border-radius: 999px;
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          background: var(--bg);
+          color: var(--text);
+          padding: 8px 14px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .searchBody {
+          display: grid;
+          gap: 14px;
+        }
+        .searchGrid {
+          display: grid;
+          gap: 14px;
+        }
         .toast {
           position: fixed;
           bottom: 24px;
@@ -362,6 +482,11 @@ export default function WorkoutGrid({ searchTerm }: Props) {
           box-shadow: 0 20px 60px rgba(15, 23, 42, 0.28);
           z-index: 1200;
           color: var(--text);
+        }
+        @media (max-width: 720px) {
+          .searchPanel {
+            padding: 20px 16px;
+          }
         }
       `}</style>
     </section>

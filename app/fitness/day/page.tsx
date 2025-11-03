@@ -113,8 +113,9 @@ const getErrorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message ? error.message : fallback;
 
 export default function DayPlannerPage() {
+  const todayKey = useMemo(() => currentDayKey(), []);
   const [plan, setPlan] = useState<WeekPlan | null>(null);
-  const [day, setDay] = useState<DayKey>(() => currentDayKey());
+  const [day, setDay] = useState<DayKey>(todayKey);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState("");
@@ -293,16 +294,23 @@ export default function DayPlannerPage() {
           </div>
         </div>
         <nav className="dayNav" aria-label="Select day">
-          {dayOrder.map((d) => (
+          {dayOrder.map((d) => {
+            const isPast = dayOrder.indexOf(d) < dayOrder.indexOf(todayKey);
+            return (
             <button
               key={d}
               type="button"
-              className={`dayBtn ${day === d ? "active" : ""}`}
-              onClick={() => setDay(d)}
+              className={`dayBtn ${day === d ? "active" : ""} ${isPast ? "past" : ""}`}
+              onClick={() => {
+                if (isPast) return;
+                setDay(d);
+              }}
+              disabled={isPast}
             >
               {dayNames[d].slice(0, 3)}
             </button>
-          ))}
+          );
+          })}
         </nav>
       </section>
 
@@ -529,6 +537,13 @@ export default function DayPlannerPage() {
           background: var(--bg2);
           color: var(--text);
           transition: background 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+        }
+        .dayBtn.past {
+          opacity: 0.55;
+          cursor: not-allowed;
+        }
+        .dayBtn:disabled {
+          pointer-events: none;
         }
         .dayBtn:hover {
           transform: translateY(-1px);

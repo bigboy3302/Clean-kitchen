@@ -1,4 +1,5 @@
 import { fetchExercises, type ExerciseDbItem } from "@/lib/workouts/exercisedb";
+import { FALLBACK_WORKOUTS } from "@/lib/workouts/fallback";
 import { fetchWgerDescription } from "@/lib/workouts/wger";
 import type { WorkoutContent, WorkoutSearchFilters, WorkoutSearchResponse } from "@/lib/workouts/types";
 
@@ -63,6 +64,20 @@ function toWorkoutContent(exercise: ExerciseDbItem, description: { text: string;
   };
 }
 
+function fallbackMatches(filters: WorkoutSearchFilters, limit: number): ExerciseDbItem[] {
+  const normalizedQuery = filters.q?.toLowerCase().trim() || "";
+  return FALLBACK_WORKOUTS.filter((item) => {
+    if (filters.bodyPart && item.bodyPart.toLowerCase() !== filters.bodyPart.toLowerCase()) return false;
+    if (filters.target && item.target.toLowerCase() !== filters.target.toLowerCase()) return false;
+    if (filters.equipment && item.equipment.toLowerCase() !== filters.equipment.toLowerCase()) return false;
+    if (normalizedQuery) {
+      const haystack = `${item.name} ${item.bodyPart} ${item.target}`.toLowerCase();
+      if (!haystack.includes(normalizedQuery)) return false;
+    }
+    return true;
+  }).slice(0, Math.max(limit, 1));
+}
+
 export async function searchWorkouts(options: {
   filters: WorkoutSearchFilters;
   limit?: number;
@@ -75,13 +90,27 @@ export async function searchWorkouts(options: {
 
   const { q, bodyPart, target, equipment } = filters;
 
-  const raw = await fetchExercises({
-    search: q || undefined,
-    bodyPart: bodyPart || undefined,
-    target: target || undefined,
-    limit: limit + 6,
-    offset,
-  });
+  let raw: ExerciseDbItem[] = [];
+  let usedFallback = false;
+
+  try {
+    raw = await fetchExercises({
+      search: q || undefined,
+      bodyPart: bodyPart || undefined,
+      target: target || undefined,
+      limit: limit + 6,
+      offset,
+    });
+  } catch (error) {
+    console.warn("Falling back to local workouts", error);
+    raw = fallbackMatches(filters, limit + 6);
+    usedFallback = true;
+  }
+
+  if (!raw.length) {
+    raw = fallbackMatches(filters, limit + 6);
+    usedFallback = true;
+  }
 
   const filtered = equipment
     ? raw.filter((item) => item.equipment?.toLowerCase() === equipment.toLowerCase())
@@ -92,16 +121,18 @@ export async function searchWorkouts(options: {
 
   for (const exercise of slice) {
     let description: { text: string; html: string } | null = null;
-    try {
-      const enriched = await fetchWgerDescription(exercise.name);
-      if (enriched && enriched.descriptionText) {
-        description = {
-          text: enriched.descriptionText,
-          html: enriched.descriptionHtml,
-        };
+    if (!usedFallback) {
+      try {
+        const enriched = await fetchWgerDescription(exercise.name);
+        if (enriched && enriched.descriptionText) {
+          description = {
+            text: enriched.descriptionText,
+            html: enriched.descriptionHtml,
+          };
+        }
+      } catch (error) {
+        console.warn(`Failed to fetch Wger description for ${exercise.name}:`, error);
       }
-    } catch (error) {
-      console.warn(`Failed to fetch Wger description for ${exercise.name}:`, error);
     }
 
     results.push(toWorkoutContent(exercise, description));
@@ -117,7 +148,7 @@ export async function searchWorkouts(options: {
       offset,
       nextOffset,
       filters,
-      sources: ["exerciseDB", "wger"],
+      sources: usedFallback ? ["fallback"] : ["exerciseDB", "wger"],
       tookMs: Math.round(took),
     },
   };
