@@ -217,15 +217,15 @@ export default function FitnessPage() {
             </section>
           ) : null}
 
-          <section className="panelRow">
-            <div className="meterWrap">
+          <div className="flex flex-col gap-4 md:grid md:grid-cols-[1.4fr_1fr]">
+            <section className="sectionCard meterCard">
               <Meter
                 status={suitability.status}
                 label="Goal suitability"
                 message={suitability.message}
               />
-            </div>
-            <div className="sectionCard statCard">
+            </section>
+            <section className="sectionCard statCard">
               <h3 className="sectionTitle">Energy targets</h3>
               <div className="statGrid">
                 <div className="statMetric">
@@ -241,33 +241,33 @@ export default function FitnessPage() {
                   <span className="statValue">{macros.calories} kcal</span>
                 </div>
               </div>
-            </div>
-          </section>
+            </section>
+          </div>
 
-          <section className="panelRow">
-            <div className="sectionCard tableCard">
+          <div className="flex flex-col gap-4 md:grid md:grid-cols-[1.4fr_1fr]">
+            <section className="sectionCard tableCard">
               <h3 className="sectionTitle">Daily macros</h3>
-              <table className="macrosTable">
-                <thead>
-                  <tr>
-                    <th scope="col">Calories</th>
-                    <th scope="col">Protein</th>
-                    <th scope="col">Fat</th>
-                    <th scope="col">Carbs</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>{macros.calories}</td>
-                    <td>{macros.proteinG} g</td>
-                    <td>{macros.fatG} g</td>
-                    <td>{macros.carbsG} g</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+              <div className="macroGrid">
+                <div className="macroCell">
+                  <span className="macroLabel">Calories</span>
+                  <span className="macroValue">{macros.calories}</span>
+                </div>
+                <div className="macroCell">
+                  <span className="macroLabel">Protein</span>
+                  <span className="macroValue">{macros.proteinG} g</span>
+                </div>
+                <div className="macroCell">
+                  <span className="macroLabel">Fat</span>
+                  <span className="macroValue">{macros.fatG} g</span>
+                </div>
+                <div className="macroCell">
+                  <span className="macroLabel">Carbs</span>
+                  <span className="macroValue">{macros.carbsG} g</span>
+                </div>
+              </div>
+            </section>
 
-            <div className="sectionCard plannerCard">
+            <section className="sectionCard plannerCard">
               <h3 className="sectionTitle">Today&apos;s planner</h3>
               <p className="muted">
                 Review your checklist, mark workouts complete, and see recipe ideas.
@@ -275,8 +275,8 @@ export default function FitnessPage() {
               <Link className="cta" href="/fitness/day">
                 Open today&apos;s planner
               </Link>
-            </div>
-          </section>
+            </section>
+          </div>
 
           <section className="library">
             <WorkoutGrid
@@ -378,23 +378,6 @@ export default function FitnessPage() {
           }
         }
         .panelRow > * {
-          min-width: 0;
-        }
-        @media (max-width: 640px) {
-          .panelRow .statCard {
-            order: 2;
-          }
-          .panelRow .meterWrap {
-            order: 1;
-          }
-        }
-        @media (max-width: 480px) {
-          .panelRow .statCard,
-          .panelRow .meterWrap {
-            order: unset;
-          }
-        }
-        .meterWrap {
           min-width: 0;
         }
         .statCard { gap: 18px; }
@@ -545,63 +528,51 @@ export default function FitnessPage() {
             width: 100%;
           }
         }
-        .tableCard table {
-          width: 100%;
-          border-collapse: separate;
-          border-spacing: 0;
-          border-radius: 16px;
-          overflow: hidden;
+        .macroGrid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 12px;
         }
-        @media (max-width: 640px) {
-          .tableCard {
-            overflow-x: auto;
-          }
-          .tableCard table {
-            min-width: 420px;
+        @media (max-width: 960px) {
+          .macroGrid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
         }
         @media (max-width: 480px) {
-          .tableCard table {
-            min-width: 360px;
+          .macroGrid {
+            grid-template-columns: 1fr;
           }
         }
-        @media (max-width: 360px) {
-          .tableCard table {
-            min-width: 320px;
-          }
-        }
-        .macrosTable th,
-        .macrosTable td {
-          padding: 12px;
+        .macroCell {
+          border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+          border-radius: 14px;
+          padding: 14px 16px;
+          background: color-mix(in oklab, var(--bg2) 94%, transparent);
+          display: grid;
+          gap: 8px;
           text-align: center;
-          border: 1px solid color-mix(in oklab, var(--border) 92%, transparent);
         }
-        .macrosTable th {
+        @media (max-width: 480px) {
+          .macroCell {
+            padding: 12px;
+            text-align: left;
+          }
+        }
+        .macroLabel {
           font-size: 0.75rem;
           font-weight: 700;
           letter-spacing: 0.08em;
           text-transform: uppercase;
           color: var(--muted);
-          background: color-mix(in oklab, var(--bg2) 95%, transparent);
         }
-        .macrosTable td {
-          font-size: 1.05rem;
-          font-weight: 700;
+        .macroValue {
+          font-size: 1.4rem;
+          font-weight: 800;
           color: var(--text);
-          background: color-mix(in oklab, var(--bg2) 90%, transparent);
         }
         @media (max-width: 480px) {
-          .macrosTable th,
-          .macrosTable td {
-            padding: 10px;
-            font-size: 0.95rem;
-          }
-        }
-        @media (max-width: 360px) {
-          .macrosTable th,
-          .macrosTable td {
-            padding: 8px;
-            font-size: 0.9rem;
+          .macroValue {
+            font-size: 1.2rem;
           }
         }
         .plannerCard {
@@ -642,9 +613,9 @@ export default function FitnessPage() {
         }
         .cta:hover { filter: brightness(1.05); }
         .cta:active { transform: translateY(1px); }
-        .meterWrap :global(.card) { height: 100%; }
+        .meterCard :global(.card) { height: 100%; }
         @media (max-width: 720px) {
-          .meterWrap :global(.card) {
+          .meterCard :global(.card) {
             height: auto;
           }
         }

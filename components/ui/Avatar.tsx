@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { DEFAULT_AVATAR } from "@/lib/constants";
 
 type Props = {
   src?: string | null;
@@ -13,8 +14,8 @@ type Props = {
 
 export default function Avatar({ src, alt = "avatar", size = 100, name, className }: Props) {
   const [failed, setFailed] = useState(false);
-  const fallback = "/placeholder.png";
-  const imageSrc = !failed && src ? src : fallback;
+  const imageSrc = !failed && src ? src : DEFAULT_AVATAR;
+  void name;
   return (
     <>
       <span

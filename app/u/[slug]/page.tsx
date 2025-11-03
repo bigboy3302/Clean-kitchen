@@ -1,10 +1,11 @@
 ﻿'use client';
 
-import Image from 'next/image';
-import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
-import { db } from '@/lib/firebas1e';
+import Image from "next/image";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
+import { db } from "@/lib/firebas1e";
+import { DEFAULT_AVATAR } from "@/lib/constants";
 import {
   collection,
   doc,
@@ -16,7 +17,7 @@ import {
   type DocumentData,
   type FirestoreError,
   type QueryDocumentSnapshot,
-} from 'firebase/firestore';
+} from "firebase/firestore";
 
 type AuthorLite = {
   displayName?: string | null;
@@ -193,21 +194,26 @@ const pickRecipeCover = (recipe: PublicRecipe): string | null => {
 
 export default function PublicProfilePage() {
   const params = useParams<{ slug: string }>();
-  const slug = params?.slug ?? '';
+  const slug = params?.slug ?? "";
 
   const [uid, setUid] = useState<string | null>(null);
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [posts, setPosts] = useState<PublicPost[]>([]);
   const [recipes, setRecipes] = useState<PublicRecipe[]>([]);
   const [err, setErr] = useState<string | null>(null);
-  const [tab, setTab] = useState<'posts' | 'recipes'>('recipes');
+  const [tab, setTab] = useState<"posts" | "recipes">("recipes");
+  const [avatarError, setAvatarError] = useState(false);
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [profile?.avatarURL]);
 
   useEffect(() => {
     let cancelled = false;
     async function resolveUid() {
       try {
         if (!slug) return;
-        const usernameSnap = await getDoc(doc(db, 'usernames', String(slug)));
+        const usernameSnap = await getDoc(doc(db, "usernames", String(slug)));
         if (cancelled) return;
         if (usernameSnap.exists()) {
           const data = usernameSnap.data() as { uid?: string } | undefined;
@@ -230,7 +236,7 @@ export default function PublicProfilePage() {
   useEffect(() => {
     if (!uid) return;
     let cancelled = false;
-    getDoc(doc(db, 'usersPublic', uid))
+    getDoc(doc(db, "usersPublic", uid))
       .then((snapshot) => {
         if (cancelled || !snapshot.exists()) return;
         const data = snapshot.data() as DocumentData;
@@ -250,7 +256,7 @@ export default function PublicProfilePage() {
 
   useEffect(() => {
     if (!uid) return;
-    const qy = query(collection(db, 'posts'), where('uid', '==', uid), fsLimit(300));
+    const qy = query(collection(db, "posts"), where("uid", "==", uid), fsLimit(300));
     const stop = onSnapshot(
       qy,
       (snap) => {
@@ -269,7 +275,7 @@ export default function PublicProfilePage() {
         }
       },
       (error) => {
-        setErr(error.message || 'Failed to load posts.');
+        setErr(error.message || "Failed to load posts.");
       }
     );
     return () => stop();
@@ -277,7 +283,7 @@ export default function PublicProfilePage() {
 
   useEffect(() => {
     if (!uid) return;
-    const qy = query(collection(db, 'recipes'), where('uid', '==', uid), fsLimit(300));
+    const qy = query(collection(db, "recipes"), where("uid", "==", uid), fsLimit(300));
     const stop = onSnapshot(
       qy,
       (snap) => {
@@ -285,7 +291,7 @@ export default function PublicProfilePage() {
         setRecipes(list);
       },
       (error) => {
-        setErr(error.message || 'Failed to load recipes.');
+        setErr(error.message || "Failed to load recipes.");
       }
     );
     return () => stop();
@@ -321,32 +327,27 @@ export default function PublicProfilePage() {
   }
 
   const headingName =
-    profile?.displayName ??
-    (profile?.username ? `@${profile.username}` : slug);
+    profile?.displayName ?? (profile?.username ? `@${profile.username}` : slug);
   const secondaryName =
     profile?.username && profile.username !== headingName
       ? `@${profile.username}`
       : null;
-  const avatarInitial = headingName ? headingName.charAt(0).toUpperCase() : 'U';
+  const avatarSrc = profile?.avatarURL?.trim() ? profile.avatarURL : DEFAULT_AVATAR;
+  const resolvedAvatar = avatarError ? DEFAULT_AVATAR : avatarSrc;
 
   return (
     <main className="wrap">
       <header className="head">
         <div className="who">
-          {profile?.avatarURL ? (
-            <Image
-              className="avatar"
-              src={profile.avatarURL}
-              alt={headingName}
-              width={72}
-              height={72}
-              unoptimized
-            />
-          ) : (
-            <div className="avatar ph" aria-hidden="true">
-              {avatarInitial}
-            </div>
-          )}
+          <Image
+            className="avatar"
+            src={resolvedAvatar}
+            alt={headingName}
+            width={72}
+            height={72}
+            unoptimized
+            onError={() => setAvatarError(true)}
+          />
           <div className="names">
             <h1 className="title">{headingName}</h1>
             {secondaryName ? <p className="muted">{secondaryName}</p> : null}
@@ -360,17 +361,17 @@ export default function PublicProfilePage() {
       <nav className="tabs" role="tablist" aria-label="Profile content">
         <button
           role="tab"
-          aria-selected={tab === 'recipes'}
-          className={`tab ${tab === 'recipes' ? 'on' : ''}`}
-          onClick={() => setTab('recipes')}
+          aria-selected={tab === "recipes"}
+          className={`tab ${tab === "recipes" ? "on" : ""}`}
+          onClick={() => setTab("recipes")}
         >
           Recipes
         </button>
         <button
           role="tab"
-          aria-selected={tab === 'posts'}
-          className={`tab ${tab === 'posts' ? 'on' : ''}`}
-          onClick={() => setTab('posts')}
+          aria-selected={tab === "posts"}
+          className={`tab ${tab === "posts" ? "on" : ""}`}
+          onClick={() => setTab("posts")}
         >
           Posts
         </button>
@@ -396,7 +397,7 @@ export default function PublicProfilePage() {
                           {cover ? (
                             <Image
                               src={cover}
-                              alt={recipe.title ?? 'Recipe cover'}
+                              alt={recipe.title ?? "Recipe cover"}
                               width={320}
                               height={220}
                               className="mediaImg"
@@ -415,7 +416,7 @@ export default function PublicProfilePage() {
                         </div>
                         <div className="rcBody">
                           <h3 className="rcTitle">
-                            {trim(recipe.title || 'Untitled recipe', 64)}
+                            {trim(recipe.title || "Untitled recipe", 64)}
                           </h3>
                           {recipe.description ? (
                             <p className="rcDesc">{trim(recipe.description, 120)}</p>
@@ -471,7 +472,7 @@ export default function PublicProfilePage() {
                         )}
                         <div className="pmBody">
                           <div className="pmTitle">
-                            {trim(post.text || post.title || 'Untitled post', 80)}
+                            {trim(post.text || post.title || "Untitled post", 80)}
                           </div>
                           <div className="pmMeta">
                             <span className="muted">

@@ -441,6 +441,30 @@ function mealsKey(dateIso: string, goal: "cut" | "maintain" | "bulk") {
 function todayIso() { return fmtDate(new Date()); }
 const MEALS_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours
 
+function seededRandom(seed: string) {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = (hash << 5) - hash + seed.charCodeAt(i);
+    hash |= 0;
+  }
+  if (hash === 0) hash = 1;
+  let state = hash >>> 0;
+  return () => {
+    state = (1664525 * state + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+function shuffleBySeed<T>(list: readonly T[], seed: string): T[] {
+  const random = seededRandom(seed);
+  const copy = list.slice();
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 export async function getOrCreateDailyMeals(
   dateIso?: string,
   _goal: "cut" | "maintain" | "bulk" = "maintain",
@@ -496,9 +520,10 @@ export async function getOrCreateDailyMeals(
     // ignore — use fallback
   }
 
-  const fallbackPayload = { items: FALLBACK_MEALS, expiresAt: Date.now() + MEALS_TTL_MS };
+  const seededFallback = shuffleBySeed(FALLBACK_MEALS, `${day}:${goal}`);
+  const fallbackPayload = { items: seededFallback, expiresAt: Date.now() + MEALS_TTL_MS };
   lsSet(cacheId, JSON.stringify(fallbackPayload));
-  return FALLBACK_MEALS.slice(0, safeCount);
+  return seededFallback.slice(0, safeCount);
 }
 
 /* ======================================================================

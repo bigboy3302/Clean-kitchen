@@ -7,6 +7,7 @@ import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { db } from "@/lib/firebas1e";
 import { collection, onSnapshot, query } from "firebase/firestore";
 import Avatar from "@/components/ui/Avatar";
+import { DEFAULT_AVATAR } from "@/lib/constants";
 
 type Author = { username?: string|null; displayName?: string|null; avatarURL?: string|null };
 type MediaItem = { type:"image"|"video"; url:string; w?:number; h?:number; duration?:number };
@@ -27,6 +28,7 @@ export type Post = {
 type Props = {
   post: Post;
   meUid?: string|null;
+  currentUser?: { uid: string | null; displayName?: string | null; username?: string | null; avatarURL?: string | null } | null;
   onEdit?: (post: Post, nextText: string) => Promise<void>|void;
   onAddMedia?: (post: Post, files: File[]) => Promise<void>|void;
   onDelete?: (post: Post) => Promise<void>|void;
@@ -64,7 +66,7 @@ function timeAgo(ts: Post["createdAt"]) {
 }
 
 export default function PostCard({
-  post, meUid, onEdit, onAddMedia, onDelete, onReport, onToggleRepost, onToggleLike,
+  post, meUid, currentUser, onEdit, onAddMedia, onDelete, onReport, onToggleRepost, onToggleLike,
 }: Props) {
   const { text, media = [], author = {}, createdAt } = post || {};
   const isOwner = !!(meUid && post?.uid && meUid === post.uid);
@@ -302,8 +304,30 @@ export default function PostCard({
     }
   }
 
-  const displayName = author?.displayName || author?.username || "User";
-  const profileHref = `/u/${author?.username || post.uid || ""}`;
+  const useCurrent = Boolean(currentUser?.uid && post?.uid && currentUser.uid === post.uid);
+  const fallbackName =
+    author?.name ||
+    (typeof post?.authorName === "string" ? post.authorName : undefined) ||
+    (typeof post?.username === "string" ? post.username : undefined);
+  const displayName = useCurrent
+    ? currentUser?.displayName || currentUser?.username || "You"
+    : author?.displayName || author?.username || fallbackName || "User";
+  const avatarSrc = useCurrent
+    ? currentUser?.avatarURL || DEFAULT_AVATAR
+    : author?.avatarURL || author?.photoURL || DEFAULT_AVATAR;
+  const profileSlug =
+    (useCurrent ? currentUser?.username : null) ||
+    author?.username ||
+    (typeof post?.username === "string" ? post.username : null);
+  const trimmedSlug = profileSlug?.trim();
+  const profileHref =
+    trimmedSlug
+      ? `/u/${trimmedSlug}`
+      : useCurrent
+      ? "/profile"
+      : post?.uid
+      ? `/u/${post.uid}`
+      : "/profile";
   const threadHref = `/posts/${post.id}`;
   const displayText = editing ? draft : justSaved ? draft : text || "";
 
@@ -313,7 +337,7 @@ export default function PostCard({
         <header className="pc-head">
           <div className="pc-left">
             <Link href={profileHref} aria-label={`${displayName} profile`} className="avatar-wrap">
-              <Avatar src={author?.avatarURL || undefined} name={displayName} size={68} />
+              <Avatar src={avatarSrc} name={displayName} size={68} />
             </Link>
             <div className="pc-meta">
               <div className="pc-name"><Link href={profileHref} className="pc-link">{displayName}</Link></div>
@@ -973,5 +997,3 @@ export default function PostCard({
     </>
   );
 }
-
-

@@ -41,6 +41,7 @@ import type { ThemeMode } from "@/components/theme/ThemeProvider";
 import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
+import { DEFAULT_AVATAR } from "@/lib/constants";
 
 
 type UserDoc = {
@@ -360,6 +361,9 @@ export default function ProfilePage() {
 
       const displayNameNext = fullName(trimmedFirst, trimmedLast);
       await updateProfile(me, { displayName: displayNameNext || undefined });
+      if (auth.currentUser) {
+        setMe(auth.currentUser);
+      }
 
       const nextPhotoURL = userDoc.photoURL ?? me.photoURL ?? null;
 
@@ -537,7 +541,7 @@ export default function ProfilePage() {
                   <div className="avatarColumn">
                     <div className="avatarWrap">
                       <Image
-                        src={userDoc.photoURL || "/default-avatar.png"}
+                        src={userDoc.photoURL || DEFAULT_AVATAR}
                         alt="Profile avatar"
                         fill
                         sizes="140px"

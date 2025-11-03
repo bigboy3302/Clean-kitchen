@@ -1,6 +1,14 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 export type ThemeMode = "system" | "light" | "dark" | "custom";
 export type Palette = {
@@ -102,20 +110,21 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const modeRef = useRef<ThemeMode>("system");
   const mqlRef = useRef<MediaQueryList | null>(null);
 
-  const readSystemPrefersDark = () => {
+  const readSystemPrefersDark = useCallback(() => {
     if (typeof window === "undefined") return false;
     if (!mqlRef.current) {
       mqlRef.current = window.matchMedia("(prefers-color-scheme: dark)");
     }
     return !!mqlRef.current.matches;
-  };
+  }, []);
 
-  const applyForMode = (targetMode: ThemeMode, paletteOverride?: Palette) => {
-    const systemIsDark = readSystemPrefersDark();
-    const paletteForMode =
-      targetMode === "dark"
-        ? DARK
-        : targetMode === "light"
+  const applyForMode = useCallback(
+    (targetMode: ThemeMode, paletteOverride?: Palette) => {
+      const systemIsDark = readSystemPrefersDark();
+      const paletteForMode =
+        targetMode === "dark"
+          ? DARK
+          : targetMode === "light"
         ? LIGHT
         : targetMode === "custom"
         ? paletteOverride ?? customRef.current
@@ -132,11 +141,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         ? "custom"
         : targetMode;
 
-    setPaletteState(paletteForMode);
-    if (typeof window !== "undefined") {
-      applyCssVars(paletteForMode, attr);
-    }
-  };
+      setPaletteState(paletteForMode);
+      if (typeof window !== "undefined") {
+        applyCssVars(paletteForMode, attr);
+      }
+    },
+    [readSystemPrefersDark]
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -270,7 +281,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         window.scrollTo(0, y);
       }
     },
-  }), [mode, palette]);
+  }), [mode, palette, applyForMode, readSystemPrefersDark]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -294,7 +305,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         ? "custom"
         : mode;
     applyCssVars(paletteForMode, attr);
-  }, [mode, palette]);
+  }, [mode, palette, readSystemPrefersDark]);
 
   return <ThemeCtx.Provider value={value}>{children}</ThemeCtx.Provider>;
 }

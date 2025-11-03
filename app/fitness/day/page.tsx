@@ -141,7 +141,7 @@ export default function DayPlannerPage() {
   const [exByItem, setExByItem] = useState<Record<string, Exercise | null>>({});
   const [recipes, setRecipes] = useState<SuggestedMeal[]>([]);
   const [openRecipe, setOpenRecipe] = useState<CommonRecipe | null>(null);
-  const seededDaysRef = useRef<Record<DayKey, boolean>>({});
+  const seededDaysRef = useRef<Partial<Record<DayKey, boolean>>>({});
   const mealsCacheRef = useRef<Record<string, SuggestedMeal[]>>({});
 
   useEffect(() => {
@@ -428,7 +428,8 @@ export default function DayPlannerPage() {
 
       {error ? <div className="alert">{error}</div> : null}
 
-      <section className="sectionCard workoutCard">
+      <div className="flex flex-col gap-6 md:grid md:grid-cols-[1.4fr_1fr]">
+        <section className="sectionCard workoutCard">
         <div className="sectionHead">
           <div>
             <h2 className="sectionTitle">Workout checklist</h2>
@@ -523,9 +524,9 @@ export default function DayPlannerPage() {
             })}
           </ul>
         )}
-      </section>
+        </section>
 
-      <section className="sectionCard mealsCard">
+        <section className="sectionCard mealsCard">
         <div className="sectionHead">
           <div>
             <h2 className="sectionTitle">Today&apos;s meals</h2>
@@ -566,7 +567,8 @@ export default function DayPlannerPage() {
           ))}
           {recipes.length === 0 ? <p className="muted noMeals">No recipes saved for today yet.</p> : null}
         </div>
-      </section>
+        </section>
+      </div>
 
       {openRecipe ? (
         <RecipeModal
@@ -805,6 +807,17 @@ export default function DayPlannerPage() {
           gap: 16px;
           align-items: start;
         }
+        @media (max-width: 480px) {
+          .workTop {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 10px;
+          }
+          .ghostBtn {
+            width: 100%;
+            text-align: center;
+          }
+        }
         .workImg {
           width: 100%;
           border-radius: 14px;
@@ -910,6 +923,31 @@ export default function DayPlannerPage() {
           grid-column: 1 / -1;
           text-align: center;
         }
+        @media (max-width: 768px) {
+          .mealGrid {
+            grid-template-columns: 1fr;
+          }
+          .mealCard {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 12px;
+          }
+          .mealImg {
+            width: 100%;
+            height: auto;
+            aspect-ratio: 4 / 3;
+            border-radius: 14px;
+          }
+          .mealInfo {
+            gap: 8px;
+          }
+          .mealDesc {
+            max-width: none;
+          }
+          .mealLink {
+            align-self: flex-start;
+          }
+        }
         @media (max-width: 720px) {
           .plannerShell {
             gap: 20px;
@@ -927,9 +965,21 @@ export default function DayPlannerPage() {
           }
           .workBody {
             grid-template-columns: 1fr;
+            gap: 12px;
           }
           .workImg {
-            max-height: 200px;
+            max-height: none;
+          }
+        }
+        @media (max-width: 480px) {
+          .workBody {
+            gap: 10px;
+          }
+          .workImg {
+            border-radius: 16px;
+          }
+          .workDesc {
+            font-size: 0.85rem;
           }
         }
       `}</style>

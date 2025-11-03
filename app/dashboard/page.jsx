@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import NextImage from "next/image";
@@ -25,6 +25,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { auth, db, storage } from "@/lib/firebas1e";
 import PostCard from "@/components/posts/PostCard";
 import { getWeekPlan, getOrCreateDailyMeals, getMetrics } from "@/lib/fitness/store";
+import { DEFAULT_AVATAR } from "@/lib/constants";
 
 
 function getImageDims(file) {
@@ -109,6 +110,37 @@ export default function DashboardPage() {
   const [trendingReposts, setTrendingReposts] = useState({});
   const [meAuthor, setMeAuthor] = useState(null);
   const meAuthorRef = useRef(null);
+  const normalizePostAuthor = useCallback((post) => {
+    const author = post?.author || {};
+    const avatarURL = author.avatarURL || author.photoURL || DEFAULT_AVATAR;
+    const username = author.username || post?.username || null;
+    const displayName =
+      author.displayName ||
+      author.name ||
+      (typeof post?.authorName === "string" ? post.authorName : null) ||
+      username;
+    return {
+      ...post,
+      author: {
+        ...author,
+        uid: author.uid || post?.uid || null,
+        username,
+        displayName: displayName || null,
+        avatarURL,
+        photoURL: author.photoURL || avatarURL,
+      },
+    };
+  }, []);
+  const mergeAuthorIntoPosts = useCallback((list) => {
+    const patch = meAuthorRef.current;
+    return list.map((post) => {
+      const isMine =
+        !!(patch && uid) &&
+        (post?.uid === uid || (post?.author && post.author.uid === uid));
+      const updated = isMine ? { ...post, author: { ...post.author, ...patch } } : post;
+      return normalizePostAuthor(updated);
+    });
+  }, [uid, normalizePostAuthor]);
   const trendingSorted = useMemo(() => {
     const withIndex = trending.map((post, idx) => ({ post, idx }));
     return withIndex
@@ -162,6 +194,22 @@ export default function DashboardPage() {
     return ago ? `Last post Ā· ${ago} ago` : "Last post";
   }, [myPosts.length, lastPostMs]);
 
+  const currentUser = useMemo(() => {
+    if (!uid) return null;
+    const patch = meAuthorRef.current || meAuthor;
+    const authUser = auth.currentUser;
+    return {
+      uid,
+      displayName: patch?.displayName || authUser?.displayName || null,
+      username: patch?.username || (authUser?.email ? authUser.email.split("@")[0] : null),
+      avatarURL:
+        patch?.avatarURL ??
+        patch?.photoURL ??
+        authUser?.photoURL ??
+        DEFAULT_AVATAR,
+    };
+  }, [uid, meAuthor]);
+
   const [pantryCount, setPantryCount] = useState(null);
   const [recentPantry, setRecentPantry] = useState([]);
   const [todayRecipe, setTodayRecipe] = useState(null);
@@ -201,14 +249,6 @@ export default function DashboardPage() {
     return () => stop();
   }, [router]);
 
-  const mergeAuthorIntoPosts = (list) => {
-    const patch = meAuthorRef.current;
-    if (!patch || !uid) return list;
-    return list.map((post) =>
-      post?.uid === uid ? { ...post, author: { ...post.author, ...patch } } : post
-    );
-  };
-
   useEffect(() => {
     if (!uid) {
       setMeAuthor(null);
@@ -227,11 +267,13 @@ export default function DashboardPage() {
         || data.username
         || data.email
         || "You";
-      const avatarURL = data.photoURL || data.avatarURL || null;
+      const avatarURL = data.photoURL || data.avatarURL || DEFAULT_AVATAR;
       const authorPatch = {
+        uid,
         displayName,
         username: data.username ?? null,
-        avatarURL: avatarURL ?? null,
+        avatarURL,
+        photoURL: data.photoURL ?? data.avatarURL ?? null,
       };
       setMeAuthor(authorPatch);
       meAuthorRef.current = authorPatch;
@@ -239,7 +281,7 @@ export default function DashboardPage() {
       setTrending((prev) => mergeAuthorIntoPosts(prev));
     });
     return () => stop();
-  }, [uid]);
+  }, [uid, mergeAuthorIntoPosts]);
 
   useEffect(() => {
     const qy = query(
@@ -254,7 +296,7 @@ export default function DashboardPage() {
       setRecentPosts(mergeAuthorIntoPosts(list));
     });
     return () => stop();
-  }, [uid]);
+  }, [uid, mergeAuthorIntoPosts]);
 
   useEffect(() => {
     const ids = trending.map((p) => p.id).filter(Boolean);
@@ -297,7 +339,7 @@ export default function DashboardPage() {
       setTrending(mergeAuthorIntoPosts(list));
     });
     return () => stop();
-  }, [uid]);
+  }, [uid, mergeAuthorIntoPosts]);
 
   useEffect(() => {
     if (!uid) {
@@ -605,7 +647,7 @@ export default function DashboardPage() {
     setErrPost(null);
     try {
     
-      let author = { username: null, displayName: null, avatarURL: null };
+      let author = { username: null, displayName: null, avatarURL: DEFAULT_AVATAR };
       try {
         const uSnap = await getDoc(doc(db, "users", uid));
         if (uSnap.exists()) {
@@ -615,7 +657,7 @@ export default function DashboardPage() {
             displayName: u.firstName
               ? `${u.firstName}${u.lastName ? " " + u.lastName : ""}`
               : u.displayName || null,
-            avatarURL: u.photoURL || null,
+            avatarURL: u.photoURL || DEFAULT_AVATAR,
           };
         }
       } catch {}
@@ -790,6 +832,7 @@ export default function DashboardPage() {
                 key={p.id}
                 post={p}
                 meUid={uid}
+                currentUser={currentUser}
                 onEdit={handleEdit}
                 onAddMedia={handleAddMedia}
                 onDelete={handleDelete}
