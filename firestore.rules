@@ -160,29 +160,22 @@ service cloud.firestore {
       }
     }
 
-    /* -------- workouts (public + owner) -------- */
-    match /workouts/{id} {
-      allow read: if resource.data.visibility == "public"
-                  || (isSignedIn() && resource.data.ownerId == request.auth.uid);
-
-      allow create: if isSignedIn()
-                    && request.resource.data.ownerId == request.auth.uid
-                    && request.resource.data.name is string
-                    && request.resource.data.name.size() >= 2
-                    && request.resource.data.bodyPart is string
-                    && request.resource.data.target is string
-                    && request.resource.data.equipment is string
-                    && (!('instructions' in request.resource.data) || request.resource.data.instructions is list)
-                    && (!('visibility' in request.resource.data) || request.resource.data.visibility in ['public', 'private']);
-
-      allow update, delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
-    }
-
     /* -------- fav recipes -------- */
     match /users/{uid}/favoriteRecipes/{rid} {
       allow read: if isSignedIn() && request.auth.uid == uid;
       allow create, delete: if isSignedIn() && request.auth.uid == uid;
       allow update: if false;
+    }
+
+    /* -------- saved workouts -------- */
+    match /savedWorkouts/{id} {
+      allow read: if resource.data.visibility == "public" || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create: if creatingAsSelf()
+                    && request.resource.data.visibility in ["public", "private"];
+      allow update: if isSignedIn()
+                    && resource.data.uid == request.auth.uid
+                    && ownershipUnchanged();
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
     }
 
     /* ------------------------------------------------------------------

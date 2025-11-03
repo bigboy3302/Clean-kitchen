@@ -1,14 +1,6 @@
 "use client";
 
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 export type ThemeMode = "system" | "light" | "dark" | "custom";
 export type Palette = {
@@ -90,19 +82,6 @@ function hexToRgb(hex: string): [number, number, number] {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-function palettesEqual(a: Palette, b: Palette) {
-  return (
-    a.primary === b.primary &&
-    a.primaryContrast === b.primaryContrast &&
-    a.bg === b.bg &&
-    a.bg2 === b.bg2 &&
-    a.text === b.text &&
-    a.muted === b.muted &&
-    a.border === b.border &&
-    a.ring === b.ring
-  );
-}
-
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setModeState] = useState<ThemeMode>("system");
   const [palette, setPaletteState] = useState<Palette>(LIGHT);
@@ -118,13 +97,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return !!mqlRef.current.matches;
   }, []);
 
-  const applyForMode = useCallback(
-    (targetMode: ThemeMode, paletteOverride?: Palette) => {
-      const systemIsDark = readSystemPrefersDark();
-      const paletteForMode =
-        targetMode === "dark"
-          ? DARK
-          : targetMode === "light"
+  const applyForMode = useCallback((targetMode: ThemeMode, paletteOverride?: Palette) => {
+    const systemIsDark = readSystemPrefersDark();
+    const paletteForMode =
+      targetMode === "dark"
+        ? DARK
+        : targetMode === "light"
         ? LIGHT
         : targetMode === "custom"
         ? paletteOverride ?? customRef.current
@@ -141,13 +119,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         ? "custom"
         : targetMode;
 
-      setPaletteState(paletteForMode);
-      if (typeof window !== "undefined") {
-        applyCssVars(paletteForMode, attr);
-      }
-    },
-    [readSystemPrefersDark]
-  );
+    setPaletteState(paletteForMode);
+    if (typeof window !== "undefined") {
+      applyCssVars(paletteForMode, attr);
+    }
+  }, [readSystemPrefersDark]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -204,17 +180,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<Ctx>(() => ({
     mode,
     setMode: (nextMode, options) => {
-      const sameMode = modeRef.current === nextMode;
-      const paletteUpdateRequested = !!options?.palette;
-      if (sameMode && !paletteUpdateRequested) return;
-
       modeRef.current = nextMode;
-      if (!sameMode) {
-        setModeState(nextMode);
-        if (typeof window !== "undefined") {
-          localStorage.setItem(LS_MODE, nextMode);
-        }
-      } else if (typeof window !== "undefined") {
+      setModeState(nextMode);
+      if (typeof window !== "undefined") {
         localStorage.setItem(LS_MODE, nextMode);
       }
 
@@ -228,21 +196,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      if (typeof window !== "undefined") {
-        const y = window.scrollY;
-        applyForMode(nextMode, customPalette);
-        window.scrollTo(0, y);
-      } else {
-        applyForMode(nextMode, customPalette);
-      }
+      applyForMode(nextMode, customPalette);
     },
     palette,
     setPalette: (p, options) => {
       const nextPalette: Palette = { ...p };
       const persist = options?.persist ?? modeRef.current === "custom";
-      const samePalette = palettesEqual(nextPalette, palette);
-      if (samePalette && !persist) return;
-
       if (modeRef.current === "custom" || persist) {
         customRef.current = nextPalette;
       }
@@ -250,35 +209,30 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem(LS_CUSTOM, JSON.stringify(customRef.current));
       }
 
-      if (!samePalette) {
-        setPaletteState(nextPalette);
-      }
-
-      const systemIsDark = readSystemPrefersDark();
-      const activeMode = modeRef.current;
-      const attr: "light" | "dark" | "custom" =
-        activeMode === "system"
-          ? systemIsDark
-            ? "dark"
-            : "light"
-          : activeMode === "custom"
-          ? "custom"
-          : activeMode;
-      const paletteToApply =
-        activeMode === "custom"
-          ? nextPalette
-          : activeMode === "dark"
-          ? DARK
-          : activeMode === "light"
-          ? LIGHT
-          : systemIsDark
-          ? DARK
-          : LIGHT;
+      setPaletteState(nextPalette);
 
       if (typeof window !== "undefined") {
-        const y = window.scrollY;
+        const systemIsDark = readSystemPrefersDark();
+        const activeMode = modeRef.current;
+        const attr: "light" | "dark" | "custom" =
+          activeMode === "system"
+            ? systemIsDark
+              ? "dark"
+              : "light"
+            : activeMode === "custom"
+            ? "custom"
+            : activeMode;
+        const paletteToApply =
+          activeMode === "custom"
+            ? nextPalette
+            : activeMode === "dark"
+            ? DARK
+            : activeMode === "light"
+            ? LIGHT
+            : systemIsDark
+            ? DARK
+            : LIGHT;
         applyCssVars(paletteToApply, attr);
-        window.scrollTo(0, y);
       }
     },
   }), [mode, palette, applyForMode, readSystemPrefersDark]);

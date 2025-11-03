@@ -35,6 +35,10 @@ export async function listBodyParts(): Promise<string[]> {
   return fetchJSON<string[]>(`/exercises/bodyPartList`);
 }
 
+export async function listEquipment(): Promise<string[]> {
+  return fetchJSON<string[]>(`/exercises/equipmentList`);
+}
+
 export async function fetchExercises(options: {
   search?: string | null;
   target?: string | null;

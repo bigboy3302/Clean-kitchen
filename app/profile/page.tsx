@@ -41,7 +41,6 @@ import type { ThemeMode } from "@/components/theme/ThemeProvider";
 import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
-import { DEFAULT_AVATAR } from "@/lib/constants";
 
 
 type UserDoc = {
@@ -314,8 +313,6 @@ export default function ProfilePage() {
     setErr(null);
     setMsg(null);
     setBusySave(true);
-    const trimmedFirst = firstName.trim();
-    const trimmedLast = lastName.trim();
     const requestedUsername = slugifyUsername(username);
     const previousUsername = userDoc.username || null;
     const previousDisplayName = fullName(userDoc.firstName, userDoc.lastName);
@@ -349,8 +346,8 @@ export default function ProfilePage() {
         trx.set(
           uref,
           {
-            firstName: trimmedFirst || null,
-            lastName: trimmedLast || null,
+            firstName: firstName.trim() || null,
+            lastName: lastName.trim() || null,
             username: nextUsername || null,
             prefs: { units, theme: mode, emailNotifications },
           },
@@ -359,11 +356,8 @@ export default function ProfilePage() {
         appliedUsername = nextUsername || null;
       });
 
-      const displayNameNext = fullName(trimmedFirst, trimmedLast);
+      const displayNameNext = fullName(firstName, lastName);
       await updateProfile(me, { displayName: displayNameNext || undefined });
-      if (auth.currentUser) {
-        setMe(auth.currentUser);
-      }
 
       const nextPhotoURL = userDoc.photoURL ?? me.photoURL ?? null;
 
@@ -400,8 +394,8 @@ export default function ProfilePage() {
         prev
           ? {
               ...prev,
-              firstName: trimmedFirst || null,
-              lastName: trimmedLast || null,
+              firstName: firstName.trim() || null,
+              lastName: lastName.trim() || null,
               username: appliedUsername,
               prefs: { units, theme: mode, emailNotifications },
             }
@@ -541,7 +535,7 @@ export default function ProfilePage() {
                   <div className="avatarColumn">
                     <div className="avatarWrap">
                       <Image
-                        src={userDoc.photoURL || DEFAULT_AVATAR}
+                        src={userDoc.photoURL || "/default-avatar.png"}
                         alt="Profile avatar"
                         fill
                         sizes="140px"

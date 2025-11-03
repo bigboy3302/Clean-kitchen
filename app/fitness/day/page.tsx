@@ -1,13 +1,12 @@
 ﻿'use client';
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { format, parseISO } from "date-fns";
 import Container from "@/components/Container";
 import PageHeader from "@/components/PageHeader";
 import Button from "@/components/ui/Button";
-import { extractWorkouts } from "@/lib/workouts/api";
 import {
   getWeekPlan,
   upsertDayItem,
@@ -33,9 +32,7 @@ type Exercise = {
   gifUrl: string;
   imageUrl: string | null;
   imageThumbnailUrl: string | null;
-  description: string;
   descriptionHtml: string;
-  instructions?: string[];
   primaryMuscles: string[];
   secondaryMuscles: string[];
   equipmentList: string[];
@@ -79,21 +76,6 @@ const exerciseFromItem = (item: WorkoutItem): Exercise | null => {
     : meta.equipment
     ? [String(meta.equipment)]
     : [];
-  const instructions = Array.isArray(meta.instructions) ? meta.instructions.map(String) : [];
-  const descriptionHtml =
-    typeof meta.descriptionHtml === "string" && meta.descriptionHtml.trim().length
-      ? meta.descriptionHtml
-      : instructions.length
-      ? instructions.map((step) => `<p>${step}</p>`).join("")
-      : typeof meta.description === "string" && meta.description.trim().length
-      ? `<p>${meta.description.trim()}</p>`
-      : "";
-  const description =
-    typeof meta.description === "string" && meta.description.trim().length
-      ? meta.description.trim()
-      : descriptionHtml
-      ? stripHtml(descriptionHtml)
-      : "Follow the GIF demo.";
   return {
     id: meta.id ? String(meta.id) : item.id,
     name: meta.name ? String(meta.name) : item.name,
@@ -120,9 +102,7 @@ const exerciseFromItem = (item: WorkoutItem): Exercise | null => {
         : typeof meta.gifUrl === "string"
         ? meta.gifUrl
         : null,
-    description,
-    descriptionHtml,
-    instructions,
+    descriptionHtml: typeof meta.descriptionHtml === "string" ? meta.descriptionHtml : "",
     primaryMuscles,
     secondaryMuscles,
     equipmentList: equipmentList.length ? equipmentList : ["Bodyweight"],
@@ -142,13 +122,6 @@ export default function DayPlannerPage() {
   const [exByItem, setExByItem] = useState<Record<string, Exercise | null>>({});
   const [recipes, setRecipes] = useState<SuggestedMeal[]>([]);
   const [openRecipe, setOpenRecipe] = useState<CommonRecipe | null>(null);
-  const seededDaysRef = useRef<Partial<Record<DayKey, boolean>>>({});
-  const mealsCacheRef = useRef<Record<string, SuggestedMeal[]>>({});
-
-  useEffect(() => {
-    seededDaysRef.current = {};
-    mealsCacheRef.current = {};
-  }, [plan?.weekId]);
 
   useEffect(() => {
     let ignore = false;
@@ -161,6 +134,8 @@ export default function DayPlannerPage() {
         const freshPlan = await getWeekPlan();
         if (!ignore) setPlan(freshPlan);
 
+        const todaysMeals = await getOrCreateDailyMeals(undefined, metrics?.goal ?? "maintain", 3);
+        if (!ignore) setRecipes(todaysMeals.slice(0, 3));
       } catch (error) {
         if (!ignore) setError(getErrorMessage(error, "Unable to load today."));
       } finally {
@@ -193,9 +168,8 @@ export default function DayPlannerPage() {
           const res = await fetch(`/api/workouts?q=${encodeURIComponent(item.name)}&limit=1`, {
             cache: "no-store",
           });
-          const raw = await res.json();
-          const list = extractWorkouts(raw);
-          map[item.id] = list.length ? list[0] : null;
+          const data = (await res.json()) as Exercise[] | { error?: string };
+          map[item.id] = Array.isArray(data) && data.length ? data[0] : null;
         } catch {
           map[item.id] = null;
         }
@@ -206,89 +180,6 @@ export default function DayPlannerPage() {
       ignore = true;
     };
   }, [items]);
-
-  useEffect(() => {
-    if (!plan) return;
-    const dayPlan = plan.days?.[day];
-    const iso = dayPlan?.date;
-    if (!iso) {
-      setRecipes([]);
-      return;
-    }
-    const cacheKey = `${iso}|${goal}`;
-    const cachedMeals = mealsCacheRef.current[cacheKey];
-    if (cachedMeals) {
-      setRecipes(cachedMeals);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const meals = await getOrCreateDailyMeals(iso, goal, 3);
-        if (cancelled) return;
-        mealsCacheRef.current[cacheKey] = meals;
-        setRecipes(meals);
-      } catch (error) {
-        if (!cancelled) console.warn("Failed to load meals", error);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [plan, day, goal]);
-
-  useEffect(() => {
-    if (!plan || items.length > 0) {
-      if (plan && items.length > 0) seededDaysRef.current[day] = true;
-      return;
-    }
-    if (seededDaysRef.current[day]) return;
-    if (!plan.weekId) return;
-    seededDaysRef.current[day] = true;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/workouts?limit=4", { cache: "no-store" });
-        const raw = await res.json();
-        const data = extractWorkouts(raw);
-        if (!data.length || cancelled) return;
-        const picks = data.slice(0, 4);
-        for (const workout of picks) {
-          if (cancelled) return;
-          const item: WorkoutItem = {
-            id: crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-            name: workout.name,
-            done: false,
-            exercise: {
-              id: workout.id,
-              name: workout.name,
-              bodyPart: workout.bodyPart,
-              target: workout.target,
-              equipment: workout.equipment,
-              gifUrl: workout.gifUrl,
-              imageUrl: workout.imageUrl ?? workout.gifUrl ?? null,
-              imageThumbnailUrl: workout.imageThumbnailUrl ?? workout.imageUrl ?? workout.gifUrl ?? null,
-              description: workout.description,
-              descriptionHtml: workout.descriptionHtml,
-              primaryMuscles: workout.primaryMuscles,
-              secondaryMuscles: workout.secondaryMuscles,
-              equipmentList: workout.equipmentList,
-              instructions: workout.instructions,
-            },
-          };
-          await upsertDayItem(plan.weekId, day, item);
-        }
-        if (!cancelled) {
-          await refreshPlan(plan.weekId);
-        }
-      } catch (error) {
-        console.warn("Failed to seed workouts for day", error);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [plan, day, items.length]);
 
   async function refreshPlan(targetWeekId?: string) {
     try {
@@ -357,21 +248,6 @@ export default function DayPlannerPage() {
   const isLoadingPlan = busy && !plan;
 
   async function openMeal(meal: SuggestedMeal) {
-    if (meal.ingredients?.length || meal.instructions || meal.description) {
-      const recipe: CommonRecipe = {
-        id: meal.id,
-        source: "api",
-        title: meal.title,
-        image: meal.image || null,
-        category: meal.category ?? null,
-        area: meal.area ?? null,
-        ingredients: meal.ingredients ?? [],
-        instructions: meal.instructions ?? meal.description ?? null,
-        author: { uid: null, name: null },
-      };
-      setOpenRecipe(recipe);
-      return;
-    }
     try {
       const full = await lookupMealById(meal.id);
       if (full) {
@@ -381,15 +257,16 @@ export default function DayPlannerPage() {
     } catch {
       // fall through to fallback shape
     }
+    // Fallback if API didn't return details; shape it as CommonRecipe
     const fallback: CommonRecipe = {
       id: meal.id,
       source: "api",
       title: meal.title,
       image: meal.image || null,
-      category: meal.category ?? null,
-      area: meal.area ?? null,
+      category: null,
+      area: null,
       ingredients: [],
-      instructions: meal.description ?? null,
+      instructions: null,
       author: { uid: null, name: null },
     };
     setOpenRecipe(fallback);
@@ -431,8 +308,7 @@ export default function DayPlannerPage() {
 
       {error ? <div className="alert">{error}</div> : null}
 
-      <div className="flex flex-col gap-6 md:grid md:grid-cols-[1.4fr_1fr]">
-        <section className="sectionCard workoutCard">
+      <section className="sectionCard workoutCard">
         <div className="sectionHead">
           <div>
             <h2 className="sectionTitle">Workout checklist</h2>
@@ -469,15 +345,6 @@ export default function DayPlannerPage() {
                     .filter(Boolean)
                     .filter((chip, idx, arr) => arr.indexOf(chip) === idx)
                 : [];
-              const summary = resolved
-                ? (resolved.description || stripHtml(resolved.descriptionHtml || "") || "").trim()
-                : "";
-              const excerpt =
-                summary.length > 0
-                  ? summary.length > 160
-                    ? `${summary.slice(0, 157)}…`
-                    : summary
-                  : "Open this movement in the library for full cues.";
               return (
                 <li key={item.id} className={`workItem ${item.done ? "done" : ""}`}>
                   <div className="workTop">
@@ -511,7 +378,10 @@ export default function DayPlannerPage() {
                       />
                       <div className="workMeta">
                         <div className="workName">{cap(resolved.name)}</div>
-                        <p className="workDesc">{excerpt}</p>
+                        <p className="workDesc">
+                          {stripHtml(resolved.descriptionHtml || "").slice(0, 160) ||
+                            "Open this movement in the library for full cues."}
+                        </p>
                         <div className="chipsRow">
                           {chips.map((chip) => (
                             <span key={`${item.id}-${chip}`} className="chip">
@@ -527,9 +397,9 @@ export default function DayPlannerPage() {
             })}
           </ul>
         )}
-        </section>
+      </section>
 
-        <section className="sectionCard mealsCard">
+      <section className="sectionCard mealsCard">
         <div className="sectionHead">
           <div>
             <h2 className="sectionTitle">Today&apos;s meals</h2>
@@ -555,23 +425,13 @@ export default function DayPlannerPage() {
               />
               <div className="mealInfo">
                 <div className="mealTitle">{meal.title}</div>
-                <p className="mealDesc">
-                  {(() => {
-                    const desc = meal.description?.trim() || "";
-                    const instr = meal.instructions?.split("\n").map((s) => s.trim()).find(Boolean) || "";
-                    const text = desc || instr;
-                    if (!text) return "Tap to see ingredients & steps.";
-                    return text.length > 96 ? `${text.slice(0, 93)}…` : text;
-                  })()}
-                </p>
                 <span className="mealLink">Open &gt;</span>
               </div>
             </button>
           ))}
           {recipes.length === 0 ? <p className="muted noMeals">No recipes saved for today yet.</p> : null}
         </div>
-        </section>
-      </div>
+      </section>
 
       {openRecipe ? (
         <RecipeModal
@@ -810,17 +670,6 @@ export default function DayPlannerPage() {
           gap: 16px;
           align-items: start;
         }
-        @media (max-width: 480px) {
-          .workTop {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 10px;
-          }
-          .ghostBtn {
-            width: 100%;
-            text-align: center;
-          }
-        }
         .workImg {
           width: 100%;
           border-radius: 14px;
@@ -898,9 +747,9 @@ export default function DayPlannerPage() {
         }
         .mealInfo {
           display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 6px;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
           width: 100%;
         }
         .mealTitle {
@@ -908,48 +757,15 @@ export default function DayPlannerPage() {
           color: var(--text);
           flex: 1;
         }
-        .mealDesc {
-          margin: 0;
-          color: var(--muted);
-          font-size: 0.85rem;
-          line-height: 1.35;
-          max-width: 28ch;
-        }
         .mealLink {
           font-size: 0.8rem;
           font-weight: 600;
           color: var(--primary);
           white-space: nowrap;
-          align-self: flex-start;
         }
         .noMeals {
           grid-column: 1 / -1;
           text-align: center;
-        }
-        @media (max-width: 768px) {
-          .mealGrid {
-            grid-template-columns: 1fr;
-          }
-          .mealCard {
-            flex-direction: column;
-            align-items: stretch;
-            gap: 12px;
-          }
-          .mealImg {
-            width: 100%;
-            height: auto;
-            aspect-ratio: 4 / 3;
-            border-radius: 14px;
-          }
-          .mealInfo {
-            gap: 8px;
-          }
-          .mealDesc {
-            max-width: none;
-          }
-          .mealLink {
-            align-self: flex-start;
-          }
         }
         @media (max-width: 720px) {
           .plannerShell {
@@ -968,21 +784,9 @@ export default function DayPlannerPage() {
           }
           .workBody {
             grid-template-columns: 1fr;
-            gap: 12px;
           }
           .workImg {
-            max-height: none;
-          }
-        }
-        @media (max-width: 480px) {
-          .workBody {
-            gap: 10px;
-          }
-          .workImg {
-            border-radius: 16px;
-          }
-          .workDesc {
-            font-size: 0.85rem;
+            max-height: 200px;
           }
         }
       `}</style>

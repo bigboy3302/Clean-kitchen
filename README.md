@@ -116,6 +116,23 @@ firebase deploy
 Pēc deploy Firebase dos URL, piemēram:
 https://clean-kitchen-de925.web.app
 
+---
+
+## 🏋️‍♀️ Jaunais Fitness moduļa API un saglabāšanas funkcijas
+
+- **Exercise DB piekļuve**: pārliecinies, ka `.env.local` satur `RAPIDAPI_EXERCISE_KEY` (un, ja vajag, `RAPIDAPI_EXERCISE_HOST`). Šī atslēga tiek izmantota `GET /api/workouts/search` maršrutā.
+- **Wger apraksti**: tiek izmantota publiskā `https://wger.de/api/v2` API pareizās tehnikas aprakstiem — nav nepieciešams atslēgas, bet jābūt ļautam izejošam tīklam.
+- **Saglabāto treniņu kolekcija**: serveris izmanto `savedWorkouts` kolekciju Firestore. Saglabājot, tiek pārbaudīts Firebase ID tokens (`Authorization: Bearer <idToken>`).
+- **Drošības noteikumi**: repo `firestore.rules` jau ietver jaunos noteikumus, bet pēc izmaiņām tie jāizvieto ar `firebase deploy --only firestore:rules`.
+- **Indeksi**: lai vaicājumi (uid + updatedAt / visibility + updatedAt) būtu ātri, nepieciešams sinhronizēt `firestore.indexes.json` (`firebase deploy --only firestore:indexes`).
+- **Jaunie API maršruti**:
+  - `GET /api/workouts/search?q=push-up&bodyPart=chest` – normalizēts saraksts ar GIF/MP4 un aprakstiem
+  - `GET /api/workouts/filters` – ķermeņa daļas, aprīkojuma un mērķa saraksti filtriem
+  - `POST /api/saved-workouts` – izveido/atjaunina saglabātu treniņu (`visibility: "public" | "private"`)
+  - `GET /api/saved-workouts/me` un `GET /api/saved-workouts/public`
+  - `DELETE /api/saved-workouts/:id`
+
+💡  Lai lokāli pārbaudītu saglabāšanu, Firebase Auth lietotājam jābūt ielogotam, citādi API atgriezīs `401` (`AUTH_REQUIRED`).
 
 
 

@@ -1,8 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
-import { DEFAULT_AVATAR } from "@/lib/constants";
 
 type Props = {
   src?: string | null;
@@ -13,9 +11,7 @@ type Props = {
 };
 
 export default function Avatar({ src, alt = "avatar", size = 100, name, className }: Props) {
-  const [failed, setFailed] = useState(false);
-  const imageSrc = !failed && src ? src : DEFAULT_AVATAR;
-  void name;
+  const initial = (name || alt || "U").trim().slice(0, 1).toUpperCase() || "U";
   return (
     <>
       <span
@@ -23,14 +19,17 @@ export default function Avatar({ src, alt = "avatar", size = 100, name, classNam
         style={{ width: size, height: size, minWidth: size, minHeight: size }}
         aria-label={alt}
       >
-        <Image
-          src={imageSrc}
-          alt={alt}
-          width={size}
-          height={size}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-          onError={() => setFailed(true)}
-        />
+        {src ? (
+          <Image
+            src={src}
+            alt={alt}
+            width={size}
+            height={size}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        ) : (
+          <span className="ph">{initial}</span>
+        )}
       </span>
 
       <style jsx>{`
@@ -45,6 +44,17 @@ export default function Avatar({ src, alt = "avatar", size = 100, name, classNam
         .ui-avatar :global(img) {
           display: block;
           border-radius: 999px;
+        }
+        .ui-avatar .ph {
+          width: 100%;
+          height: 100%;
+          display: grid;
+          place-items: center;
+          background: var(--bg2, #0f172a);
+          color: var(--text, #e5e7eb);
+          font-weight: 800;
+          font-size: 13px;
+          user-select: none;
         }
       `}</style>
     </>
