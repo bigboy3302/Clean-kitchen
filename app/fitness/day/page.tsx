@@ -7,6 +7,7 @@ import { format, parseISO } from "date-fns";
 import Container from "@/components/Container";
 import PageHeader from "@/components/PageHeader";
 import Button from "@/components/ui/Button";
+import { extractWorkouts } from "@/lib/workouts/api";
 import {
   getWeekPlan,
   upsertDayItem,
@@ -192,8 +193,9 @@ export default function DayPlannerPage() {
           const res = await fetch(`/api/workouts?q=${encodeURIComponent(item.name)}&limit=1`, {
             cache: "no-store",
           });
-          const data = (await res.json()) as Exercise[] | { error?: string };
-          map[item.id] = Array.isArray(data) && data.length ? data[0] : null;
+          const raw = await res.json();
+          const list = extractWorkouts(raw);
+          map[item.id] = list.length ? list[0] : null;
         } catch {
           map[item.id] = null;
         }
@@ -247,8 +249,9 @@ export default function DayPlannerPage() {
     (async () => {
       try {
         const res = await fetch("/api/workouts?limit=4", { cache: "no-store" });
-        const data = (await res.json()) as Exercise[] | null;
-        if (!Array.isArray(data) || !data.length || cancelled) return;
+        const raw = await res.json();
+        const data = extractWorkouts(raw);
+        if (!data.length || cancelled) return;
         const picks = data.slice(0, 4);
         for (const workout of picks) {
           if (cancelled) return;

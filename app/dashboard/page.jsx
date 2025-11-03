@@ -422,8 +422,13 @@ export default function DashboardPage() {
         if (!res.ok) throw new Error(`workouts-${res.status}`);
         const payload = await res.json();
         if (ignore) return;
-        if (Array.isArray(payload) && payload.length) {
-          const workout = payload[0];
+        const list = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.items)
+          ? payload.items
+          : [];
+        if (list.length) {
+          const workout = list[0];
           const snippet = (workout?.description || "Follow the GIF demo.").toString();
           setWorkoutOfDay({
             id: workout?.id || "",

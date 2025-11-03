@@ -216,8 +216,13 @@ async function seedWeekPlanIfEmpty(plan: WeekPlan): Promise<WeekPlan> {
   try {
     const res = await fetch("/api/workouts?limit=28", { cache: "no-store" });
     if (!res.ok) return plan;
-    const json = (await res.json()) as ApiWorkoutSeed[] | null;
-    if (!Array.isArray(json) || json.length === 0) return plan;
+    const payload = (await res.json()) as { items?: ApiWorkoutSeed[] } | ApiWorkoutSeed[] | null;
+    const json = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.items)
+      ? payload?.items ?? []
+      : [];
+    if (!json.length) return plan;
 
     const next: WeekPlan = {
       ...plan,

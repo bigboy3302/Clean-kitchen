@@ -13,4 +13,17 @@ export type Exercise = {
   secondaryMuscles: string[];
   equipmentList: string[];
   instructions?: string[];
+  visibility?: "public" | "private";
+  ownerId?: string | null;
+  likes?: number;
+  verified?: boolean;
+  createdAt?: string | null;
+  source?: "local" | "user";
+};
+
+export type WorkoutsResponse = {
+  items: Exercise[];
+  page: number;
+  total: number;
+  hasNext: boolean;
 };

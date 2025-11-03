@@ -3,15 +3,21 @@
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Goal } from "@/lib/fitness/calc";
-import {
-  getWeekPlan,
-  upsertDayItem,
-  type WorkoutItem,
-  type DayKey,
-} from "@/lib/fitness/store";
+import { getWeekPlan, upsertDayItem, type WorkoutItem, type DayKey } from "@/lib/fitness/store";
+import { extractWorkouts } from "@/lib/workouts/api";
 
 const MIN_SEARCH_CHARS = 2;
 const cache = new Map<string, Exercise[]>();
+const DEFAULT_BODY_PARTS = [
+  "back",
+  "cardio",
+  "chest",
+  "lower legs",
+  "shoulders",
+  "upper arms",
+  "upper legs",
+  "waist",
+] as const;
 
 type Exercise = {
   id: string;
@@ -45,7 +51,7 @@ export default function WorkoutGrid({
 }: Props) {
   void _goal;
   const [targets, setTargets] = useState<string[]>([]);
-  const [sel, setSel] = useState<string>(initialBodyPart);
+  const [sel, setSel] = useState<string>(initialBodyPart.toLowerCase());
 
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
@@ -65,6 +71,10 @@ export default function WorkoutGrid({
   }, [q]);
 
   useEffect(() => {
+    setSel(initialBodyPart.toLowerCase());
+  }, [initialBodyPart]);
+
+  useEffect(() => {
     let alive = true;
     (async () => {
       try {
@@ -72,13 +82,47 @@ export default function WorkoutGrid({
         const data = (await res.json()) as string[] | { error?: string };
         if (!alive) return;
         if (Array.isArray(data)) {
-          setTargets(data);
-          if (data.length && !data.includes(initialBodyPart)) setSel(data[0]);
+          const deduped = Array.from(
+            new Set([
+              ...DEFAULT_BODY_PARTS.map((bp) => bp.toLowerCase()),
+              ...data.map((bp) => (typeof bp === "string" ? bp.toLowerCase() : "")).filter(Boolean),
+            ])
+          ).sort((a, b) => a.localeCompare(b));
+          if (!alive) return;
+          setTargets(deduped);
+          if (deduped.length) {
+            const initialLower = initialBodyPart.toLowerCase();
+            setSel((prev) => {
+              if (deduped.includes(prev)) return prev;
+              if (deduped.includes(initialLower)) return initialLower;
+              return deduped[0];
+            });
+          }
         } else {
-          setTargets([]);
+          const fallback = DEFAULT_BODY_PARTS.map((bp) => bp.toLowerCase());
+          if (!alive) return;
+          setTargets(fallback);
+          if (fallback.length) {
+            const initialLower = initialBodyPart.toLowerCase();
+            setSel((prev) => {
+              if (fallback.includes(prev)) return prev;
+              if (fallback.includes(initialLower)) return initialLower;
+              return fallback[0];
+            });
+          }
         }
       } catch {
-        if (alive) setTargets([]);
+        if (!alive) return;
+        const fallback = DEFAULT_BODY_PARTS.map((bp) => bp.toLowerCase());
+        setTargets(fallback);
+        if (fallback.length) {
+          const initialLower = initialBodyPart.toLowerCase();
+          setSel((prev) => {
+            if (fallback.includes(prev)) return prev;
+            if (fallback.includes(initialLower)) return initialLower;
+            return fallback[0];
+          });
+        }
       }
     })();
     return () => {
@@ -94,44 +138,31 @@ export default function WorkoutGrid({
     const hasSearch = debouncedQ.length >= MIN_SEARCH_CHARS;
     const key = hasSearch
       ? `q:${debouncedQ.toLowerCase()}:limit=${limit}`
-      : `target:${sel.toLowerCase()}:limit=${limit}`;
+      : `body:${sel}:limit=${limit}`;
 
     lastKeyRef.current = key;
 
-    if (cache.has(key)) {
-      const cached = cache.get(key)!;
-      if (alive && lastKeyRef.current === key) {
-        setList(cached);
-        setBusy(false);
-      }
-      return;
+    if (cache.has(key) && alive && lastKeyRef.current === key) {
+      setList(cache.get(key)!);
     }
 
     const endpoint = hasSearch
       ? `/api/workouts?q=${encodeURIComponent(debouncedQ)}&limit=${limit}`
-      : `/api/workouts?target=${encodeURIComponent(sel)}&limit=${limit}`;
+      : `/api/workouts?bodyPart=${encodeURIComponent(sel)}&limit=${limit}`;
 
     (async () => {
       try {
         const res = await fetch(endpoint, { cache: "no-store" });
-        const data = (await res.json()) as unknown;
+        const raw = await res.json();
+        const cleaned = extractWorkouts(raw).filter((x) => x && x.name);
         if (!alive || lastKeyRef.current !== key) return;
 
-        if (Array.isArray(data)) {
-          const cleaned = (data as Exercise[]).filter((x) => x && x.name);
+        if (cleaned.length) {
           cache.set(key, cleaned);
           setList(cleaned);
+          setErr(null);
         } else {
-          if (
-            data &&
-            typeof data === "object" &&
-            "error" in data &&
-            typeof (data as { error?: unknown }).error === "string"
-          ) {
-            setErr((data as { error: string }).error);
-          } else {
-            setErr("Failed to load.");
-          }
+          setErr("No workouts found.");
           setList([]);
         }
       } catch (error: unknown) {
@@ -195,7 +226,7 @@ export default function WorkoutGrid({
 
   function onPick(target: string) {
     setQ("");
-    setSel(target);
+    setSel(target.toLowerCase());
   }
 
   const heading = useMemo(() => {
@@ -203,13 +234,13 @@ export default function WorkoutGrid({
     return `${cap(sel)} exercises`;
   }, [debouncedQ, sel]);
 
-  function mediaSrc(ex: Exercise) {
+  function mediaSrc(ex: Exercise): string | null {
     if (ex.gifUrl) return `/api/workouts/gif?src=${encodeURIComponent(ex.gifUrl)}`;
     if (ex.imageThumbnailUrl)
       return `/api/workouts/gif?src=${encodeURIComponent(ex.imageThumbnailUrl)}`;
     if (ex.imageUrl) return `/api/workouts/gif?src=${encodeURIComponent(ex.imageUrl)}`;
     if (ex.id) return `/api/workouts/gif?id=${encodeURIComponent(ex.id)}`;
-    return "/placeholder.png";
+    return null;
   }
 
   function snippet(ex: Exercise) {
@@ -221,6 +252,8 @@ export default function WorkoutGrid({
     const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
     return text.length > 160 ? `${text.slice(0, 160)}…` : text || "No description available.";
   }
+
+  const modalSrc = openEx ? mediaSrc(openEx) : null;
 
   return (
     <section className="card">
@@ -264,45 +297,48 @@ export default function WorkoutGrid({
       )}
 
       <div className="grid">
-        {list.map((ex) => (
-          <article key={`${ex.id}-${ex.name}`} className="item">
-            {}
-            <Image
-              src={mediaSrc(ex)}
-              alt={ex.name}
-              className="gif"
-              width={400}
-              height={300}
-              loading="lazy"
-              unoptimized
-              onError={({ currentTarget }) => {
-                currentTarget.src = "/placeholder.png";
-              }}
-            />
-            <div className="meta">
-              <div className="name">{cap(ex.name)}</div>
-            <p className="desc">{snippet(ex)}</p>
-              <div className="row">
-                <span className="chip">{cap(ex.bodyPart || ex.target)}</span>
-                {ex.primaryMuscles?.slice(0, 2).map((mus) => (
-                  <span key={mus} className="chip alt">
-                    {cap(mus)}
-                  </span>
-                ))}
-                {ex.equipment ? <span className="chip ghost">{cap(ex.equipment)}</span> : null}
-              </div>
+        {list.map((ex) => {
+          const imgSrc = mediaSrc(ex);
+          return (
+            <article key={`${ex.id}-${ex.name}`} className="item">
+              {imgSrc ? (
+                <Image
+                  src={imgSrc}
+                  alt={ex.name}
+                  className="gif"
+                  width={400}
+                  height={300}
+                  loading="lazy"
+                  unoptimized
+                />
+              ) : (
+                <div className="gif no-media" aria-hidden="true" />
+              )}
+              <div className="meta">
+                <div className="name">{cap(ex.name)}</div>
+                <p className="desc">{snippet(ex)}</p>
+                <div className="row">
+                  <span className="chip">{cap(ex.bodyPart || ex.target)}</span>
+                  {ex.primaryMuscles?.slice(0, 2).map((mus) => (
+                    <span key={mus} className="chip alt">
+                      {cap(mus)}
+                    </span>
+                  ))}
+                  {ex.equipment ? <span className="chip ghost">{cap(ex.equipment)}</span> : null}
+                </div>
 
-              <div className="actions">
-                <button className="btn ghost" onClick={() => setOpenEx(ex)}>
-                  View
-                </button>
-                <button className="btn primary" onClick={() => addToToday(ex)}>
-                  Add to Today
-                </button>
+                <div className="actions">
+                  <button className="btn ghost" onClick={() => setOpenEx(ex)}>
+                    View
+                  </button>
+                  <button className="btn primary" onClick={() => addToToday(ex)}>
+                    Add to Today
+                  </button>
+                </div>
               </div>
-            </div>
-          </article>
-        ))}
+            </article>
+          );
+        })}
       </div>
 
       {}
@@ -312,21 +348,22 @@ export default function WorkoutGrid({
             <div className="mh">
               <div className="mt">{cap(openEx.name)}</div>
               <button className="x" onClick={() => setOpenEx(null)} aria-label="Close">
-                âœ•
+                X
               </button>
             </div>
             <div className="mbody">
-              <Image
-                src={mediaSrc(openEx)}
-                alt={openEx.name}
-                className="modalGif"
-                width={720}
-                height={480}
-                unoptimized
-                onError={({ currentTarget }) => {
-                  currentTarget.src = "/placeholder.png";
-                }}
-              />
+              {modalSrc ? (
+                <Image
+                  src={modalSrc}
+                  alt={openEx.name}
+                  className="modalGif"
+                  width={720}
+                  height={480}
+                  unoptimized
+                />
+              ) : (
+                <div className="modalGif no-media" aria-hidden="true" />
+              )}
               <div className="chipsRow">
                 <span className="chip">{cap(openEx.bodyPart || openEx.target)}</span>
                 {openEx.primaryMuscles?.slice(0, 3).map((m) => (
@@ -377,7 +414,6 @@ export default function WorkoutGrid({
         .search{flex:0 0 280px;max-width:100%}
         @media (max-width:640px){.search{flex:1 1 100%}}
         .search .inp{width:100%;border:1px solid var(--border);border-radius:12px;padding:9px 12px;background:var(--bg2);color:var(--text)}
-        .search .inp::placeholder{color:var(--muted)}
 
         .tabsWrap{overflow-x:auto;padding-bottom:4px;margin-top:-4px}
         .tabsWrap::-webkit-scrollbar{height:4px}
@@ -398,6 +434,7 @@ export default function WorkoutGrid({
         .item{border:1px solid var(--border);border-radius:16px;overflow:hidden;background:var(--bg);display:flex;flex-direction:column;transition:transform .18s ease, box-shadow .18s ease}
         .item:hover{transform:translateY(-2px);box-shadow:0 16px 32px rgba(15,23,42,.14)}
         .gif{width:100%;aspect-ratio:4/3;object-fit:cover;background:linear-gradient(135deg,#0f172a,#1e293b);}
+        .gif.no-media{display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.45);font-weight:700;letter-spacing:0.08em;text-transform:uppercase}
 
         .meta{padding:14px;display:flex;flex-direction:column;gap:10px}
         .name{font-weight:800;color:var(--text);font-size:16px}
@@ -421,6 +458,7 @@ export default function WorkoutGrid({
         .x{border:none;background:var(--primary);color:var(--primary-contrast);border-radius:10px;padding:4px 10px;cursor:pointer}
         .mbody{padding:12px;display:flex;flex-direction:column;gap:10px}
         .modalGif{width:100%;border-radius:12px;border:1px solid var(--border);object-fit:cover;max-height:420px}
+        .modalGif.no-media{display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f172a,#1e293b);color:rgba(255,255,255,0.5);font-weight:700;letter-spacing:0.08em;text-transform:uppercase}
         .chipsRow{display:flex;gap:6px;flex-wrap:wrap}
         .prose :global(p){margin:0 0 8px;color:var(--text);line-height:1.6}
         .prose :global(ul), .prose :global(ol){padding-left:18px;margin:0 0 8px}

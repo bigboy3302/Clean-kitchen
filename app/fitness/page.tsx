@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import Container from "@/components/Container";
 import PageHeader from "@/components/PageHeader";
 import Button from "@/components/ui/Button";
 import Meter from "@/components/ui/Meter";
@@ -92,7 +91,8 @@ export default function FitnessPage() {
   }
 
   return (
-    <Container as="main" className="fitnessShell">
+    <main className="fitnessView">
+      <div className="fitnessShell">
       {loading ? (
         <div className="loadingState">
           <p className="muted">Loading&hellip;</p>
@@ -217,8 +217,14 @@ export default function FitnessPage() {
             </section>
           ) : null}
 
-          <div className="flex flex-col gap-4 md:grid md:grid-cols-[1.4fr_1fr]">
+          <div className="layoutRow">
             <section className="sectionCard meterCard">
+              <div className="sectionHead">
+                <div>
+                  <h3 className="sectionTitle">Goal suitability</h3>
+                  <p className="muted">We assess your metrics to ensure the plan matches your target.</p>
+                </div>
+              </div>
               <Meter
                 status={suitability.status}
                 label="Goal suitability"
@@ -226,7 +232,12 @@ export default function FitnessPage() {
               />
             </section>
             <section className="sectionCard statCard">
-              <h3 className="sectionTitle">Energy targets</h3>
+              <div className="sectionHead">
+                <div>
+                  <h3 className="sectionTitle">Energy targets</h3>
+                  <p className="muted">Calculated automatically from your inputs and goal.</p>
+                </div>
+              </div>
               <div className="statGrid">
                 <div className="statMetric">
                   <span className="statLabel">BMR</span>
@@ -244,9 +255,15 @@ export default function FitnessPage() {
             </section>
           </div>
 
-          <div className="flex flex-col gap-4 md:grid md:grid-cols-[1.4fr_1fr]">
+          <div className="layoutRow">
             <section className="sectionCard tableCard">
-              <h3 className="sectionTitle">Daily macros</h3>
+              <div className="sectionHead">
+                <div>
+                  <h3 className="sectionTitle">Daily macros</h3>
+                  <p className="muted">Split your calories to keep energy steady throughout the day.</p>
+                </div>
+                <span className={`badge ${f.goal}`}>{f.goal.toUpperCase()}</span>
+              </div>
               <div className="macroGrid">
                 <div className="macroCell">
                   <span className="macroLabel">Calories</span>
@@ -268,17 +285,35 @@ export default function FitnessPage() {
             </section>
 
             <section className="sectionCard plannerCard">
-              <h3 className="sectionTitle">Today&apos;s planner</h3>
-              <p className="muted">
-                Review your checklist, mark workouts complete, and see recipe ideas.
-              </p>
-              <Link className="cta" href="/fitness/day">
-                Open today&apos;s planner
-              </Link>
+              <div className="sectionHead">
+                <div>
+                  <h3 className="sectionTitle">Today&apos;s planner</h3>
+                  <p className="muted">
+                    Review your checklist, mark workouts complete, and see recipe ideas.
+                  </p>
+                </div>
+              </div>
+              <div className="ctaStack">
+                <Link className="cta" href="/fitness/day">
+                  Open today&apos;s planner
+                </Link>
+                <Link className="cta secondary" href="/fitness/workouts/new">
+                  Create a workout
+                </Link>
+              </div>
             </section>
           </div>
 
-          <section className="library">
+          <section className="sectionCard libraryCard">
+            <div className="sectionHead">
+              <div>
+                <h3 className="sectionTitle">Movement library</h3>
+                <p className="muted">Browse curated exercises and community workouts to slot into your week.</p>
+              </div>
+              <Link className="ghostLink" href="/fitness/workouts/new">
+                + Share a workout
+              </Link>
+            </div>
             <WorkoutGrid
               initialBodyPart={
                 f.goal === "bulk"
@@ -295,21 +330,49 @@ export default function FitnessPage() {
       )}
 
       <style jsx>{`
+        .fitnessView {
+          padding: 24px 16px 72px;
+        }
+        @media (max-width: 640px) {
+          .fitnessView {
+            padding: 16px 12px 60px;
+          }
+        }
+        @media (max-width: 480px) {
+          .fitnessView {
+            padding: 14px 10px 48px;
+          }
+        }
         .fitnessShell {
           display: grid;
           gap: 24px;
-          padding-block: 24px 72px;
+          max-width: min(1120px, 100%);
+          margin: 0 auto;
         }
         @media (max-width: 640px) {
           .fitnessShell {
             gap: 18px;
-            padding-block: 16px 60px;
           }
         }
         @media (max-width: 480px) {
           .fitnessShell {
             gap: 16px;
-            padding-block: 14px 48px;
+          }
+        }
+        .layoutRow {
+          display: grid;
+          gap: 24px;
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+          align-items: stretch;
+        }
+        @media (min-width: 1024px) {
+          .layoutRow {
+            grid-template-columns: 1.4fr minmax(0, 1fr);
+          }
+        }
+        @media (max-width: 640px) {
+          .layoutRow {
+            gap: 16px;
           }
         }
         .muted { color: var(--muted); }
@@ -328,7 +391,7 @@ export default function FitnessPage() {
           padding: 20px;
           box-shadow: var(--shadow);
           display: grid;
-          gap: 16px;
+          gap: 18px;
         }
         @media (max-width: 640px) {
           .sectionCard {
@@ -355,6 +418,21 @@ export default function FitnessPage() {
             font-size: 0.95rem;
           }
         }
+        .sectionHead {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 16px;
+        }
+        @media (max-width: 480px) {
+          .sectionHead {
+            flex-direction: column;
+            gap: 10px;
+          }
+        }
+        .sectionHead .muted {
+          margin: 6px 0 0;
+        }
         .panelRow {
           display: grid;
           gap: 20px;
@@ -379,6 +457,32 @@ export default function FitnessPage() {
         }
         .panelRow > * {
           min-width: 0;
+        }
+        .badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 4px 10px;
+          border-radius: 999px;
+          font-size: 0.7rem;
+          letter-spacing: 0.08em;
+          font-weight: 700;
+          text-transform: uppercase;
+        }
+        .badge.cut {
+          background: color-mix(in oklab, #0ea5e9 18%, transparent);
+          border: 1px solid color-mix(in oklab, #0ea5e9 45%, var(--border));
+          color: color-mix(in oklab, #0ea5e9 65%, var(--text));
+        }
+        .badge.maintain {
+          background: color-mix(in oklab, #10b981 18%, transparent);
+          border: 1px solid color-mix(in oklab, #10b981 45%, var(--border));
+          color: color-mix(in oklab, #10b981 65%, var(--text));
+        }
+        .badge.bulk {
+          background: color-mix(in oklab, #f97316 18%, transparent);
+          border: 1px solid color-mix(in oklab, #f97316 45%, var(--border));
+          color: color-mix(in oklab, #f97316 65%, var(--text));
         }
         .statCard { gap: 18px; }
         .statGrid {
@@ -575,6 +679,17 @@ export default function FitnessPage() {
             font-size: 1.2rem;
           }
         }
+        .ghostLink {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-weight: 700;
+          color: var(--primary);
+          text-decoration: none;
+        }
+        .ghostLink:hover {
+          text-decoration: underline;
+        }
         .plannerCard {
           justify-content: space-between;
         }
@@ -590,6 +705,15 @@ export default function FitnessPage() {
           .plannerCard {
             align-items: stretch;
           }
+        }
+        .plannerCard .sectionHead {
+          flex-direction: column;
+          gap: 12px;
+        }
+        .ctaStack {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
         }
         .cta {
           display: inline-flex;
@@ -613,14 +737,35 @@ export default function FitnessPage() {
         }
         .cta:hover { filter: brightness(1.05); }
         .cta:active { transform: translateY(1px); }
+        .cta.secondary {
+          background: var(--bg2);
+          color: var(--primary);
+          border-color: color-mix(in oklab, var(--primary) 35%, var(--border));
+        }
         .meterCard :global(.card) { height: 100%; }
         @media (max-width: 720px) {
           .meterCard :global(.card) {
             height: auto;
           }
         }
-        .library { margin-top: 8px; }
+        .libraryCard {
+          padding: 22px;
+        }
+        @media (max-width: 640px) {
+          .libraryCard {
+            padding: 18px;
+          }
+        }
+        @media (max-width: 480px) {
+          .libraryCard {
+            padding: 16px;
+          }
+        }
+        .libraryBody {
+          margin-top: 4px;
+        }
       `}</style>
-    </Container>
+      </div>
+    </main>
   );
 }
