@@ -3,7 +3,10 @@ import { FALLBACK_WORKOUTS } from "@/lib/workouts/fallback";
 import { fetchWgerDescription } from "@/lib/workouts/wger";
 import type { WorkoutContent, WorkoutSearchFilters, WorkoutSearchResponse } from "@/lib/workouts/types";
 
-const perf = typeof performance !== "undefined" && performance?.now ? performance : { now: () => Date.now() };
+const perf =
+  typeof performance !== "undefined" && typeof performance.now === "function"
+    ? performance
+    : { now: () => Date.now() };
 
 const MIN_LIMIT = 6;
 const MAX_LIMIT = 24;

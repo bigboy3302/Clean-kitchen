@@ -280,6 +280,7 @@ export default function FitnessPage() {
 
           <section className="library">
             <WorkoutGrid
+              searchTerm=""
               initialBodyPart={
                 f.goal === "bulk"
                   ? "upper legs"

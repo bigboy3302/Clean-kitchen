@@ -8,58 +8,12 @@ import { requireUser } from "@/lib/server/auth";
 import type {
   SaveWorkoutPayload,
   SavedWorkoutVisibility,
-  WorkoutContent,
 } from "@/lib/workouts/types";
 import { fetchOwnerProfile, toRecord } from "@/lib/workouts/storage";
+import { sanitizeWorkoutContent } from "@/lib/workouts/sanitize";
 
 const COLLECTION = "savedWorkouts";
 const VISIBILITIES: SavedWorkoutVisibility[] = ["public", "private"];
-
-function sanitizeWorkout(workout: WorkoutContent | undefined | null): WorkoutContent {
-  if (!workout) throw new Error("Workout payload missing");
-
-  const title = (workout.title || "Workout").toString().trim();
-  const description = (workout.description || "").toString().trim();
-  if (!title) throw new Error("Workout title required");
-  if (!description) throw new Error("Workout description required");
-
-  const safeHtml = (workout.instructionsHtml || "")
-    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
-    .replace(/ on[a-z]+="[^"]*"/gi, "");
-
-  const clamp = (value: string | undefined | null): string | null => {
-    if (!value) return null;
-    const trimmed = value.toString().trim();
-    return trimmed.length ? trimmed : null;
-  };
-
-  const norm = {
-    id: workout.id?.toString() || crypto.randomUUID(),
-    title,
-    mediaUrl: clamp(workout.mediaUrl),
-    mediaType: workout.mediaType === "mp4" ? "mp4" : workout.mediaType === "image" ? "image" : "gif",
-    previewUrl: clamp(workout.previewUrl) || clamp(workout.mediaUrl),
-    thumbnailUrl: clamp(workout.thumbnailUrl) || clamp(workout.previewUrl) || clamp(workout.mediaUrl),
-    description: description.slice(0, 2000),
-    instructionsHtml: safeHtml ? safeHtml.slice(0, 8000) : null,
-    bodyPart: clamp(workout.bodyPart),
-    target: clamp(workout.target),
-    equipment: clamp(workout.equipment),
-    source: workout.source || "exerciseDB",
-    primaryMuscles: Array.isArray(workout.primaryMuscles)
-      ? workout.primaryMuscles.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()).slice(0, 8)
-      : undefined,
-    secondaryMuscles: Array.isArray(workout.secondaryMuscles)
-      ? workout.secondaryMuscles.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()).slice(0, 8)
-      : undefined,
-    equipmentList: Array.isArray(workout.equipmentList)
-      ? workout.equipmentList.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()).slice(0, 8)
-      : undefined,
-    externalUrl: clamp(workout.externalUrl),
-  } satisfies WorkoutContent;
-
-  return norm;
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -76,7 +30,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid visibility" }, { status: 400 });
     }
 
-    const workout = sanitizeWorkout(payload.workout);
+    const workout = sanitizeWorkoutContent(payload.workout);
     const db = await getAdminDb();
     const owner = await fetchOwnerProfile(uid, db);
 

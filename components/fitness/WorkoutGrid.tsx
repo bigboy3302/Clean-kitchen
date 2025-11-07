@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { useWorkoutFilters } from "@/hooks/useWorkoutFilters";
@@ -13,10 +14,16 @@ import type {
   WorkoutSearchFilters,
 } from "@/lib/workouts/types";
 import { addExerciseToToday } from "@/lib/fitness/store";
+import { auth } from "@/lib/firebas1e";
+import { uploadWorkoutMedia } from "@/lib/uploads";
+import type { Goal } from "@/lib/fitness/calc";
 
 type Props = {
   searchTerm: string;
   onClearSearch?: () => void;
+  initialBodyPart?: string;
+  title?: string;
+  goal?: Goal;
 };
 
 type ViewKey = "explore" | "saved" | "community";
@@ -26,6 +33,42 @@ type DisplayWorkout = {
   saved?: SavedWorkoutRecord | null;
   community?: SavedWorkoutRecord | null;
 };
+
+type CreatorForm = {
+  title: string;
+  description: string;
+  instructions: string;
+  bodyPart: string;
+  target: string;
+  equipment: string;
+  primaryMuscles: string;
+  secondaryMuscles: string;
+  equipmentList: string;
+  externalMedia: string;
+  mediaUrl: string;
+  mediaKind: WorkoutContent["mediaType"];
+  mediaName: string;
+  visibility: SavedWorkoutVisibility;
+};
+
+const CREATOR_DEFAULT: CreatorForm = {
+  title: "",
+  description: "",
+  instructions: "",
+  bodyPart: "",
+  target: "",
+  equipment: "",
+  primaryMuscles: "",
+  secondaryMuscles: "",
+  equipmentList: "",
+  externalMedia: "",
+  mediaUrl: "",
+  mediaKind: "gif",
+  mediaName: "",
+  visibility: "private",
+};
+
+const CREATOR_STEPS = ["Basics", "Coaching", "Media"] as const;
 
 const VIEW_TABS: { key: ViewKey; label: string }[] = [
   { key: "explore", label: "Explore" },
@@ -42,12 +85,22 @@ const DEFAULT_FILTERS: WorkoutSearchFilters = {
 
 const MIN_SEARCH_LENGTH = 2;
 
-export default function WorkoutGrid({ searchTerm, onClearSearch }: Props) {
-  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+export default function WorkoutGrid({ searchTerm, onClearSearch, initialBodyPart, title, goal }: Props) {
+  const defaultFilters = useMemo<WorkoutSearchFilters>(
+    () => ({ ...DEFAULT_FILTERS, bodyPart: initialBodyPart ?? "" }),
+    [initialBodyPart]
+  );
+  const [filters, setFilters] = useState<WorkoutSearchFilters>(defaultFilters);
   const [view, setView] = useState<ViewKey>("explore");
   const [toast, setToast] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [showSearchOverlay, setShowSearchOverlay] = useState(false);
+  const [showCreator, setShowCreator] = useState(false);
+  const [creator, setCreator] = useState<CreatorForm>(CREATOR_DEFAULT);
+  const [creatorStep, setCreatorStep] = useState(0);
+  const [creatorError, setCreatorError] = useState<string | null>(null);
+  const [creatorBusy, setCreatorBusy] = useState(false);
+  const [creatorUploading, setCreatorUploading] = useState(false);
 
   const mergedFilters = useMemo<WorkoutSearchFilters>(
     () => ({ ...filters, q: searchTerm }),
@@ -95,6 +148,15 @@ export default function WorkoutGrid({ searchTerm, onClearSearch }: Props) {
   }, [searchTerm, view]);
 
   useEffect(() => {
+    if (!showCreator) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [showCreator]);
+
+  useEffect(() => {
     if (!showSearchOverlay) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -109,11 +171,15 @@ export default function WorkoutGrid({ searchTerm, onClearSearch }: Props) {
     return () => clearTimeout(id);
   }, [toast]);
 
+  useEffect(() => {
+    setFilters(defaultFilters);
+  }, [defaultFilters]);
+
   const updateFilter = (field: keyof WorkoutSearchFilters, value: string) => {
     setFilters((prev) => ({ ...prev, [field]: value }));
   };
 
-  const clearFilters = () => setFilters(DEFAULT_FILTERS);
+  const clearFilters = useCallback(() => setFilters(defaultFilters), [defaultFilters]);
 
   const handleSave = useCallback(
     async (workout: WorkoutContent, visibility: SavedWorkoutVisibility, existing?: SavedWorkoutRecord | null) => {
@@ -151,6 +217,140 @@ export default function WorkoutGrid({ searchTerm, onClearSearch }: Props) {
   );
 
   const [detail, setDetail] = useState<DisplayWorkout | null>(null);
+  const updateCreator = useCallback(<K extends keyof CreatorForm>(key: K, value: CreatorForm[K]) => {
+    setCreator((prev) => ({ ...prev, [key]: value }));
+    setCreatorError(null);
+  }, []);
+  const resetCreator = useCallback(() => {
+    setCreator(CREATOR_DEFAULT);
+    setCreatorStep(0);
+    setCreatorError(null);
+    setCreatorBusy(false);
+    setCreatorUploading(false);
+  }, []);
+  const closeCreator = useCallback(() => {
+    setShowCreator(false);
+    resetCreator();
+  }, [resetCreator]);
+  const creatorMediaSrc = (creator.mediaUrl || creator.externalMedia || "").trim();
+  const creatorPreviewType = creator.mediaUrl
+    ? creator.mediaKind
+    : detectMediaType(creatorMediaSrc ? creatorMediaSrc : null);
+  const creatorCombinedMedia = creatorMediaSrc.length ? creatorMediaSrc : null;
+  const basicsIncomplete = !creator.title.trim() || !creator.description.trim();
+  const nextDisabled =
+    creatorStep === 0
+      ? basicsIncomplete
+      : creatorStep === CREATOR_STEPS.length - 1
+      ? creatorBusy || creatorUploading
+      : false;
+  const nextLabel =
+    creatorStep === CREATOR_STEPS.length - 1 ? (creatorBusy ? "Saving…" : "Save workout") : "Next";
+  const handleNextStep = () => {
+    if (creatorStep === CREATOR_STEPS.length - 1) {
+      void handleCreatorSubmit();
+      return;
+    }
+    setCreatorStep((prev) => Math.min(prev + 1, CREATOR_STEPS.length - 1));
+  };
+  const handlePrevStep = () => {
+    if (creatorStep === 0) {
+      closeCreator();
+      return;
+    }
+    setCreatorStep((prev) => Math.max(prev - 1, 0));
+  };
+  const handleCreatorFile = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const user = auth.currentUser;
+      if (!user) {
+        setCreatorError("Sign in to upload media.");
+        event.target.value = "";
+        return;
+      }
+      setCreatorUploading(true);
+      setCreatorError(null);
+      try {
+        const uploadedUrl = await uploadWorkoutMedia(user.uid, file);
+        updateCreator("mediaUrl", uploadedUrl);
+        updateCreator("mediaKind", file.type.startsWith("video/") ? "mp4" : file.type.toLowerCase().includes("gif") ? "gif" : "image");
+        updateCreator("mediaName", file.name);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Upload failed. Try again.";
+        setCreatorError(message);
+      } finally {
+        setCreatorUploading(false);
+        event.target.value = "";
+      }
+    },
+    [updateCreator]
+  );
+  const handleCreatorSubmit = useCallback(async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      setCreatorError("Sign in to save workouts.");
+      return;
+    }
+    if (!creator.title.trim() || !creator.description.trim()) {
+      setCreatorStep(0);
+      setCreatorError("Add a title and description.");
+      return;
+    }
+    setCreatorError(null);
+    setCreatorBusy(true);
+    try {
+      const idComponent =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : Math.random().toString(36).slice(2);
+      const workout: WorkoutContent = {
+        id: `custom-${idComponent}`,
+        title: creator.title.trim(),
+        description: creator.description.trim(),
+        mediaUrl: creatorCombinedMedia,
+        mediaType: creatorPreviewType,
+        previewUrl: creatorCombinedMedia,
+        thumbnailUrl: creatorCombinedMedia,
+        instructionsHtml: toHtml(creator.instructions.trim()),
+        bodyPart: creator.bodyPart.trim() || null,
+        target: creator.target.trim() || null,
+        equipment: creator.equipment.trim() || null,
+        source: "user",
+        primaryMuscles: parseList(creator.primaryMuscles),
+        secondaryMuscles: parseList(creator.secondaryMuscles),
+        equipmentList: parseList(creator.equipmentList),
+      };
+      await savedMine.save({ visibility: creator.visibility, workout });
+      await savedMine.refresh();
+      if (creator.visibility === "public") {
+        await savedCommunity.refresh();
+      }
+      closeCreator();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save workout.";
+      setCreatorError(message);
+    } finally {
+      setCreatorBusy(false);
+    }
+  }, [
+    closeCreator,
+    creator.bodyPart,
+    creator.description,
+    creator.equipment,
+    creator.equipmentList,
+    creator.instructions,
+    creator.primaryMuscles,
+    creator.secondaryMuscles,
+    creator.target,
+    creator.title,
+    creator.visibility,
+    creatorCombinedMedia,
+    creatorPreviewType,
+    savedCommunity,
+    savedMine,
+  ]);
 
   const onAddToToday = useCallback(async (workout: WorkoutContent) => {
     try {
@@ -190,21 +390,37 @@ export default function WorkoutGrid({ searchTerm, onClearSearch }: Props) {
   return (
     <section className="workoutSection">
       <header className="sectionHead">
-        <div className="tabs" role="tablist" aria-label="Workout views">
-          {VIEW_TABS.map((tab) => (
-            <button
-              key={tab.key}
-              role="tab"
-              aria-selected={view === tab.key}
-              className={clsx("tab", view === tab.key && "on")}
-              onClick={() => setView(tab.key)}
-            >
-              {tab.label}
-              {tab.key === "saved" && savedMine.items.length ? (
-                <span className="badge">{savedMine.items.length}</span>
-              ) : null}
+        {(title || goal) && (
+          <div className="sectionIntro">
+            {title ? <h2 className="sectionTitle">{title}</h2> : null}
+            {goal ? <p className="sectionSubtitle">Goal focus: {titleCase(goal)}</p> : null}
+          </div>
+        )}
+        <div className="tabsRow">
+          <div className="tabs" role="tablist" aria-label="Workout views">
+            {VIEW_TABS.map((tab) => (
+              <button
+                key={tab.key}
+                role="tab"
+                aria-selected={view === tab.key}
+                className={clsx("tab", view === tab.key && "on")}
+                onClick={() => setView(tab.key)}
+              >
+                {tab.label}
+                {tab.key === "saved" && savedMine.items.length ? (
+                  <span className="badge">{savedMine.items.length}</span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+          <div className="ctaRow">
+            <button type="button" className="heroBtn" onClick={() => setShowCreator(true)}>
+              + Create workout
             </button>
-          ))}
+            <Link href="/fitness/day" className="tab action linkBtn">
+              Today&apos;s planner
+            </Link>
+          </div>
         </div>
 
         {view === "explore" ? (
@@ -266,6 +482,194 @@ export default function WorkoutGrid({ searchTerm, onClearSearch }: Props) {
       </div>
     ) : null}
 
+      {showCreator ? (
+        <div className="creatorOverlay" role="dialog" aria-modal="true" aria-label="Create workout" onClick={closeCreator}>
+          <div className="creatorPanel" onClick={(event) => event.stopPropagation()}>
+            <header className="creatorHead">
+              <div>
+                <p className="creatorEyebrow">Create & share</p>
+                <h3>New workout</h3>
+              </div>
+              <button type="button" className="ghostBtn creatorClose" onClick={closeCreator}>
+                Close
+              </button>
+            </header>
+            <div className="creatorSteps">
+              {CREATOR_STEPS.map((label, index) => (
+                <button
+                  key={label}
+                  type="button"
+                  className={clsx("stepDot", index === creatorStep && "on")}
+                  aria-current={index === creatorStep}
+                  onClick={() => setCreatorStep(index)}
+                >
+                  <span>{index + 1}</span>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="creatorSlider">
+              <div className="creatorSlides" style={{ transform: `translateX(-${creatorStep * 100}%)` }}>
+                <section className="creatorSlide">
+                  <div className="creatorGrid">
+                    <label className="creatorField">
+                      <span>Title*</span>
+                      <input
+                        type="text"
+                        value={creator.title}
+                        onChange={(event) => updateCreator("title", event.currentTarget.value)}
+                        placeholder="Push-up ladder finisher"
+                      />
+                    </label>
+                    <label className="creatorField">
+                      <span>Body part</span>
+                      <input
+                        type="text"
+                        value={creator.bodyPart}
+                        onChange={(event) => updateCreator("bodyPart", event.currentTarget.value)}
+                        placeholder="Full body"
+                      />
+                    </label>
+                    <label className="creatorField">
+                      <span>Target muscle</span>
+                      <input
+                        type="text"
+                        value={creator.target}
+                        onChange={(event) => updateCreator("target", event.currentTarget.value)}
+                        placeholder="Chest / core"
+                      />
+                    </label>
+                    <label className="creatorField">
+                      <span>Equipment</span>
+                      <input
+                        type="text"
+                        value={creator.equipment}
+                        onChange={(event) => updateCreator("equipment", event.currentTarget.value)}
+                        placeholder="Bodyweight"
+                      />
+                    </label>
+                  </div>
+                  <label className="creatorField">
+                    <span>Short description*</span>
+                    <textarea
+                      rows={4}
+                      value={creator.description}
+                      onChange={(event) => updateCreator("description", event.currentTarget.value)}
+                      placeholder="Explain the focus and outcome of this workout."
+                    />
+                  </label>
+                </section>
+                <section className="creatorSlide">
+                  <label className="creatorField">
+                    <span>Detailed instructions</span>
+                    <textarea
+                      rows={6}
+                      value={creator.instructions}
+                      onChange={(event) => updateCreator("instructions", event.currentTarget.value)}
+                      placeholder="Step 1..."
+                    />
+                    <span className="creatorHint">Use blank lines to start a new paragraph.</span>
+                  </label>
+                  <div className="creatorGrid">
+                    <label className="creatorField">
+                      <span>Primary muscles</span>
+                      <input
+                        type="text"
+                        value={creator.primaryMuscles}
+                        onChange={(event) => updateCreator("primaryMuscles", event.currentTarget.value)}
+                        placeholder="Chest, triceps"
+                      />
+                    </label>
+                    <label className="creatorField">
+                      <span>Secondary muscles</span>
+                      <input
+                        type="text"
+                        value={creator.secondaryMuscles}
+                        onChange={(event) => updateCreator("secondaryMuscles", event.currentTarget.value)}
+                        placeholder="Shoulders"
+                      />
+                    </label>
+                    <label className="creatorField">
+                      <span>Equipment list</span>
+                      <input
+                        type="text"
+                        value={creator.equipmentList}
+                        onChange={(event) => updateCreator("equipmentList", event.currentTarget.value)}
+                        placeholder="Timer, mat"
+                      />
+                    </label>
+                  </div>
+                </section>
+                <section className="creatorSlide">
+                  <div className="creatorGrid">
+                    <label className="creatorField">
+                      <span>Upload media</span>
+                      <input type="file" accept="image/*,video/*" onChange={handleCreatorFile} disabled={creatorUploading || creatorBusy} />
+                      <span className="creatorHint">Images up to 20 MB, videos up to 120 MB.</span>
+                    </label>
+                    <label className="creatorField">
+                      <span>External media URL</span>
+                      <input
+                        type="url"
+                        value={creator.externalMedia}
+                        onChange={(event) => updateCreator("externalMedia", event.currentTarget.value)}
+                        placeholder="https://example.com/move.gif"
+                      />
+                    </label>
+                  </div>
+                  {creatorMediaSrc ? (
+                    <div className="creatorPreview">
+                      {creatorPreviewType === "mp4" ? (
+                        <video src={creatorMediaSrc} controls playsInline />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={creatorMediaSrc} alt={creator.title || "Workout media"} />
+                      )}
+                      <button
+                        type="button"
+                        className="ghostBtn creatorGhost"
+                        onClick={() => {
+                          updateCreator("mediaUrl", "");
+                          updateCreator("externalMedia", "");
+                          updateCreator("mediaName", "");
+                        }}
+                      >
+                        Remove media
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="creatorHint">Add at least one visual so others can follow your movement.</p>
+                  )}
+                  <div className="creatorVisibility">
+                    <p className="creatorLabel">Visibility</p>
+                    <div className="chips">
+                      {(["private", "public"] as SavedWorkoutVisibility[]).map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          className={clsx("chip", creator.visibility === option && "on")}
+                          onClick={() => updateCreator("visibility", option)}
+                        >
+                          {option === "private" ? "Private (only me)" : "Public (share with community)"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+            {creatorError ? <p className="creatorError">{creatorError}</p> : null}
+            <div className="creatorNav">
+              <button type="button" className="ghostBtn creatorGhost" onClick={handlePrevStep} disabled={creatorBusy}>
+                {creatorStep === 0 ? "Cancel" : "Back"}
+              </button>
+              <button type="button" className="primaryBtn" onClick={handleNextStep} disabled={nextDisabled}>
+                {creatorUploading ? "Uploading…" : nextLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {showSearchOverlay ? (
         <div
           className="searchOverlay"
@@ -335,6 +739,31 @@ export default function WorkoutGrid({ searchTerm, onClearSearch }: Props) {
           display: grid;
           gap: 14px;
         }
+        .sectionIntro {
+          display: flex;
+          justify-content: space-between;
+          align-items: baseline;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .sectionTitle {
+          margin: 0;
+          font-size: 1.2rem;
+          color: var(--text);
+        }
+        .sectionSubtitle {
+          margin: 0;
+          font-size: 0.85rem;
+          color: var(--muted);
+          font-weight: 600;
+        }
+        .tabsRow {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 16px;
+        }
         .tabs {
           display: inline-flex;
           gap: 10px;
@@ -361,6 +790,52 @@ export default function WorkoutGrid({ searchTerm, onClearSearch }: Props) {
           background: var(--primary);
           color: var(--primary-contrast);
           box-shadow: 0 16px 40px color-mix(in oklab, var(--primary) 40%, transparent);
+        }
+        .ctaRow {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .heroBtn {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          border: 0;
+          border-radius: 16px;
+          padding: 12px 20px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: #fff;
+          background: linear-gradient(120deg, var(--primary) 0%, color-mix(in oklab, var(--primary) 85%, #f472b6) 100%);
+          box-shadow:
+            0 0 0 2px color-mix(in oklab, var(--primary) 20%, transparent),
+            0 20px 40px color-mix(in oklab, var(--primary) 40%, transparent);
+          cursor: pointer;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+          text-decoration: none;
+        }
+        .heroBtn:hover {
+          transform: translateY(-2px);
+          box-shadow:
+            0 0 0 2px color-mix(in oklab, var(--primary) 35%, transparent),
+            0 26px 50px color-mix(in oklab, var(--primary) 45%, transparent);
+        }
+        .heroBtn:active {
+          transform: translateY(0);
+          box-shadow:
+            0 0 0 2px color-mix(in oklab, var(--primary) 30%, transparent),
+            0 14px 24px color-mix(in oklab, var(--primary) 50%, transparent);
+        }
+        .heroBtn svg {
+          width: 18px;
+          height: 18px;
+          stroke: currentColor;
+          stroke-width: 2;
+          fill: none;
+        }
+        .heroBtn.withIcon {
+          background: linear-gradient(120deg, var(--primary) 0%, color-mix(in oklab, var(--primary) 85%, #8b5cf6) 100%);
         }
         .badge {
           background: color-mix(in oklab, var(--primary-contrast) 15%, transparent);
@@ -482,6 +957,238 @@ export default function WorkoutGrid({ searchTerm, onClearSearch }: Props) {
           box-shadow: 0 20px 60px rgba(15, 23, 42, 0.28);
           z-index: 1200;
           color: var(--text);
+        }
+        .creatorOverlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(4, 9, 20, 0.75);
+          display: grid;
+          place-items: center;
+          padding: 20px;
+          z-index: 1300;
+        }
+        .creatorPanel {
+          width: min(960px, 100%);
+          max-height: 90vh;
+          overflow-y: auto;
+          background: color-mix(in oklab, var(--bg2) 98%, transparent);
+          border-radius: 28px;
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          box-shadow: 0 40px 80px rgba(15, 23, 42, 0.35);
+          padding: 24px;
+          display: grid;
+          gap: 18px;
+        }
+        .creatorHead {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+        }
+        .creatorEyebrow {
+          margin: 0;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          font-size: 0.75rem;
+          color: var(--muted);
+          font-weight: 700;
+        }
+        .creatorHead h3 {
+          margin: 2px 0 0;
+          font-size: 1.5rem;
+          color: var(--text);
+        }
+        .creatorSteps {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .stepDot {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          border-radius: 999px;
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          padding: 6px 14px;
+          background: transparent;
+          color: var(--muted);
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .stepDot span {
+          display: inline-flex;
+          width: 22px;
+          height: 22px;
+          border-radius: 50%;
+          align-items: center;
+          justify-content: center;
+          background: color-mix(in oklab, var(--border) 80%, transparent);
+          font-size: 0.75rem;
+        }
+        .stepDot.on {
+          border-color: var(--primary);
+          color: var(--primary);
+        }
+        .stepDot.on span {
+          background: var(--primary);
+          color: var(--primary-contrast);
+        }
+        .creatorSlider {
+          overflow: hidden;
+        }
+        .creatorSlides {
+          display: grid;
+          grid-auto-flow: column;
+          grid-auto-columns: 100%;
+          transition: transform 0.4s ease;
+        }
+        .creatorSlide {
+          display: grid;
+          gap: 16px;
+          padding-right: 4px;
+        }
+        .creatorGrid {
+          display: grid;
+          gap: 12px 16px;
+          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        }
+        .creatorField {
+          display: grid;
+          gap: 6px;
+        }
+        .creatorField span {
+          font-weight: 600;
+          color: var(--text);
+        }
+        .creatorField input,
+        .creatorField textarea {
+          border-radius: 14px;
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          background: var(--bg);
+          color: var(--text);
+          padding: 10px 12px;
+          font: inherit;
+        }
+        .creatorField textarea {
+          min-height: 120px;
+        }
+        .creatorHint {
+          margin: 0;
+          font-size: 0.85rem;
+          color: var(--muted);
+        }
+        .creatorPreview {
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          border-radius: 18px;
+          padding: 12px;
+          background: color-mix(in oklab, var(--bg2) 92%, transparent);
+          display: grid;
+          gap: 10px;
+        }
+        .creatorPreview img,
+        .creatorPreview video {
+          width: 100%;
+          border-radius: 14px;
+          max-height: 340px;
+          object-fit: cover;
+        }
+        .creatorVisibility {
+          display: grid;
+          gap: 8px;
+          margin-top: 8px;
+        }
+        .creatorLabel {
+          font-weight: 700;
+          color: var(--text);
+        }
+        .chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+        .chip {
+          border-radius: 999px;
+          border: 1px solid color-mix(in oklab, var(--border) 75%, transparent);
+          padding: 8px 14px;
+          background: transparent;
+          cursor: pointer;
+          font-weight: 600;
+          color: var(--text);
+        }
+        .chip.on {
+          background: var(--primary);
+          color: var(--primary-contrast);
+          border-color: var(--primary);
+          box-shadow: 0 12px 28px color-mix(in oklab, var(--primary) 32%, transparent);
+        }
+        .creatorError {
+          margin: 0;
+          border-radius: 12px;
+          border: 1px solid color-mix(in oklab, #ef4444 60%, transparent);
+          background: color-mix(in oklab, #fee2e2 80%, transparent);
+          color: #7f1d1d;
+          padding: 10px 12px;
+          font-weight: 600;
+        }
+        .creatorNav {
+          display: flex;
+          justify-content: flex-end;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .ghostBtn.creatorClose,
+        .ghostBtn.creatorGhost {
+          position: relative;
+          border-radius: 999px;
+          padding: 10px 18px;
+          border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+          font-weight: 700;
+          overflow: hidden;
+          background: color-mix(in oklab, var(--bg2) 96%, transparent);
+        }
+        .ghostBtn.creatorClose::after,
+        .ghostBtn.creatorGhost::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(120deg, color-mix(in oklab, var(--bg2) 90%, transparent), color-mix(in oklab, var(--primary) 14%, transparent));
+          opacity: 0;
+          transition: opacity 0.2s ease;
+        }
+        .ghostBtn.creatorClose:hover::after,
+        .ghostBtn.creatorGhost:hover::after {
+          opacity: 1;
+        }
+        .ghostBtn.creatorClose {
+          color: var(--text);
+        }
+        .ghostBtn.creatorGhost {
+          color: var(--primary);
+          border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
+        }
+        .primaryBtn {
+          border: 0;
+          border-radius: 999px;
+          padding: 12px 24px;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--primary-contrast);
+          min-width: 200px;
+          cursor: pointer;
+          background: linear-gradient(135deg, var(--primary) 0%, color-mix(in oklab, var(--primary) 60%, #8b5cf6) 100%);
+          box-shadow: 0 20px 40px color-mix(in oklab, var(--primary) 35%, transparent);
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .primaryBtn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 26px 48px color-mix(in oklab, var(--primary) 40%, transparent);
+        }
+        .primaryBtn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+          transform: none;
+          box-shadow: none;
         }
         @media (max-width: 720px) {
           .searchPanel {
@@ -1167,4 +1874,29 @@ function titleCase(value: string) {
     .split(/\s+/)
     .map((segment) => (segment ? segment.charAt(0).toUpperCase() + segment.slice(1) : ""))
     .join(" ");
+}
+
+function parseList(text: string): string[] | undefined {
+  const items = text
+    .split(/[,;\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return items.length ? items.slice(0, 8) : undefined;
+}
+
+function toHtml(value: string) {
+  const blocks = value
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+  if (!blocks.length) return null;
+  return blocks.map((block) => `<p>${block.replace(/\n+/g, "<br/>")}</p>`).join("");
+}
+
+function detectMediaType(source: string | null): WorkoutContent["mediaType"] {
+  if (!source) return "gif";
+  const lowered = source.toLowerCase();
+  if (lowered.includes(".mp4") || lowered.includes("video") || lowered.startsWith("video/")) return "mp4";
+  if (lowered.includes(".png") || lowered.includes(".jpg") || lowered.includes(".jpeg") || lowered.includes(".webp")) return "image";
+  return "gif";
 }

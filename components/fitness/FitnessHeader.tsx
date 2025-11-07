@@ -140,6 +140,9 @@ export default function FitnessHeader({ search, onSearchChange, onClearSearch }:
           .search {
             width: 100%;
           }
+          .actions {
+            width: 100%;
+          }
         }
       `}</style>
     </header>

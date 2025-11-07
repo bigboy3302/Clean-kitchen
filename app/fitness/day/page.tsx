@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { format, parseISO } from "date-fns";
@@ -111,6 +111,7 @@ const exerciseFromItem = (item: WorkoutItem): Exercise | null => {
 
 const getErrorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message ? error.message : fallback;
+type PlannerView = "workouts" | "meals";
 
 export default function DayPlannerPage() {
   const todayKey = useMemo(() => currentDayKey(), []);
@@ -123,6 +124,10 @@ export default function DayPlannerPage() {
   const [exByItem, setExByItem] = useState<Record<string, Exercise | null>>({});
   const [recipes, setRecipes] = useState<SuggestedMeal[]>([]);
   const [openRecipe, setOpenRecipe] = useState<CommonRecipe | null>(null);
+  const readModeFromHash = () =>
+    typeof window !== "undefined" && window.location.hash.toLowerCase() === "#meals" ? "meals" : "workouts";
+  const [viewMode, setViewMode] = useState<PlannerView>(() => readModeFromHash());
+  const viewingMeals = viewMode === "meals";
 
   useEffect(() => {
     let ignore = false;
@@ -181,6 +186,31 @@ export default function DayPlannerPage() {
       ignore = true;
     };
   }, [items]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sync = () => setViewMode(readModeFromHash());
+    sync();
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const selectMode = useCallback(
+    (mode: PlannerView) => {
+      setViewMode(mode);
+      if (typeof window === "undefined") return;
+      if (mode === "meals") {
+        if (window.location.hash.toLowerCase() !== "#meals") {
+          window.location.hash = "meals";
+        }
+      } else {
+        const url = window.location.pathname + window.location.search;
+        window.history.replaceState(null, "", url);
+      }
+    },
+    []
+  );
 
   async function refreshPlan(targetWeekId?: string) {
     try {
@@ -312,10 +342,34 @@ export default function DayPlannerPage() {
           );
           })}
         </nav>
+        <div className="viewToggle" role="tablist" aria-label="Planner view">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!viewingMeals}
+            className={`viewBtn ${!viewingMeals ? "on" : ""}`}
+            onClick={() => selectMode("workouts")}
+          >
+            Workouts
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={viewingMeals}
+            className={`viewBtn ${viewingMeals ? "on" : ""}`}
+            onClick={() => selectMode("meals")}
+          >
+            Meals
+          </button>
+        </div>
+        {viewingMeals ? (
+          <p className="modeHint">Meals are shown for today only.</p>
+        ) : null}
       </section>
 
       {error ? <div className="alert">{error}</div> : null}
 
+      {viewingMeals ? null : (
       <section className="sectionCard workoutCard">
         <div className="sectionHead">
           <div>
@@ -406,8 +460,10 @@ export default function DayPlannerPage() {
           </ul>
         )}
       </section>
+      )}
 
-      <section className="sectionCard mealsCard">
+      {viewingMeals ? (
+      <section className="sectionCard mealsCard" id="meals">
         <div className="sectionHead">
           <div>
             <h2 className="sectionTitle">Today&apos;s meals</h2>
@@ -440,6 +496,7 @@ export default function DayPlannerPage() {
           {recipes.length === 0 ? <p className="muted noMeals">No recipes saved for today yet.</p> : null}
         </div>
       </section>
+      ) : null}
 
       {openRecipe ? (
         <RecipeModal
@@ -527,6 +584,36 @@ export default function DayPlannerPage() {
         }
         .dayNav::-webkit-scrollbar {
           height: 6px;
+        }
+        .viewToggle {
+          display: inline-flex;
+          gap: 8px;
+          border-radius: 999px;
+          padding: 4px;
+          background: color-mix(in oklab, var(--bg2) 90%, transparent);
+          border: 1px solid color-mix(in oklab, var(--border) 75%, transparent);
+          width: fit-content;
+        }
+        .viewBtn {
+          border: 0;
+          background: transparent;
+          color: var(--muted);
+          font-weight: 700;
+          padding: 8px 16px;
+          border-radius: 999px;
+          cursor: pointer;
+          transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .viewBtn.on {
+          background: var(--primary);
+          color: var(--primary-contrast);
+          box-shadow: 0 12px 30px color-mix(in oklab, var(--primary) 30%, transparent);
+        }
+        .modeHint {
+          margin: 4px 0 0;
+          font-size: 0.85rem;
+          color: var(--muted);
+          font-weight: 600;
         }
         .dayBtn {
           min-width: 72px;

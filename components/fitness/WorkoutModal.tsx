@@ -2,7 +2,21 @@
 
 import Image from "next/image";
 import type { Goal } from "@/lib/fitness/calc";
-import type { Exercise } from "@/lib/workouts/types";
+
+type Exercise = {
+  id: string | number;
+  name: string;
+  bodyPart: string;
+  target?: string | null;
+  equipment: string;
+  gifUrl?: string | null;
+  imageUrl?: string | null;
+  imageThumbnailUrl?: string | null;
+  descriptionHtml?: string | null;
+  primaryMuscles?: string[];
+  secondaryMuscles?: string[];
+  equipmentList?: string[];
+};
 
 type Props = {
   exercise: Exercise;
@@ -54,7 +68,7 @@ export default function WorkoutModal({ exercise, goal, onClose }: Props) {
 
         <div className="meta">
           <span className="chip">{cap(exercise.bodyPart)}</span>
-          {exercise.primaryMuscles.slice(0, 2).map((muscle) => (
+          {(exercise.primaryMuscles ?? []).slice(0, 2).map((muscle) => (
             <span key={muscle} className="chip alt">
               {cap(muscle)}
             </span>
@@ -66,7 +80,7 @@ export default function WorkoutModal({ exercise, goal, onClose }: Props) {
           <div
             className="prose"
             dangerouslySetInnerHTML={{
-              __html: exercise.descriptionHtml.replace(/<[^>]+>/g, (tag) =>
+              __html: exercise.descriptionHtml.replace(/<[^>]+>/g, (tag: string) =>
                 /^(<br\s*\/?>|<p>|<\/p>|<ul>|<\/ul>|<ol>|<\/ol>|<li>|<\/li>)$/i.test(tag) ? tag : ""
               ),
             }}

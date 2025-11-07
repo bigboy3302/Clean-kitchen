@@ -311,22 +311,26 @@ export default function FitnessPage() {
               {planner.loading ? (
                 <p className="muted">Loading recipes…</p>
               ) : (
-                <ul className="recipeList">
+                <div className="recipeTiles">
                   {planner.recipes.map((recipe) => (
-                    <li key={recipe.id}>
-                      <div className="recipeMedia">
+                    <article key={recipe.id} className="recipeTile">
+                      <div className="recipeThumb">
                         {recipe.image ? (
-                          <Image src={recipe.image} alt={recipe.title} fill sizes="64px" />
+                          <Image src={recipe.image} alt={recipe.title} fill sizes="120px" />
                         ) : (
-                          <span className="placeholder" aria-hidden="true">🍽️</span>
+                          <span aria-hidden="true">🍽️</span>
                         )}
                       </div>
-                      <div>
-                        <span className="recipeTitle">{recipe.title}</span>
+                      <div className="recipeMeta">
+                        <p className="recipeTitle">{recipe.title}</p>
+                        <p className="recipeHint">Fuel idea #{planner.recipes.indexOf(recipe) + 1}</p>
                       </div>
-                    </li>
+                    </article>
                   ))}
-                </ul>
+                  {planner.recipes.length === 0 ? (
+                    <p className="muted noMeals">No recipes saved for today yet.</p>
+                  ) : null}
+                </div>
               )}
             </article>
           </section>
@@ -695,9 +699,28 @@ export default function FitnessPage() {
           color: var(--text);
         }
         .manageLink {
-          font-size: 0.85rem;
-          color: var(--primary);
-          font-weight: 600;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          border: 0;
+          border-radius: 999px;
+          padding: 10px 18px;
+          font-size: 0.9rem;
+          font-weight: 700;
+          text-decoration: none;
+          color: var(--primary-contrast);
+          background: var(--primary);
+          box-shadow: 0 14px 32px color-mix(in oklab, var(--primary) 25%, transparent);
+          transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
+        }
+        .manageLink:hover {
+          transform: translateY(-1px);
+          filter: brightness(1.05);
+        }
+        .manageLink:active {
+          transform: translateY(0);
+          box-shadow: 0 8px 18px color-mix(in oklab, var(--primary) 30%, transparent);
         }
         .todayBody {
           display: grid;
@@ -785,40 +808,53 @@ export default function FitnessPage() {
           font-size: 0.78rem;
           color: var(--muted);
         }
-        .recipesCard .recipeList {
-          list-style: none;
-          margin: 0;
-          padding: 0;
+        .recipeTiles {
           display: grid;
-          gap: 12px;
+          gap: 14px;
+          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         }
-        .recipeList li {
-          display: grid;
-          grid-template-columns: 56px 1fr;
+        .recipeTile {
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          border-radius: 18px;
+          padding: 14px;
+          background: linear-gradient(135deg, color-mix(in oklab, var(--bg2) 95%, transparent), color-mix(in oklab, var(--bg) 88%, transparent));
+          display: flex;
           gap: 12px;
           align-items: center;
+          box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
         }
-        .recipeMedia {
+        .recipeThumb {
           position: relative;
-          width: 56px;
-          height: 56px;
-          border-radius: 16px;
+          width: 80px;
+          height: 80px;
+          border-radius: 20px;
+          border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
           overflow: hidden;
-          background: color-mix(in oklab, var(--bg) 88%, transparent);
-        }
-        .recipeMedia :global(img) {
-          object-fit: cover;
-        }
-        .placeholder {
           display: grid;
           place-items: center;
-          width: 100%;
-          height: 100%;
-          font-size: 24px;
+          background: color-mix(in oklab, var(--bg2) 92%, transparent);
+          font-size: 30px;
+        }
+        .recipeThumb :global(img) {
+          object-fit: cover;
+        }
+        .recipeMeta {
+          display: grid;
+          gap: 6px;
         }
         .recipeTitle {
-          font-weight: 600;
+          margin: 0;
+          font-weight: 700;
           color: var(--text);
+        }
+        .recipeHint {
+          margin: 0;
+          font-size: 0.85rem;
+          color: var(--muted);
+        }
+        .noMeals {
+          grid-column: 1 / -1;
+          text-align: center;
         }
         .alertInline {
           border-radius: 14px;
