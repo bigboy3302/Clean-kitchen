@@ -9,19 +9,12 @@ import {
   Dumbbell,
   LayoutDashboard,
   LogOut,
-  MonitorCog,
-  Moon,
-  Plus,
-  Sparkles,
-  SunMedium,
 } from "lucide-react";
 import clsx from "clsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
-import FabNav from "@/components/nav/FabNav";
 import ExpiryBell from "@/components/nav/ExpiryBell";
 import Avatar from "@/components/ui/Avatar";
-import { useTheme } from "@/components/theme/ThemeProvider";
 import { auth } from "@/lib/firebas1e";
 
 type LinkItem = {
@@ -37,55 +30,6 @@ const primaryLinks: LinkItem[] = [
   { href: "/recipes", label: "Recipes", description: "Ideas", Icon: BookOpen },
   { href: "/fitness", label: "Fitness", description: "Training", Icon: Dumbbell },
 ];
-
-function ThemeToggle() {
-  const { mode, setMode } = useTheme();
-  const icon =
-    mode === "dark" ? (
-      <Moon strokeWidth={1.8} />
-    ) : mode === "light" ? (
-      <SunMedium strokeWidth={1.8} />
-    ) : (
-      <MonitorCog strokeWidth={1.8} />
-    );
-  const label =
-    mode === "dark"
-      ? "Dark mode"
-      : mode === "light"
-      ? "Light mode"
-      : "Follow system";
-
-  function handleClick() {
-    const order: Array<"system" | "light" | "dark"> = ["system", "light", "dark"];
-    const idx = order.indexOf(mode as "system" | "light" | "dark");
-    const next = order[(idx + 1) % order.length];
-    setMode(next);
-  }
-
-  return (
-    <>
-      <button
-        type="button"
-        className="navButton themeToggle"
-        onClick={handleClick}
-        aria-label={`Theme: ${label}`}
-      >
-        {icon}
-      </button>
-
-      <style jsx>{`
-        .themeToggle {
-          width: 44px;
-          height: 44px;
-        }
-        .themeToggle :global(svg) {
-          width: 20px;
-          height: 20px;
-        }
-      `}</style>
-    </>
-  );
-}
 
 export default function PrimaryNavbar() {
   const pathname = usePathname();
@@ -131,7 +75,7 @@ export default function PrimaryNavbar() {
   const profileName = user?.displayName || user?.email || "Account";
   const profileInitial = profileName.slice(0, 1);
 
-  // --- NEW: scroll-based show/hide logic ---
+  // --- scroll-based show/hide logic ---
   const [isHidden, setIsHidden] = useState(false);
   const lastScrollY = useRef(0);
 
@@ -164,9 +108,10 @@ export default function PrimaryNavbar() {
       lastScrollY.current = currentY;
     };
 
-    window.addEventListener("scroll", handleScroll, { passive: true } as any);
+    const options: AddEventListenerOptions = { passive: true };
+    window.addEventListener("scroll", handleScroll, options);
     return () => {
-      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("scroll", handleScroll, options);
     };
   }, []);
 
@@ -184,9 +129,6 @@ export default function PrimaryNavbar() {
               <span>{today}</span>
             </span>
           </Link>
-
-          {/* Right side of brand row: theme + quick actions on desktop */}
-
         </div>
 
         <div className="navGrid">
@@ -216,8 +158,7 @@ export default function PrimaryNavbar() {
 
           <div className="actionRail">
             <div className="quickActions" role="group" aria-label="Quick actions">
-              {/* You can keep or remove these; layout is improved either way */}
-              {/* <FabNav /> or more buttons could live here */}
+              {/* empty for now – no extra buttons per your request */}
             </div>
 
             <ExpiryBell />
@@ -346,17 +287,6 @@ export default function PrimaryNavbar() {
           letter-spacing: 0.01em;
         }
 
-        .brandRight {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .brandQuickActions {
-          display: flex;
-          gap: 8px;
-        }
-
         .navGrid {
           display: grid;
           grid-template-columns: minmax(0, 2fr) minmax(0, auto);
@@ -468,46 +398,6 @@ export default function PrimaryNavbar() {
           display: flex;
           gap: 8px;
           flex-wrap: wrap;
-        }
-
-        .quickBtn {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 8px 12px;
-          border-radius: 999px;
-          border: 1px solid
-            color-mix(in oklab, var(--border) 70%, transparent);
-          text-decoration: none;
-          font-weight: 600;
-          font-size: 13px;
-          color: var(--text);
-          background: color-mix(
-            in oklab,
-            var(--bg2) 94%,
-            transparent
-          );
-          transition: box-shadow 0.2s ease, transform 0.1s ease,
-            background 0.15s ease;
-        }
-
-        .quickBtn.primary {
-          background: var(--primary);
-          color: var(--primary-contrast);
-          border-color: color-mix(
-            in oklab,
-            var(--primary) 70%,
-            transparent
-          );
-        }
-
-        .quickBtn.ghost {
-          background: transparent;
-        }
-
-        .quickBtn:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 10px 22px rgba(15, 23, 42, 0.16);
         }
 
         .navButton {
@@ -638,14 +528,6 @@ export default function PrimaryNavbar() {
           .actionRail {
             justify-content: space-between;
           }
-
-          .brandRight {
-            flex-wrap: wrap;
-          }
-
-          .brandQuickActions {
-            display: none; /* keep navbar compact on tablets */
-          }
         }
 
         @media (max-width: 768px) {
@@ -666,10 +548,6 @@ export default function PrimaryNavbar() {
 
           .navLinkChip {
             min-width: calc(50% - 6px);
-          }
-
-          .brandRight {
-            gap: 6px;
           }
 
           .profileName {
