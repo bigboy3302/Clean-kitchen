@@ -182,7 +182,7 @@ export default function EditRecipePage() {
       <main className="wrap">
         <div className="card bad">{loadErr || "Recipe not found."}</div>
         <Link className="btn ghost" href="/recipes">
-          <- All recipes
+          Back to recipes
         </Link>
         <style jsx>{recipePageStyles}</style>
       </main>
@@ -193,7 +193,7 @@ export default function EditRecipePage() {
     <main className="wrap">
       <header className="strip">
         <Link className="btn ghost" href={`/recipes/${id}`}>
-          <- Back to recipe
+          Back to recipe
         </Link>
         <div className="actions">
           <span className="hint">Edit recipe</span>
