@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Boxes, BookOpen, User, Dumbbell,
@@ -51,7 +52,7 @@ export default function Navbar() {
       <div className="nk-inner">
         <Link href="/dashboard" className="nk-brand">
           <span className="nk-brandMark" aria-hidden>
-            ✦
+            <Image src="/logo.png" alt="" width={20} height={20} />
           </span>
           <span className="nk-brandText">Clean&nbsp;Kitchen</span>
         </Link>

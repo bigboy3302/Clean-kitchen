@@ -41,6 +41,7 @@ import type { ThemeMode } from "@/components/theme/ThemeProvider";
 import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
+import BackgroundMotionControl from "@/components/background/BackgroundMotionControl";
 
 
 type UserDoc = {
@@ -667,6 +668,7 @@ export default function ProfilePage() {
                   <p className="cardSubtitle">Choose how Clean Kitchen should look and notify you.</p>
                   <div className="themeBlock">
                     <ThemePicker />
+                    <BackgroundMotionControl />
                   </div>
                   <div className="grid2">
                     <div className="field">

@@ -423,7 +423,7 @@ export default function PantryPage() {
     });
   }, [logs]);
 
-  const recentLogs = useMemo(() => sortedLogs.slice(0, 8), [sortedLogs]);
+  const recentLogs = useMemo(() => sortedLogs.slice(0, 5), [sortedLogs]);
 
   const totalsWeek = useMemo(() => {
     const out = { sugars_g: 0, satFat_g: 0, sodium_g: 0, kcal: 0 };

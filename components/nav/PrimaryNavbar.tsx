@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -123,7 +124,9 @@ export default function PrimaryNavbar() {
       <div className="nav-shell">
         <div className="brandRow">
           <Link href="/dashboard" className="brand" aria-label="Clean Kitchen home">
-            <span className="brandMark">CK</span>
+            <span className="brandMark" aria-hidden>
+              <Image src="/logo.png" alt="" width={28} height={28} className="brandLogo" />
+            </span>
             <span className="brandCopy">
               <strong>Clean Kitchen</strong>
               <span>{today}</span>
@@ -262,16 +265,23 @@ export default function PrimaryNavbar() {
         }
 
         .brandMark {
-          width: 40px;
-          height: 40px;
+          width: 38px;
+          height: 36px;
           border-radius: 14px;
           display: grid;
           place-items: center;
-          background: var(--text);
-          color: var(--bg);
-          font-weight: 800;
-          letter-spacing: 0.08em;
-          font-size: 12px;
+          padding: 4px;
+          background: var(--bg2);
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          box-shadow: 0 10px 20px rgba(15, 23, 42, 0.14);
+          overflow: hidden;
+        }
+        .brandLogo {
+          width: 32px;
+          height: 32px;
+          object-fit: contain;
+          display: block;
+          border-radius: 10px;
         }
 
         .brandCopy {

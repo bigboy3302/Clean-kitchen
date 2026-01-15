@@ -345,3 +345,249 @@ img, video { max-width: 100%; height: auto; }
 .ck-tab--active .ck-tab-ico {
   filter: saturate(1.2);
 }
+
+.appRoot {
+  position: relative;
+  z-index: 10;
+  min-height: 100vh;
+}
+
+.motionControl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.motionLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.motionOptions {
+  display: inline-flex;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  padding: 4px;
+  gap: 4px;
+}
+
+.motionOption {
+  border: none;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  background: transparent;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.motionOption:hover {
+  background: color-mix(in oklab, var(--text) 10%, transparent);
+}
+
+.motionOption.is-active {
+  background: var(--primary);
+  color: var(--primary-contrast);
+}
+
+.motionOption:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.motionNote {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+:root {
+  --bg-a1: 0.16;
+  --bg-a2: 0.14;
+  --bg-a3: 0.14;
+  --layer-a: 0.95;
+}
+
+:root[data-theme="dark"] {
+  --bg-a1: 0.28;
+  --bg-a2: 0.22;
+  --bg-a3: 0.22;
+  --layer-a: 0.95;
+}
+
+/* --- Clean Kitchen Moving Background --- */
+.ck-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.appRoot {
+  position: relative;
+  z-index: 10;
+}
+
+:root {
+  --bg-1: rgb(34 197 94 / .14);
+  --bg-2: rgb(59 130 246 / .12);
+  --bg-3: rgb(16 185 129 / .12);
+  --blob-a: rgb(59 130 246 / .22);
+  --blob-b: rgb(34 197 94 / .20);
+  --blob-c: rgb(99 102 241 / .18);
+}
+
+:root[data-theme="dark"] {
+  --bg-1: rgb(34 197 94 / .22);
+  --bg-2: rgb(59 130 246 / .18);
+  --bg-3: rgb(16 185 129 / .18);
+  --blob-a: rgb(59 130 246 / .30);
+  --blob-b: rgb(34 197 94 / .28);
+  --blob-c: rgb(99 102 241 / .24);
+}
+
+.ck-bg {
+  background:
+    radial-gradient(1200px 700px at 20% 10%, var(--bg-1), transparent 60%),
+    radial-gradient(900px 600px at 85% 20%, var(--bg-2), transparent 58%),
+    radial-gradient(900px 700px at 55% 92%, var(--bg-3), transparent 62%);
+}
+
+.ck-bg__layer {
+  position: absolute;
+  inset: -25%;
+  filter: blur(18px);
+  opacity: .95;
+  transform: translate3d(0,0,0);
+  will-change: transform;
+}
+
+.ck-bg__layer--one {
+  background:
+    radial-gradient(800px 520px at 30% 30%, rgb(34 197 94 / .22), transparent 60%),
+    radial-gradient(700px 460px at 70% 40%, rgb(59 130 246 / .18), transparent 60%);
+}
+
+.ck-bg__layer--two {
+  background:
+    radial-gradient(820px 520px at 60% 70%, rgb(16 185 129 / .20), transparent 60%),
+    radial-gradient(640px 420px at 20% 80%, rgb(99 102 241 / .16), transparent 60%);
+  mix-blend-mode: screen;
+}
+
+.ck-bg__grain {
+  position: absolute;
+  inset: 0;
+  opacity: .06;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+
+.ck-bg--off .ck-bg__layer,
+.ck-bg--off .ck-bg__waves,
+.ck-bg--off .ck-bg__blob {
+  animation: none !important;
+  transform: none !important;
+}
+
+.ck-bg__waves {
+  position: absolute;
+  inset: -30%;
+  opacity: 0;
+  filter: blur(10px);
+  transform: translate3d(0,0,0);
+  will-change: transform, background-position;
+  background:
+    radial-gradient(1200px 420px at 10% 55%, rgb(59 130 246 / .14), transparent 62%),
+    radial-gradient(1100px 420px at 65% 45%, rgb(34 197 94 / .12), transparent 62%),
+    radial-gradient(1000px 420px at 90% 60%, rgb(16 185 129 / .12), transparent 62%);
+}
+
+.ck-bg--subtle .ck-bg__waves {
+  opacity: .95;
+  animation: ck-waves 16s ease-in-out infinite;
+}
+
+.ck-bg--subtle .ck-bg__layer--one { animation: ck-drift-1 28s ease-in-out infinite; }
+.ck-bg--subtle .ck-bg__layer--two { animation: ck-drift-2 36s ease-in-out infinite; }
+
+.ck-bg__blob {
+  position: absolute;
+  inset: auto;
+  width: 520px;
+  height: 520px;
+  border-radius: 999px;
+  filter: blur(26px);
+  opacity: 0;
+  transform: translate3d(0,0,0);
+  will-change: transform;
+  mix-blend-mode: screen;
+}
+
+.ck-bg__blob--a {
+  left: -120px;
+  top: 10%;
+  background: radial-gradient(circle at 30% 30%, var(--blob-a), transparent 62%);
+}
+.ck-bg__blob--b {
+  right: -140px;
+  top: 18%;
+  background: radial-gradient(circle at 40% 40%, var(--blob-b), transparent 62%);
+}
+.ck-bg__blob--c {
+  left: 22%;
+  bottom: -180px;
+  background: radial-gradient(circle at 45% 45%, var(--blob-c), transparent 62%);
+}
+
+.ck-bg--dynamic .ck-bg__blob {
+  opacity: .95;
+}
+
+.ck-bg--dynamic .ck-bg__layer--one { animation: ck-drift-1 12s ease-in-out infinite; }
+.ck-bg--dynamic .ck-bg__layer--two { animation: ck-drift-2 16s ease-in-out infinite; }
+
+.ck-bg--dynamic .ck-bg__blob--a { animation: ck-blob-a 10s ease-in-out infinite; }
+.ck-bg--dynamic .ck-bg__blob--b { animation: ck-blob-b 13s ease-in-out infinite; }
+.ck-bg--dynamic .ck-bg__blob--c { animation: ck-blob-c 15s ease-in-out infinite; }
+
+@keyframes ck-drift-1 {
+  0%   { transform: translate3d(-6%, -4%, 0) scale(1.03); }
+  50%  { transform: translate3d( 6%,  5%, 0) scale(1.08); }
+  100% { transform: translate3d(-6%, -4%, 0) scale(1.03); }
+}
+
+@keyframes ck-drift-2 {
+  0%   { transform: translate3d( 6%,  4%, 0) scale(1.02); }
+  50%  { transform: translate3d(-6%, -5%, 0) scale(1.07); }
+  100% { transform: translate3d( 6%,  4%, 0) scale(1.02); }
+}
+
+@keyframes ck-waves {
+  0%   { transform: translate3d(-4%,  1%, 0) scale(1.02); }
+  50%  { transform: translate3d( 4%, -1%, 0) scale(1.05); }
+  100% { transform: translate3d(-4%,  1%, 0) scale(1.02); }
+}
+
+@keyframes ck-blob-a {
+  0%   { transform: translate3d(0,0,0) scale(1.00); }
+  50%  { transform: translate3d(70px, -30px, 0) scale(1.12); }
+  100% { transform: translate3d(0,0,0) scale(1.00); }
+}
+@keyframes ck-blob-b {
+  0%   { transform: translate3d(0,0,0) scale(1.00); }
+  50%  { transform: translate3d(-80px, 40px, 0) scale(1.10); }
+  100% { transform: translate3d(0,0,0) scale(1.00); }
+}
+@keyframes ck-blob-c {
+  0%   { transform: translate3d(0,0,0) scale(1.00); }
+  50%  { transform: translate3d(30px, -70px, 0) scale(1.14); }
+  100% { transform: translate3d(0,0,0) scale(1.00); }
+}
