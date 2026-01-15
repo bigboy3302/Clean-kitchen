@@ -1,4 +1,3 @@
-// app/recipes/[id]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -31,6 +30,8 @@ type RecipeDoc = {
   uid?: string;
   title?: string | null;
   description?: string | null;
+  timeMinutes?: number | null;
+  servings?: number | null;
   image?: string | null;
   imageURL?: string | null;
   gallery?: { id: string; url: string }[];
@@ -59,6 +60,7 @@ function toMillis(ts: TimestampLike): number {
   } catch {}
   return 0;
 }
+
 function toLines(txt?: string | null): string[] {
   if (!txt) return [];
   return String(txt)
@@ -66,7 +68,6 @@ function toLines(txt?: string | null): string[] {
     .map((s) => s.trim())
     .filter(Boolean);
 }
-
 
 export default function RecipePublicPage() {
   const { id } = useParams<{ id: string }>();
@@ -77,6 +78,7 @@ export default function RecipePublicPage() {
 
   useEffect(() => {
     if (!id) return;
+
     const ref = doc(db, "recipes", String(id));
     const stop = onSnapshot(
       ref,
@@ -96,6 +98,7 @@ export default function RecipePublicPage() {
         setErr(error.message || "Could not load recipe.");
       }
     );
+
     return () => stop();
   }, [id]);
 
@@ -112,112 +115,132 @@ export default function RecipePublicPage() {
 
   if (loading) {
     return (
-      <main className="wrap">
+      <main className="container section">
         <div className="card">Loading recipe…</div>
-        <style jsx>{styles}</style>
       </main>
     );
   }
+
   if (err) {
     return (
-      <main className="wrap">
-        <div className="card bad">{err}</div>
-        <style jsx>{styles}</style>
+      <main className="container section">
+        <div className="card alert-error">{err}</div>
+        <Link className="btn-base btn--secondary btn--md" href="/recipes" style={{ marginTop: 12 }}>
+          Back to recipes
+        </Link>
       </main>
     );
   }
+
   if (!recipe) {
     return (
-      <main className="wrap">
+      <main className="container section">
         <div className="card">Recipe not found.</div>
-        <style jsx>{styles}</style>
+        <Link className="btn-base btn--secondary btn--md" href="/recipes" style={{ marginTop: 12 }}>
+          Back to recipes
+        </Link>
       </main>
     );
   }
 
   return (
-    <main className="wrap">
-     
-      <header className="strip">
-        <Link className="btn ghost" href="/recipes">← All recipes</Link>
-        <div className="actions">
-            <span className="hint">You’re viewing a public recipe</span>
+    <main className="container section recipePublic">
+      <header className="recipePublicBar">
+        <Link className="btn-base btn--secondary btn--sm" href="/recipes">
+          ← All recipes
+        </Link>
+        <div className="recipePublicBarActions">
+          <span className="recipePublicHint">You’re viewing a public recipe</span>
+          <Link className="btn-base btn--secondary btn--sm" href={`/recipes/edit/${id}`}>
+            Edit
+          </Link>
         </div>
       </header>
 
-      <section className="hero">
-        <div className="cover">
+      <section className="recipePublicHero">
+        <div className="recipePublicCover card">
           {cover ? (
             <Image
               src={cover}
               alt={title}
               fill
-              className="coverImg"
+              className="recipePublicCoverImg"
               sizes="(min-width: 900px) 55vw, 100vw"
             />
           ) : (
-            <div className="ph" aria-hidden>
+            <div className="recipePublicCoverPh" aria-hidden>
               <svg width="28" height="28" viewBox="0 0 24 24">
-                <path d="M4 5h16v14H4z M8 11a2 2 0 114 0 2 2 0 01-4 0zm10 6l-4.5-6-3.5 4.5L8 13l-4 4h14z" fill="currentColor"/>
+                <path
+                  d="M4 5h16v14H4z M8 11a2 2 0 114 0 2 2 0 01-4 0zm10 6l-4.5-6-3.5 4.5L8 13l-4 4h14z"
+                  fill="currentColor"
+                />
               </svg>
             </div>
           )}
         </div>
 
-        <div className="head">
-          <h1 className="title">{title}</h1>
-          <div className="meta">
-            <div className="who">
+        <div className="card recipePublicHead">
+          <h1 className="recipePublicTitle">{title}</h1>
+
+          <div className="recipePublicMeta">
+            <div className="recipePublicWho">
               {recipe?.author?.avatarURL ? (
                 <Image
-                  className="avatar"
+                  className="recipePublicAvatarImg"
                   src={recipe.author.avatarURL}
                   alt=""
                   width={44}
                   height={44}
                 />
               ) : (
-                <div className="avatar ph">{authorName[0]?.toUpperCase() || "U"}</div>
+                <div className="recipePublicAvatarPh">{authorName[0]?.toUpperCase() || "U"}</div>
               )}
-              <div className="names">
-                <div className="name">{authorName}</div>
+
+              <div className="recipePublicNames">
+                <div className="recipePublicName">{authorName}</div>
                 {created ? (
-                  <div className="time">
-                    {created.toLocaleDateString()}{" "}
+                  <div className="recipePublicTime">
+                    {created.toLocaleDateString()} {" "}
                     {created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                   </div>
                 ) : null}
               </div>
             </div>
-            <div className="chips">
-              {recipe?.category ? <span className="chip">{recipe.category}</span> : null}
-              {recipe?.area ? <span className="chip">{recipe.area}</span> : null}
+
+            <div className="recipePublicChips">
+              {recipe?.timeMinutes ? (
+                <span className="recipePill">{recipe.timeMinutes} min</span>
+              ) : null}
+              {recipe?.servings ? (
+                <span className="recipePill">{recipe.servings} servings</span>
+              ) : null}
+              {recipe?.category ? <span className="recipePill">{recipe.category}</span> : null}
+              {recipe?.area ? <span className="recipePill">{recipe.area}</span> : null}
             </div>
           </div>
 
-          {desc ? <p className="desc">{desc}</p> : null}
+          {desc ? <p className="muted" style={{ margin: 0 }}>{desc}</p> : null}
         </div>
       </section>
 
-   
-      <section className="grid">
-        <aside className="panel">
-          <div className="panelHead"><span className="dot" /> Ingredients</div>
+      <section className="recipePublicGrid">
+        <aside className="card recipePublicPanel">
+          <div className="recipePublicPanelHead">
+            <span className="recipePublicDot" /> Ingredients
+          </div>
+
           {ing.length === 0 ? (
             <p className="muted">No ingredients listed.</p>
           ) : (
-            <ul className="ingList">
+            <ul className="recipePublicIngList">
               {ing.map((it, idx) => {
                 const name = it?.name || "Ingredient";
-                
-                const measure =
-                  it?.measure ??
-                  [it?.qty, it?.unit].filter(Boolean).join(" ");
+                const measure = it?.measure ?? [it?.qty, it?.unit].filter(Boolean).join(" ");
                 return (
-                  <li key={idx} className="ing">
-                    <span className="bullet" />
-                    <span className="itName">{name}</span>
-                    {measure ? <span className="itQty">{measure}</span> : null}
+                  <li key={idx} className="recipePublicIng">
+                    <span className="recipePublicBullet" />
+                    <span className="recipePublicIngName">{name}</span>
+                    {measure ? <span className="recipePublicIngQty">{measure}</span> : null}
                   </li>
                 );
               })}
@@ -225,110 +248,23 @@ export default function RecipePublicPage() {
           )}
         </aside>
 
-        <article className="body">
-          <section className="steps">
-            <h2 className="h2">Steps</h2>
-            {steps.length === 0 ? (
-              <p className="muted">No steps provided.</p>
-            ) : (
-              <ol className="stepList">
-                {steps.map((line, i) => (
-                  <li key={i} className="step">
-                    <span className="num">{i + 1}</span>
-                    <p className="txt">{line}</p>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
+        <article className="card recipePublicBody">
+          <h2 className="recipePublicH2">Steps</h2>
+
+          {steps.length === 0 ? (
+            <p className="muted">No steps provided.</p>
+          ) : (
+            <ol className="recipePublicStepList">
+              {steps.map((line, i) => (
+                <li key={i} className="recipePublicStep">
+                  <span className="recipePublicNum">{i + 1}</span>
+                  <p className="recipePublicStepTxt">{line}</p>
+                </li>
+              ))}
+            </ol>
+          )}
         </article>
       </section>
-
-      <style jsx>{styles}</style>
     </main>
   );
 }
-
-const styles = `
-.wrap{ max-width: 1100px; margin: 0 auto; padding: 14px; color: var(--text); }
-.card{ border:1px solid var(--border); background: var(--card-bg); border-radius: 14px; padding: 12px; }
-.bad{ background: color-mix(in oklab, #ef4444 12%, var(--card-bg)); color: color-mix(in oklab, #7f1d1d 70%, var(--text) 30%); border-color: color-mix(in oklab, #ef4444 35%, var(--border)); }
-
-.strip{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
-.btn{ border:1px solid var(--border); background: var(--bg2); color: var(--text); border-radius:12px; padding:8px 12px; text-decoration:none; font-weight:800; }
-.btn:hover{ background: color-mix(in oklab, var(--bg2) 90%, var(--bg)); }
-.btn.primary{ background: var(--primary); color: var(--primary-contrast); border-color: color-mix(in oklab, var(--primary) 40%, var(--border)); }
-.btn.ghost{ background: transparent; }
-.hint{ color: var(--muted); font-size: 13px; }
-
-.hero{ display:grid; gap:14px; grid-template-columns: 1.4fr 1fr; align-items: stretch; }
-@media (max-width: 900px){ .hero{ grid-template-columns: 1fr; } }
-
-.cover{ border:1px solid var(--border); background:#000; border-radius:16px; overflow:hidden; aspect-ratio: 16/10; position:relative; }
-.coverImg{ object-fit:cover; position:absolute; inset:0; }
-.cover .ph{ width:100%; height:100%; display:grid; place-items:center; color: var(--muted); background: var(--bg2); }
-
-.head{
-  border:1px solid var(--border);
-  background: var(--card-bg);
-  border-radius:16px;
-  padding:14px;
-  box-shadow: 0 10px 30px rgba(0,0,0,.06);
-  display:grid; gap:8px;
-}
-.title{ margin:0; font-size: clamp(22px, 3.4vw, 30px); font-weight:900; letter-spacing:-.02em; }
-.meta{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
-.who{ display:flex; align-items:center; gap:10px; }
-.avatar{ width:44px; height:44px; border-radius:999px; object-fit:cover; border:1px solid var(--border); }
-.avatar.ph{ width:44px; height:44px; border-radius:999px; display:grid; place-items:center; background:var(--bg2); color:var(--text); font-weight:900; }
-.names{ line-height:1.1 }
-.name{ font-weight:800 }
-.time{ font-size:12px; color: var(--muted) }
-.chips{ display:flex; gap:8px; flex-wrap:wrap }
-.chip{ font-size:12px; font-weight:800; padding: 4px 10px; border-radius:999px; background: color-mix(in oklab, var(--primary) 12%, var(--bg)); border: 1px solid color-mix(in oklab, var(--primary) 35%, var(--border)); }
-.desc{ margin: 6px 0 0; color: var(--text) }
-
-.grid{ display:grid; gap:14px; grid-template-columns: 340px 1fr; align-items:start; margin-top:14px; }
-@media (max-width: 1024px){ .grid{ grid-template-columns: 1fr; } }
-
-.panel{
-  position: sticky; top: 14px;
-  border:1px solid var(--border); background: var(--card-bg);
-  border-radius:16px; padding:12px; box-shadow: 0 10px 30px rgba(0,0,0,.06);
-}
-.panelHead{ display:flex; align-items:center; gap:8px; font-weight:900; margin-bottom:8px; letter-spacing:-.01em; }
-.dot{ width:10px; height:10px; border-radius:999px; background: var(--primary); box-shadow: 0 0 12px color-mix(in oklab, var(--primary) 60%, transparent); }
-
-.ingList{ list-style:none; margin:0; padding:0; display:grid; gap:8px; }
-.ing{ display:grid; grid-template-columns: auto 1fr auto; gap:8px; align-items:center; }
-.bullet{ width:6px; height:6px; border-radius:999px; background: var(--text); }
-.itName{ font-weight:600; color: var(--text) }
-.itQty{ color: var(--muted); font-size: 13px; }
-
-.body{
-  border:1px solid var(--border); background: var(--card-bg);
-  border-radius:16px; box-shadow: 0 10px 30px rgba(0,0,0,.06);
-  padding: 12px;
-}
-.h2{ margin:0 0 8px; font-size:18px; font-weight:900; letter-spacing:-.01em; }
-
-.stepList{ list-style:none; margin:0; padding:0; display:grid; gap:10px; }
-.step{ display:grid; grid-template-columns: 28px 1fr; gap:10px; align-items:start; }
-.num{
-  width:28px; height:28px; border-radius:10px; border:1px solid var(--border);
-  display:grid; place-items:center; font-weight:800; background: var(--bg2);
-}
-.txt{ margin:0; color: var(--text); }
-
-.gGrid{
-  display:grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap:10px;
-}
-.gItem{
-  border:1px solid var(--border); border-radius:12px; overflow:hidden; background:#000; aspect-ratio: 4/3;
-}
-.gItem img{ width:100%; height:100%; object-fit:cover; display:block; }
-
-.muted{ color: var(--muted) }
-`;

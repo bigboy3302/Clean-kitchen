@@ -2,23 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type ChangeEvent,
-  type CSSProperties as ReactCSSProperties,
-} from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
   addDoc,
   collection,
-  deleteDoc,
-  doc,
-  getDoc,
   onSnapshot,
   query,
   serverTimestamp,
-  setDoc,
   updateDoc,
   where,
   type DocumentData,
@@ -34,19 +25,21 @@ import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import type { CommonRecipe, Ingredient } from "@/components/recipes/types";
 import RecipeModal from "@/components/recipes/RecipeModal";
-import RecipeCard, { type IngredientObj, getRecipePlaceholder } from "@/components/recipes/RecipeCard";
+import { getRecipePlaceholder } from "@/components/recipes/RecipeCard";
+import IngredientSearch from "@/components/recipes/IngredientSearch";
+import SaveRecipeButton from "@/components/recipes/SaveRecipeButton";
 import {
   getRandomMeals,
-  searchMealsByIngredient,
   searchMealsByName,
   lookupMealById,
   searchMealsByIngredientsAND,
+  searchMealsByIngredientsPaged,
 } from "@/lib/recipesApi";
 
 /* -------------------------- helpers & type guards -------------------------- */
 
 const capFirst = (s: string) => s.replace(/^\p{L}/u, (m) => m.toUpperCase());
-const ridFor = (r: CommonRecipe) => (r.source === "api" ? `api-${r.id}` : `user-${r.id}`);
+const INGREDIENT_PAGE_SIZE = 12;
 
 type TimestampLike =
   | { seconds?: number; toDate?: () => Date }
@@ -113,27 +106,12 @@ const getRecipeImage = (recipe: CommonRecipe): string | null => {
 
 const getRecipeMinutes = (recipe: CommonRecipe): number | null => {
   const record = recipe as Record<string, unknown>;
-  return safeNumber(record.minutes);
+  return safeNumber(record.timeMinutes ?? record.minutes);
 };
 
 const getRecipeServings = (recipe: CommonRecipe): number | null => {
   const record = recipe as Record<string, unknown>;
   return safeNumber(record.servings);
-};
-
-/** Ingredient list used by RecipeCard (name/measure strings). */
-const normalizeIngredientList = (ingredients: unknown): IngredientObj[] => {
-  if (!Array.isArray(ingredients)) return [];
-  return ingredients.map((entry) => {
-    if (entry && typeof entry === "object") {
-      const record = entry as Record<string, unknown>;
-      return {
-        name: safeString(record.name),
-        measure: safeString(record.measure, ""),
-      };
-    }
-    return { name: "", measure: "" };
-  });
 };
 
 /** Ingredient[] used by your domain types. */
@@ -157,6 +135,9 @@ type RecipeListItem = CommonRecipe & {
   createdAtMillis: number;
   minutes?: number | null;
   servings?: number | null;
+  calories?: number | null;
+  vegetarian?: boolean | null;
+  vegan?: boolean | null;
 };
 
 const withRecipeMeta = (recipe: CommonRecipe): RecipeListItem => {
@@ -166,14 +147,13 @@ const withRecipeMeta = (recipe: CommonRecipe): RecipeListItem => {
     ingredients: normalizeIngredients((recipe as CommonRecipe).ingredients),
     instructions: safeNullableString((recipe as CommonRecipe).instructions) ?? recipe.instructions ?? null,
     createdAtMillis: toMillis(record.createdAt as TimestampLike),
-    minutes: safeNumber(record.minutes),
+    minutes: safeNumber(record.timeMinutes ?? record.minutes),
     servings: safeNumber(record.servings),
+    calories: safeNumber(record.calories),
+    vegetarian: typeof record.vegetarian === "boolean" ? record.vegetarian : recipe.vegetarian ?? null,
+    vegan: typeof record.vegan === "boolean" ? record.vegan : recipe.vegan ?? null,
   };
 };
-
-/** CSS variable-friendly type for inline styles. */
-type WaveCharStyle = ReactCSSProperties & { ["--index"]?: number };
-const waveCharStyle = (index: number): WaveCharStyle => ({ ["--index"]: index });
 
 const mapUserRecipeDoc = (
   snapshot: QueryDocumentSnapshot<DocumentData>,
@@ -206,139 +186,15 @@ const mapUserRecipeDoc = (
     instructions: safeNullableString(data.instructions),
     author,
     createdAtMillis,
-    minutes: safeNumber(data.minutes),
+    minutes: safeNumber(data.timeMinutes ?? data.minutes),
     servings: safeNumber(data.servings),
+    calories: safeNumber(data.calories),
+    vegetarian: typeof data.vegetarian === "boolean" ? data.vegetarian : null,
+    vegan: typeof data.vegan === "boolean" ? data.vegan : null,
   } as RecipeListItem;
 };
 
 /* -------------------------------- components -------------------------------- */
-
-function SignInPrompt({
-  open,
-  onClose,
-  onSigninHref = "/login",
-}: {
-  open: boolean;
-  onClose: () => void;
-  onSigninHref?: string;
-}) {
-  if (!open) return null;
-  return (
-    <div className="ov" role="dialog" aria-modal aria-labelledby="si-title" onClick={onClose}>
-      <div className="card" onClick={(e) => e.stopPropagation()}>
-        <div className="hdr">
-          <div id="si-title" className="t">
-            Please sign in
-          </div>
-          <button className="x" onClick={onClose} aria-label="Close">
-            ×
-          </button>
-        </div>
-        <div className="body">
-          <p className="p">
-            You need an account to favorite recipes. Sign in to save and view your favorites across
-            devices.
-          </p>
-        </div>
-        <div className="actions">
-          <Link className="btn primary" href={onSigninHref}>
-            Sign in
-          </Link>
-          <button className="btn" onClick={onClose}>
-            Not now
-          </button>
-        </div>
-      </div>
-      <style jsx>{`
-        .ov {
-          position: fixed;
-          inset: 0;
-          background: rgba(2, 6, 23, 0.55);
-          display: grid;
-          place-items: center;
-          padding: 16px;
-          z-index: 1600;
-          animation: fade 0.15s ease-out;
-        }
-        @keyframes fade {
-          from {
-            opacity: 0.5;
-          }
-          to {
-            opacity: 1;
-          }
-        }
-        .card {
-          width: 100%;
-          max-width: 460px;
-          background: var(--card-bg);
-          border: 1px solid var(--border);
-          border-radius: 16px;
-          box-shadow: 0 20px 50px rgba(2, 6, 23, 0.2);
-          transform: translateY(8px);
-          animation: pop 0.18s ease-out forwards;
-        }
-        @keyframes pop {
-          to {
-            transform: translateY(0);
-          }
-        }
-        .hdr {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 12px 14px;
-          border-bottom: 1px solid var(--border);
-          background: color-mix(in oklab, var(--card-bg) 92%, #fff);
-        }
-        .t {
-          font-weight: 800;
-          color: var(--text);
-        }
-        .x {
-          border: none;
-          background: var(--bg2);
-          color: var(--text);
-          border-radius: 10px;
-          padding: 4px 10px;
-          cursor: pointer;
-        }
-        .body {
-          padding: 14px;
-        }
-        .p {
-          margin: 0;
-          color: var(--text);
-        }
-        .actions {
-          display: flex;
-          gap: 8px;
-          justify-content: flex-end;
-          padding: 12px 14px;
-          border-top: 1px solid var(--border);
-          background: color-mix(in oklab, var(--card-bg) 96%, #fff);
-        }
-        .btn {
-          border: 1px solid var(--border);
-          background: var(--bg2);
-          border-radius: 12px;
-          padding: 8px 12px;
-          cursor: pointer;
-          text-decoration: none;
-          color: inherit;
-        }
-        .btn.primary {
-          background: var(--primary);
-          border-color: var(--primary);
-          color: var(--primary-contrast);
-        }
-        .btn:hover {
-          filter: brightness(0.98);
-        }
-      `}</style>
-    </div>
-  );
-}
 
 function PantryPicker({
   open,
@@ -468,6 +324,23 @@ function PantryPicker({
           padding: 0 12px 12px;
         }
       `}</style>
+    </div>
+  );
+}
+
+function RecipeSkeletons() {
+  return (
+    <div className="skelGrid">
+      {Array.from({ length: 9 }).map((_, i) => (
+        <div className="skelCard" key={i}>
+          <div className="skelMedia" />
+          <div className="skelBody">
+            <div className="skelLine lg" />
+            <div className="skelLine md" />
+            <div className="skelLine sm" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -985,234 +858,96 @@ function CreateRecipeWizard({
   );
 }
 
-function FavOverlay({
-  uid,
-  onClose,
-  onOpen,
-}: {
-  uid: string | null;
-  onClose: () => void;
-  onOpen: (id: string, source: "api" | "user", recipeId: string) => void;
-}) {
-  const [rows, setRows] = useState<
-    { id: string; title: string; image: string | null; source: "api" | "user"; recipeId: string }[]
-  >([]);
-
-  useEffect(() => {
-    if (!uid) return;
-    const q = query(collection(db, "users", uid, "favoriteRecipes"));
-    const stop = onSnapshot(q, (snap) => {
-      const list = snap.docs.map((docSnapshot) => {
-        const data = docSnapshot.data() as Record<string, unknown>;
-        const source: "api" | "user" = data.source === "user" ? "user" : "api";
-        return {
-          id: docSnapshot.id,
-          title: safeString(data.title, "Untitled"),
-          image: safeNullableString(data.image),
-          source,
-          recipeId: safeString(data.recipeId, ""),
-        };
-      });
-      setRows(list);
-    });
-    return () => stop();
-  }, [uid]);
-
-  async function removeFav(favId: string) {
-    if (!uid) return;
-    const ref = doc(db, "users", uid, "favoriteRecipes", favId);
-    await deleteDoc(ref).catch(() => {});
-  }
-
-  return (
-    <div className="ov" onClick={onClose} role="dialog" aria-modal>
-      <div className="box" onClick={(e) => e.stopPropagation()}>
-        <div className="bh">
-          <div className="bt">Favorites</div>
-          <button className="x" onClick={onClose}>
-            ×
-          </button>
-        </div>
-        {!uid ? (
-          <p className="muted small" style={{ padding: 12 }}>
-            Sign in to view favorites.
-          </p>
-        ) : rows.length === 0 ? (
-          <p className="muted small" style={{ padding: 12 }}>
-            No favorites yet.
-          </p>
-        ) : (
-          <div className="gridFav">
-            {rows.map((r) => (
-              <div key={r.id} className="fi">
-                {r.image ? (
-                  <Image
-                    className="fimg"
-                    src={r.image}
-                    alt={r.title ?? "Recipe image"}
-                    width={320}
-                    height={120}
-                    unoptimized
-                  />
-                ) : (
-                  <Image
-                    className="fimg"
-                    src={getRecipePlaceholder(r.id)}
-                    alt={r.title ?? "Recipe image"}
-                    width={320}
-                    height={120}
-                    unoptimized
-                  />
-                )}
-                <div className="ft">{r.title}</div>
-                <div className="btns">
-                  <button className="open" onClick={() => onOpen(r.id, r.source, r.recipeId)}>
-                    Open
-                  </button>
-                  <button className="unfav" onClick={() => removeFav(r.id)} title="Remove">
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      <style jsx>{`
-        .ov {
-          position: fixed;
-          inset: 0;
-          background: rgba(2, 6, 23, 0.55);
-          display: grid;
-          place-items: center;
-          padding: 16px;
-          z-index: 1500;
-        }
-        .box {
-          width: 100%;
-          max-width: 760px;
-          max-height: 90vh;
-          overflow: auto;
-          background: var(--card-bg);
-          border-radius: 16px;
-          border: 1px solid var(--border);
-        }
-        .bh {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          border-bottom: 1px solid var(--border);
-          padding: 10px 12px;
-        }
-        .bt {
-          font-weight: 800;
-          color: var(--text);
-        }
-        .x {
-          border: none;
-          background: var(--text);
-          color: var(--primary-contrast);
-          border-radius: 10px;
-          padding: 4px 10px;
-          cursor: pointer;
-        }
-        .gridFav {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 12px;
-          padding: 12px;
-        }
-        @media (max-width: 840px) {
-          .gridFav {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
-        }
-        @media (max-width: 560px) {
-          .gridFav {
-            grid-template-columns: 1fr;
-          }
-        }
-        .fi {
-          border: 1px solid var(--border);
-          border-radius: 12px;
-          background: var(--bg2);
-          overflow: hidden;
-          display: flex;
-          flex-direction: column;
-        }
-        .fimg {
-          width: 100%;
-          height: 120px;
-          object-fit: cover;
-          background: #eee;
-        }
-        .ft {
-          padding: 8px 10px;
-          font-weight: 700;
-          flex: 1;
-          color: var(--text);
-        }
-        .btns {
-          display: flex;
-          gap: 8px;
-          justify-content: flex-end;
-          padding: 0 10px 10px;
-        }
-        .open {
-          border: 1px solid var(--border);
-          background: var(--bg2);
-          border-radius: 8px;
-          padding: 6px 10px;
-          cursor: pointer;
-        }
-        .unfav {
-          border: 1px solid rgb(249, 201, 6);
-          background: #fef9c3;
-          border-radius: 8px;
-          padding: 6px 10px;
-          cursor: pointer;
-        }
-      `}</style>
-    </div>
-  );
-}
-
 export default function RecipesPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [me, setMe] = useState<string | null>(null);
 
   const [apiRecipes, setApiRecipes] = useState<RecipeListItem[]>([]);
   const [userRecipes, setUserRecipes] = useState<RecipeListItem[]>([]);
   const [pantryRecipes, setPantryRecipes] = useState<RecipeListItem[] | null>(null);
 
-  const [favs, setFavs] = useState<Record<string, boolean>>({});
-  const [showFavs, setShowFavs] = useState(false);
-
   const [pantry, setPantry] = useState<string[]>([]);
 
   const [q, setQ] = useState("");
   const [mode, setMode] = useState<"name" | "ingredient">("name");
   const [areaFilter, setAreaFilter] = useState<string>("any");
+  const [sortBy, setSortBy] = useState<"match" | "fast" | "calories">("match");
+  const [diet, setDiet] = useState<
+    "any" | "vegetarian" | "vegan" | "pescetarian" | "gluten free" | "ketogenic"
+  >("any");
+  const [maxTime, setMaxTime] = useState<number | null>(null);
   const [busySearch, setBusySearch] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const [openModal, setOpenModal] = useState<CommonRecipe | null>(null);
   const [showPantryPicker, setShowPantryPicker] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
 
-  const [showSigninPrompt, setShowSigninPrompt] = useState(false);
+  const [ingredientValue, setIngredientValue] = useState("");
+  const [ingredientChips, setIngredientChips] = useState<string[]>([]);
+  const [lastIngredientSearch, setLastIngredientSearch] = useState<string[]>([]);
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
+  const [urlReady, setUrlReady] = useState(false);
+  const [ingredientOffset, setIngredientOffset] = useState(0);
+  const [ingredientTotal, setIngredientTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const didInit = useRef(false);
+  const didAutoSearch = useRef(false);
+
+  useEffect(() => {
+    if (didInit.current) return;
+    didInit.current = true;
+
+    const modeParam = searchParams.get("mode");
+    const qParam = searchParams.get("q");
+    const ingParam = searchParams.get("ing");
+    const dietParam = searchParams.get("diet");
+    const sortParam = searchParams.get("sort");
+    const maxParam = searchParams.get("max");
+    const areaParam = searchParams.get("area");
+
+    if (modeParam === "ingredient") setMode("ingredient");
+    if (qParam) setQ(qParam);
+    if (ingParam) {
+      const chips = ingParam
+        .split(",")
+        .map((item) => item.trim().toLowerCase())
+        .filter(Boolean);
+      if (chips.length) {
+        setIngredientChips(chips);
+        setLastIngredientSearch(chips);
+      }
+    }
+    if (
+      dietParam === "vegetarian" ||
+      dietParam === "vegan" ||
+      dietParam === "pescetarian" ||
+      dietParam === "gluten free" ||
+      dietParam === "ketogenic"
+    ) {
+      setDiet(dietParam);
+    }
+    if (sortParam === "fast" || sortParam === "calories") setSortBy(sortParam);
+    if (maxParam) {
+      const parsed = Number(maxParam);
+      if (Number.isFinite(parsed)) setMaxTime(parsed);
+    }
+    if (areaParam) setAreaFilter(areaParam);
+    setUrlReady(true);
+  }, [searchParams]);
 
   useEffect(() => {
     let stopUserSub: (() => void) | null = null;
-    let stopFavsSub: (() => void) | null = null;
     let stopPantrySub: (() => void) | null = null;
 
     const cleanupUserSubs = () => {
       if (stopUserSub) stopUserSub();
-      if (stopFavsSub) stopFavsSub();
       if (stopPantrySub) stopPantrySub();
-      stopUserSub = stopFavsSub = stopPantrySub = null;
+      stopUserSub = stopPantrySub = null;
     };
 
     setMe(auth.currentUser?.uid ?? null);
@@ -1234,13 +969,6 @@ export default function RecipesPage() {
           () => {}
         );
 
-        const fq = query(collection(db, "users", u.uid, "favoriteRecipes"));
-        stopFavsSub = onSnapshot(fq, (snap) => {
-          const map: Record<string, boolean> = {};
-          snap.docs.forEach((d) => (map[d.id] = true));
-          setFavs(map);
-        });
-
         const pq = query(collection(db, "pantryItems"), where("uid", "==", u.uid));
         stopPantrySub = onSnapshot(pq, (snap) => {
           const names = snap.docs
@@ -1255,7 +983,6 @@ export default function RecipesPage() {
         });
       } else {
         setUserRecipes([]);
-        setFavs({});
         setPantry([]);
       }
     });
@@ -1269,11 +996,14 @@ export default function RecipesPage() {
   useEffect(() => {
     let alive = true;
     (async () => {
+      setInitialLoading(true);
       try {
         const list = await getRandomMeals(15);
         if (alive) setApiRecipes(list.map(withRecipeMeta));
       } catch {
         // ignore
+      } finally {
+        if (alive) setInitialLoading(false);
       }
     })();
     return () => {
@@ -1282,6 +1012,23 @@ export default function RecipesPage() {
   }, []);
 
   useEffect(() => {
+    if (!urlReady) return;
+    const params = new URLSearchParams();
+    if (mode === "ingredient") params.set("mode", "ingredient");
+    if (mode === "name" && q.trim()) params.set("q", q.trim());
+    if (mode === "ingredient" && ingredientChips.length) {
+      params.set("ing", ingredientChips.join(","));
+    }
+    if (diet !== "any") params.set("diet", diet);
+    if (sortBy !== "match") params.set("sort", sortBy);
+    if (typeof maxTime === "number") params.set("max", String(maxTime));
+    if (areaFilter !== "any") params.set("area", areaFilter);
+    const next = params.toString();
+    router.replace(next ? `?${next}` : "/recipes", { scroll: false });
+  }, [router, mode, q, ingredientChips, diet, sortBy, maxTime, areaFilter, urlReady]);
+
+  useEffect(() => {
+    if (mode !== "name") return;
     const id = setTimeout(async () => {
       setErr(null);
       setPantryRecipes(null);
@@ -1293,10 +1040,12 @@ export default function RecipesPage() {
       }
       setBusySearch(true);
       try {
-        const list =
-          mode === "ingredient"
-            ? await searchMealsByIngredient(q.trim())
-            : await searchMealsByName(q.trim());
+        const list = await searchMealsByName(q.trim(), 24, {
+          area: areaFilter,
+          diet,
+          sort: sortBy,
+          maxTime,
+        });
         setApiRecipes(list.map(withRecipeMeta));
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Search failed.";
@@ -1306,7 +1055,26 @@ export default function RecipesPage() {
       }
     }, 280);
     return () => clearTimeout(id);
-  }, [q, mode]);
+  }, [q, mode, areaFilter, diet, sortBy, maxTime]);
+
+  useEffect(() => {
+    if (mode === "ingredient") {
+      setPantryRecipes(null);
+      setErr(null);
+      return;
+    }
+    setIngredientOffset(0);
+    setIngredientTotal(0);
+    setLastIngredientSearch([]);
+  }, [mode]);
+
+  useEffect(() => {
+    if (mode !== "ingredient") return;
+    if (!ingredientChips.length) return;
+    if (didAutoSearch.current) return;
+    didAutoSearch.current = true;
+    runIngredientSearch(ingredientChips);
+  }, [mode, ingredientChips]);
 
   /* ---------- pantry picker → AND search ---------- */
   async function runPantrySearch(terms: string[]) {
@@ -1314,7 +1082,12 @@ export default function RecipesPage() {
     setBusySearch(true);
     setShowPantryPicker(false);
     try {
-      const results = await searchMealsByIngredientsAND(terms, 36);
+      const results = await searchMealsByIngredientsAND(terms, 36, "intersect", {
+        area: areaFilter,
+        diet,
+        sort: sortBy,
+        maxTime,
+      });
       setPantryRecipes(results.map(withRecipeMeta));
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Pantry search failed.";
@@ -1324,71 +1097,104 @@ export default function RecipesPage() {
     }
   }
 
-  async function toggleFav(recipe: RecipeListItem) {
-    const uid = me;
-    if (!uid) {
-      setShowSigninPrompt(true);
-      return;
-    }
-    const id = ridFor(recipe);
-    const ref = doc(db, "users", uid, "favoriteRecipes", id);
-    if (favs[id]) {
-      await deleteDoc(ref).catch(() => {});
+  async function runIngredientSearch(terms: string[], reset = true) {
+    setErr(null);
+    setPantryRecipes(null);
+    if (reset) {
+      setIngredientOffset(0);
+      setIngredientTotal(0);
+      setBusySearch(true);
     } else {
-      await setDoc(ref, {
-        title: recipe.title,
-        image: recipe.image || null,
-        source: recipe.source,
-        recipeId: recipe.id,
-        createdAt: serverTimestamp(),
-      }).catch(() => {});
+      setLoadingMore(true);
+    }
+    setLastIngredientSearch(terms);
+    try {
+      const nextOffset = reset ? 0 : ingredientOffset + INGREDIENT_PAGE_SIZE;
+      const result = await searchMealsByIngredientsPaged(terms, INGREDIENT_PAGE_SIZE, nextOffset, {
+        area: areaFilter,
+        diet,
+        sort: sortBy,
+        maxTime,
+      });
+      setIngredientOffset(nextOffset);
+      setIngredientTotal(result.total);
+      setApiRecipes((prev) =>
+        reset ? result.recipes.map(withRecipeMeta) : [...prev, ...result.recipes.map(withRecipeMeta)]
+      );
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Ingredient search failed.";
+      setErr(message);
+    } finally {
+      if (reset) {
+        setBusySearch(false);
+      } else {
+        setLoadingMore(false);
+      }
     }
   }
 
-  async function openFavorite(id: string, source: "api" | "user", recipeId: string) {
-    if (source === "api") {
-      const hit =
-        visibleRecipes.find((r) => r.source === "api" && r.id === recipeId) ||
-        apiRecipes.find((r) => r.source === "api" && r.id === recipeId);
-      if (hit) {
-        setOpenModal(hit);
-      } else {
-        const full = await lookupMealById(recipeId);
-        if (full) setOpenModal(full);
+  async function retrySearch() {
+    setErr(null);
+    setPantryRecipes(null);
+    if (mode === "ingredient") {
+      const terms = lastIngredientSearch.length ? lastIngredientSearch : ingredientChips;
+      if (!terms.length) {
+        setErr("Please add at least one ingredient.");
+        return;
       }
-    } else {
-      const ref = doc(db, "recipes", recipeId);
-      const snap = await getDoc(ref);
-      if (snap.exists()) {
-        const data = snap.data() as Record<string, unknown>;
-        setOpenModal({
-          id: snap.id,
-          source: "user",
-          title: safeString(data.title, "Untitled"),
-          image:
-            safeNullableString(data.image) ??
-            safeNullableString(data.imageURL) ??
-            null,
-          category: safeNullableString(data.category),
-          area: safeNullableString(data.area),
-          ingredients: normalizeIngredients(data.ingredients),
-          instructions: safeNullableString(data.instructions),
-          author: {
-            uid: safeString(data.uid, ""),
-            name:
-              (data.author && typeof data.author === "object"
-                ? safeNullableString((data.author as Record<string, unknown>).name)
-                : null) ?? null,
-          },
-        } as CommonRecipe);
-      }
+      await runIngredientSearch(terms);
+      return;
     }
-    setShowFavs(false);
+
+    setBusySearch(true);
+    try {
+      if (!q.trim()) {
+        const list = await getRandomMeals(15);
+        setApiRecipes(list.map(withRecipeMeta));
+      } else {
+        const list = await searchMealsByName(q.trim(), 24, {
+          area: areaFilter,
+          diet,
+          sort: sortBy,
+          maxTime,
+        });
+        setApiRecipes(list.map(withRecipeMeta));
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Search failed.";
+      setErr(message);
+    } finally {
+      setBusySearch(false);
+    }
+  }
+
+  function clearSearch() {
+    setQ("");
+    setIngredientValue("");
+    setIngredientChips([]);
+    setLastIngredientSearch([]);
+    setDiet("any");
+    setSortBy("match");
+    setMaxTime(null);
+    setAreaFilter("any");
+    setPantryRecipes(null);
+    setIngredientOffset(0);
+    setIngredientTotal(0);
+  }
+
+  async function openRecipe(recipe: RecipeListItem) {
+    if (recipe.source !== "user") {
+      const full = await lookupMealById(recipe.id);
+      setOpenModal(full ?? recipe);
+      return;
+    }
+    setOpenModal(recipe);
   }
 
   const userFiltered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s || mode !== "name") return userRecipes;
+    if (mode !== "name") return [];
+    if (!s) return userRecipes;
     return userRecipes.filter((r) => (r.title || "").toLowerCase().includes(s));
   }, [userRecipes, q, mode]);
 
@@ -1406,151 +1212,417 @@ export default function RecipesPage() {
   }, [combined]);
 
   const visibleRecipes = useMemo(() => {
-    if (areaFilter === "any") return combined;
-    return combined.filter(
-      (r) => (r.area || "").toLowerCase() === areaFilter.toLowerCase()
-    );
-  }, [combined, areaFilter]);
+    let list = combined;
+    if (areaFilter !== "any") {
+      list = list.filter((r) => (r.area || "").toLowerCase() === areaFilter.toLowerCase());
+    }
+    if (sortBy === "fast") {
+      list = [...list].sort((a, b) => {
+        const am = typeof a.minutes === "number" ? a.minutes : Number.POSITIVE_INFINITY;
+        const bm = typeof b.minutes === "number" ? b.minutes : Number.POSITIVE_INFINITY;
+        return am - bm;
+      });
+    } else if (sortBy === "calories") {
+      list = [...list].sort((a, b) => {
+        const ac = typeof a.calories === "number" ? a.calories : Number.POSITIVE_INFINITY;
+        const bc = typeof b.calories === "number" ? b.calories : Number.POSITIVE_INFINITY;
+        return ac - bc;
+      });
+    }
+    return list;
+  }, [combined, areaFilter, sortBy]);
 
   const isSignedIn = !!me;
+  const isLoading = initialLoading || busySearch;
 
   return (
-    <main className="container">
+    <main className="container recipesPage">
       <div className="topbar">
         <h1 className="title">Recipes</h1>
         <div className="right">
           {!isSignedIn && (
             <div className="signinHint">
-              <strong>Tip:</strong> Sign in to create recipes, favorite, and search with your pantry.
+              <strong>Tip:</strong> Sign in to create recipes and search with your pantry.
             </div>
           )}
         </div>
       </div>
 
-      <section className="card controls" aria-label="Search and actions">
-        <div className="row">
-          <div className="seg">
-            <button
-              className={`segBtn ${mode === "name" ? "active" : ""}`}
-              onClick={() => setMode("name")}
-              type="button"
-            >
-              By name
-            </button>
-            <button
-              className={`segBtn ${mode === "ingredient" ? "active" : ""}`}
-              onClick={() => setMode("ingredient")}
-              type="button"
-            >
-              By ingredient
-            </button>
+      <section className="recipeSearchSticky" aria-label="Search and actions">
+        <div className="recipeSearchBar">
+          <div className="controlsTop">
+            <div className="seg">
+              <button
+                className={`segBtn ${mode === "name" ? "active" : ""}`}
+                onClick={() => setMode("name")}
+                type="button"
+              >
+                By name
+              </button>
+              <button
+                className={`segBtn ${mode === "ingredient" ? "active" : ""}`}
+                onClick={() => setMode("ingredient")}
+                type="button"
+              >
+                By ingredient
+              </button>
+            </div>
+
+            <div className="filters filtersDesktop">
+              <div className="filterItem">
+                <label className="small muted">Area</label>
+                <select
+                  value={areaFilter}
+                  onChange={(e) => setAreaFilter(e.currentTarget.value)}
+                  className="select"
+                >
+                  {areas.map((a) => (
+                    <option key={a} value={a}>
+                      {a === "any" ? "Any area" : a}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="filterItem">
+                <label className="small muted">Sort</label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.currentTarget.value as "match" | "fast" | "calories")}
+                  className="select"
+                >
+                  <option value="match">Best match</option>
+                  <option value="fast">Fastest</option>
+                  <option value="calories">Calories</option>
+                </select>
+              </div>
+              <div className="filterItem">
+                <label className="small muted">Diet</label>
+                <select
+                  value={diet}
+                  onChange={(e) =>
+                    setDiet(
+                      e.currentTarget.value as
+                        | "any"
+                        | "vegetarian"
+                        | "vegan"
+                        | "pescetarian"
+                        | "gluten free"
+                        | "ketogenic"
+                    )
+                  }
+                  className="select"
+                >
+                  <option value="any">Any</option>
+                  <option value="vegetarian">Vegetarian</option>
+                  <option value="vegan">Vegan</option>
+                  <option value="pescetarian">Pescetarian</option>
+                  <option value="gluten free">Gluten Free</option>
+                  <option value="ketogenic">Ketogenic</option>
+                </select>
+              </div>
+              <div className="filterItem">
+                <label className="small muted">Max time</label>
+                <select
+                  value={maxTime ?? ""}
+                  onChange={(e) =>
+                    setMaxTime(e.currentTarget.value ? Number(e.currentTarget.value) : null)
+                  }
+                  className="select"
+                >
+                  <option value="">Any</option>
+                  <option value="15">15 min</option>
+                  <option value="30">30 min</option>
+                  <option value="45">45 min</option>
+                </select>
+              </div>
+            </div>
+
+            {isSignedIn ? (
+              <div className="actionsRow">
+                <button
+                  className="btn-base btn--secondary btn--md filtersMobile"
+                  type="button"
+                  onClick={() => setShowFilters(true)}
+                >
+                  Filters
+                </button>
+                <Button variant="secondary" onClick={() => setShowPantryPicker(true)}>
+                  Find with my pantry
+                </Button>
+                <Button onClick={() => setShowWizard(true)}>Create recipe</Button>
+              </div>
+            ) : (
+              <div className="actionsRow">
+                <button
+                  className="btn-base btn--secondary btn--md filtersMobile"
+                  type="button"
+                  onClick={() => setShowFilters(true)}
+                >
+                  Filters
+                </button>
+              </div>
+            )}
           </div>
 
-          <div className="grow">
-            <div className="wave-group">
+          {mode === "name" ? (
+            <div className="recipeSearchRow">
               <input
-                required
                 aria-label="Search"
                 type="text"
-                className="input"
                 value={q}
                 onChange={(e) => setQ(e.currentTarget.value)}
+                placeholder="Search recipes by name..."
               />
-              <span className="bar" />
-              <label className="label" aria-hidden>
-                {["S", "e", "a", "r", "c", "h"].map((ch, i) => (
-                  <span className="label-char" style={waveCharStyle(i)} key={i}>
-                    {ch}
-                  </span>
-                ))}
-              </label>
-            </div>
-          </div>
-
-          <div className="filters">
-            <label className="small muted">Area</label>
-            <select
-              value={areaFilter}
-              onChange={(e) => setAreaFilter(e.currentTarget.value)}
-              className="select"
-            >
-              {areas.map((a) => (
-                <option key={a} value={a}>
-                  {a === "any" ? "Any area" : a}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {isSignedIn ? (
-            <div className="actionsRow">
-              <Button variant="secondary" onClick={() => setShowPantryPicker(true)}>
-                Find with my pantry
-              </Button>
-              <Button onClick={() => setShowWizard(true)}>Create recipe</Button>
-              <Button className="linkBtn" onClick={() => setShowFavs(true)}>
-                Favorites
-              </Button>
+              <button
+                className="btn-base btn--secondary btn--md"
+                type="button"
+                onClick={() => setQ("")}
+                disabled={!q.trim()}
+              >
+                Clear
+              </button>
             </div>
           ) : (
-            <div className="actionsRow" />
+            <IngredientSearch
+              value={ingredientValue}
+              ingredients={ingredientChips}
+              onValueChange={setIngredientValue}
+              onIngredientsChange={setIngredientChips}
+              onSearch={runIngredientSearch}
+              isLoading={busySearch}
+              maxIngredients={10}
+            />
           )}
-        </div>
 
-        {busySearch && <p className="muted small">Searching…</p>}
-        {err && <p className="error">{err}</p>}
-        {pantryRecipes && <p className="muted small">Showing suggestions from your pantry.</p>}
+          {busySearch && <p className="muted small">Searching…</p>}
+          {err && <p className="error">{err}</p>}
+          {pantryRecipes && <p className="muted small">Showing suggestions from your pantry.</p>}
+        </div>
       </section>
+
+      {showFilters && (
+        <div className="filtersSheet" role="dialog" aria-modal>
+          <button
+            className="filtersBackdrop"
+            type="button"
+            onClick={() => setShowFilters(false)}
+            aria-label="Close filters"
+          />
+          <div className="filtersPanel">
+            <div className="filtersHeader">
+              <strong>Filters</strong>
+              <button className="btn-base btn--ghost btn--sm" type="button" onClick={() => setShowFilters(false)}>
+                Close
+              </button>
+            </div>
+            <div className="filtersGrid">
+              <label>
+                <span className="small muted">Area</span>
+                <select
+                  value={areaFilter}
+                  onChange={(e) => setAreaFilter(e.currentTarget.value)}
+                  className="select"
+                >
+                  {areas.map((a) => (
+                    <option key={a} value={a}>
+                      {a === "any" ? "Any area" : a}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span className="small muted">Sort</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.currentTarget.value as "match" | "fast" | "calories")}
+                  className="select"
+                >
+                  <option value="match">Best match</option>
+                  <option value="fast">Fastest</option>
+                  <option value="calories">Calories</option>
+                </select>
+              </label>
+              <label>
+                <span className="small muted">Diet</span>
+                <select
+                  value={diet}
+                  onChange={(e) =>
+                    setDiet(
+                      e.currentTarget.value as
+                        | "any"
+                        | "vegetarian"
+                        | "vegan"
+                        | "pescetarian"
+                        | "gluten free"
+                        | "ketogenic"
+                    )
+                  }
+                  className="select"
+                >
+                  <option value="any">Any</option>
+                  <option value="vegetarian">Vegetarian</option>
+                  <option value="vegan">Vegan</option>
+                  <option value="pescetarian">Pescetarian</option>
+                  <option value="gluten free">Gluten Free</option>
+                  <option value="ketogenic">Ketogenic</option>
+                </select>
+              </label>
+              <label>
+                <span className="small muted">Max time</span>
+                <select
+                  value={maxTime ?? ""}
+                  onChange={(e) =>
+                    setMaxTime(e.currentTarget.value ? Number(e.currentTarget.value) : null)
+                  }
+                  className="select"
+                >
+                  <option value="">Any</option>
+                  <option value="15">15 min</option>
+                  <option value="30">30 min</option>
+                  <option value="45">45 min</option>
+                </select>
+              </label>
+            </div>
+            <div className="filtersActions">
+              <button
+                className="btn-base btn--secondary btn--md"
+                type="button"
+                onClick={() => {
+                  setAreaFilter("any");
+                  setSortBy("match");
+                  setDiet("any");
+                  setMaxTime(null);
+                }}
+              >
+                Reset
+              </button>
+              <button className="btn-base btn--primary btn--md" type="button" onClick={() => setShowFilters(false)}>
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <section className="list">
-        <div className="gridCards">
-          {visibleRecipes.map((r, idx) => {
-            const fav = favs[ridFor(r)];
-            const key = `${r.source}-${r.id}`;
-            const isOpen = expandedKey === key;
-            const isLastCol = (idx + 1) % 3 === 0;
+        {isLoading ? (
+          <RecipeSkeletons />
+        ) : err ? (
+          <div className="alert-error errorCard">
+            <div>{err}</div>
+            <button className="btn-base btn--secondary btn--md" type="button" onClick={retrySearch}>
+              Retry
+            </button>
+          </div>
+        ) : visibleRecipes.length === 0 ? (
+          <div className="emptyState">
+            <h3>No recipes found</h3>
+            <p>No recipes found — try fewer ingredients.</p>
+            <button className="btn-base btn--secondary btn--md" type="button" onClick={clearSearch}>
+              Clear search
+            </button>
+          </div>
+        ) : (
+          <div className="recipeGrid">
+            {visibleRecipes.map((r) => {
+              const key = `${r.source}-${r.id}`;
+              const imageKey = `${r.source}-${r.id}`;
+              const hasImageError = imageErrors[imageKey];
 
-            const ingredientsList: IngredientObj[] = normalizeIngredientList(r.ingredients);
-            const stepsList = r.instructions
-              ? String(r.instructions).split("\n").filter(Boolean)
-              : [];
-            const imageUrl = getRecipeImage(r) ?? "/placeholder.png";
+              const baseImage = getRecipeImage(r) ?? getRecipePlaceholder(r.title);
+              const imageUrl = hasImageError ? "/placeholder.png" : baseImage;
+              const minutes = getRecipeMinutes(r);
+              const servings = getRecipeServings(r);
+              const isMine = r.source === "user" && !!me && r.author?.uid === me;
+              const editHref = isMine ? `/profile/recipes/${r.id}` : undefined;
 
-            const minutes = getRecipeMinutes(r);
-            const baseServings = getRecipeServings(r) ?? 2;
+              return (
+                <article key={key} className="recipeCard">
+                  <div className="recipeMedia">
+                    <Image
+                      src={imageUrl}
+                      alt={r.title}
+                      fill
+                      sizes="(max-width: 768px) 90vw, 300px"
+                      className="recipeImg"
+                      onError={() => {
+                        if (hasImageError) return;
+                        setImageErrors((prev) => ({ ...prev, [imageKey]: true }));
+                      }}
+                    />
+                  </div>
 
-            const isMine = r.source === "user" && !!me && r.author?.uid === me;
-            const editHref = isMine ? `/profile/recipes/${r.id}` : undefined;
+                  <div className="recipeBody">
+                    <div className="recipeTitleRow">
+                      <h3 className="recipeTitle">{r.title}</h3>
+                    </div>
 
-            return (
-              <div key={key} className={`cardWrap ${isOpen && !isLastCol ? "span2" : ""}`}>
-                <RecipeCard
-                  title={r.title}
-                  imageUrl={imageUrl}
-                  ingredients={ingredientsList}
-                  steps={stepsList}
-                  open={isOpen}
-                  onOpen={() => setExpandedKey(key)}
-                  onClose={() => setExpandedKey(null)}
-                  panelPlacement={isLastCol ? "overlay-right" : "push"}
-                  minutes={typeof minutes === "number" ? minutes : null}
-                  baseServings={baseServings}
-                  isFavorite={!!fav}
-                  onToggleFavorite={() => toggleFav(r)}
-                  editHref={editHref}
-                />
-              </div>
-            );
-          })}
-        </div>
+                    <div className="recipeMeta">
+                      {typeof minutes === "number" ? (
+                        <span className="recipePill">{minutes} min</span>
+                      ) : null}
+                      {typeof servings === "number" ? (
+                        <span className="recipePill">{servings} servings</span>
+                      ) : null}
+                      {typeof r.calories === "number" ? (
+                        <span className="recipePill">{Math.round(r.calories)} kcal</span>
+                      ) : null}
+                      {r.area ? <span className="recipePill">{r.area}</span> : null}
+                      {r.category ? <span className="recipePill">{r.category}</span> : null}
+                    </div>
+
+                    <div className="recipeActions">
+                      {r.source !== "user" ? (
+                        <SaveRecipeButton
+                          recipe={{
+                            id: Number(r.id),
+                            title: r.title,
+                            image: imageUrl,
+                            readyInMinutes: minutes ?? null,
+                            servings: servings ?? null,
+                          }}
+                          source="themealdb"
+                          variant="secondary"
+                        />
+                      ) : null}
+                      <button
+                        className="recipeBtn recipeBtnPrimary"
+                        type="button"
+                        onClick={() => openRecipe(r)}
+                      >
+                        View
+                      </button>
+                      {editHref ? (
+                        <Link className="recipeBtn" href={editHref}>
+                          Edit
+                        </Link>
+                      ) : null}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </section>
+
+      {mode === "ingredient" && apiRecipes.length > 0 && apiRecipes.length < ingredientTotal ? (
+        <div className="loadMoreRow">
+          <button
+            className="btn-base btn--secondary btn--md"
+            type="button"
+            onClick={() => runIngredientSearch(ingredientChips, false)}
+            disabled={loadingMore || busySearch}
+          >
+            {loadingMore ? "Loading..." : "Load more"}
+          </button>
+        </div>
+      ) : null}
 
       {openModal ? (
         <RecipeModal
           recipe={openModal}
           onClose={() => setOpenModal(null)}
-          isFavorite={!!favs[ridFor(openModal)]}
-          onToggleFavorite={(r) => toggleFav(r as RecipeListItem)}
         />
       ) : null}
 
@@ -1572,20 +1644,6 @@ export default function RecipesPage() {
           meUid={me}
         />
       )}
-
-      {isSignedIn && showFavs && (
-        <FavOverlay
-          uid={me}
-          onClose={() => setShowFavs(false)}
-          onOpen={(id, source, recipeId) => openFavorite(id, source, recipeId)}
-        />
-      )}
-
-      <SignInPrompt
-        open={showSigninPrompt}
-        onClose={() => setShowSigninPrompt(false)}
-        onSigninHref="/auth/login"
-      />
 
       <style jsx>{`
         .container {
@@ -1617,22 +1675,14 @@ export default function RecipesPage() {
           border-radius: 10px;
         }
 
-        .card {
-          border: 1px solid var(--border);
-          background: var(--card-bg);
-          border-radius: 16px;
-          padding: 16px;
-          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
-        }
-        .controls .row {
+        .controlsTop {
           display: grid;
           align-items: end;
-          grid-template-columns: auto 1fr auto auto;
+          grid-template-columns: auto 1fr auto;
           gap: 14px;
-          flex-wrap: wrap;
         }
         @media (max-width: 980px) {
-          .controls .row {
+          .controlsTop {
             grid-template-columns: 1fr;
           }
         }
@@ -1641,6 +1691,7 @@ export default function RecipesPage() {
           gap: 8px;
           flex-wrap: wrap;
           justify-content: flex-end;
+          align-items: center;
         }
         @media (max-width: 980px) {
           .actionsRow {
@@ -1652,6 +1703,30 @@ export default function RecipesPage() {
           display: grid;
           gap: 4px;
           align-items: end;
+        }
+        .filtersDesktop {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 10px;
+        }
+        @media (max-width: 980px) {
+          .filtersDesktop {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+        .filterItem {
+          display: grid;
+          gap: 4px;
+        }
+        .filtersMobile {
+          display: none;
+        }
+        @media (max-width: 720px) {
+          .filtersDesktop {
+            display: none;
+          }
+          .filtersMobile {
+            display: inline-flex;
+          }
         }
         .select {
           border: 1px solid var(--border);
@@ -1694,68 +1769,6 @@ export default function RecipesPage() {
           color: var(--primary-contrast);
         }
 
-        .wave-group {
-          position: relative;
-          max-width: 520px;
-        }
-        .wave-group .input {
-          font-size: 16px;
-          padding: 12px 10px 10px 6px;
-          display: block;
-          width: 100%;
-          border: none;
-          border-bottom: 1px solid var(--border);
-          background: transparent;
-          color: var(--text);
-        }
-        .wave-group .input:focus {
-          outline: none;
-        }
-        .wave-group .label {
-          color: var(--muted);
-          font-size: 18px;
-          position: absolute;
-          pointer-events: none;
-          left: 6px;
-          top: 10px;
-          display: flex;
-        }
-        .wave-group .label-char {
-          transition: 0.2s ease all;
-          transition-delay: calc(var(--index) * 0.05s);
-        }
-        .wave-group .input:focus ~ label .label-char,
-        .wave-group .input:valid ~ label .label-char {
-          transform: translateY(-20px);
-          font-size: 14px;
-          color: var(--primary);
-        }
-        .wave-group .bar {
-          position: relative;
-          display: block;
-          width: 100%;
-        }
-        .wave-group .bar:before,
-        .wave-group .bar:after {
-          content: "";
-          height: 2px;
-          width: 0;
-          bottom: 1px;
-          position: absolute;
-          background: var(--primary);
-          transition: 0.2s ease all;
-        }
-        .wave-group .bar:before {
-          left: 50%;
-        }
-        .wave-group .bar:after {
-          right: 50%;
-        }
-        .wave-group .input:focus ~ .bar:before,
-        .wave-group .input:focus ~ .bar:after {
-          width: 50%;
-        }
-
         .muted {
           color: var(--muted);
         }
@@ -1771,33 +1784,85 @@ export default function RecipesPage() {
           padding: 8px 10px;
           font-size: 13px;
         }
+        .errorCard {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 12px;
+        }
+        .emptyState {
+          border: 1px dashed var(--border);
+          border-radius: 16px;
+          padding: 24px;
+          text-align: center;
+          background: var(--bg-raised);
+          box-shadow: var(--shadow);
+        }
+        .emptyState h3 {
+          margin: 0 0 6px;
+          color: var(--text);
+        }
+        .emptyState p {
+          margin: 0;
+          color: var(--muted);
+        }
+        .emptyState button {
+          margin-top: 12px;
+        }
 
         .list {
           margin-top: 12px;
         }
-        .gridCards {
+        .loadMoreRow {
+          display: flex;
+          justify-content: center;
+          margin: 18px 0 6px;
+        }
+        .filtersSheet {
+          position: fixed;
+          inset: 0;
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          grid-auto-rows: minmax(440px, auto);
-          gap: 22px;
-          overflow: visible;
+          align-items: end;
+          z-index: 1800;
         }
-        .cardWrap {
+        .filtersBackdrop {
+          position: absolute;
+          inset: 0;
+          background: rgba(2, 6, 23, 0.55);
+          border: 0;
+        }
+        .filtersPanel {
           position: relative;
-          overflow: visible;
+          background: var(--bg-raised);
+          border-radius: 20px 20px 0 0;
+          border: 1px solid var(--border);
+          padding: 16px;
+          box-shadow: 0 -18px 40px rgba(15, 23, 42, 0.18);
         }
-        .cardWrap.span2 {
-          grid-column: span 2;
+        .filtersHeader {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 12px;
         }
-
-        @media (max-width: 980px) {
-          .gridCards {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
+        .filtersGrid {
+          display: grid;
+          gap: 12px;
         }
-        @media (max-width: 640px) {
-          .gridCards {
-            grid-template-columns: 1fr;
+        .filtersGrid label {
+          display: grid;
+          gap: 6px;
+        }
+        .filtersActions {
+          display: flex;
+          gap: 10px;
+          justify-content: flex-end;
+          margin-top: 14px;
+        }
+        @media (min-width: 721px) {
+          .filtersSheet {
+            display: none;
           }
         }
       `}</style>

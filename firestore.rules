@@ -160,13 +160,6 @@ service cloud.firestore {
       }
     }
 
-    /* -------- fav recipes -------- */
-    match /users/{uid}/favoriteRecipes/{rid} {
-      allow read: if isSignedIn() && request.auth.uid == uid;
-      allow create, delete: if isSignedIn() && request.auth.uid == uid;
-      allow update: if false;
-    }
-
     /* -------- saved workouts -------- */
     match /savedWorkouts/{id} {
       allow read: if resource.data.visibility == "public" || (isSignedIn() && resource.data.uid == request.auth.uid);

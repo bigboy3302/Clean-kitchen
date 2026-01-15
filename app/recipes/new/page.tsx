@@ -1,60 +1,69 @@
-
 "use client";
 
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { auth, db } from "@/lib/firebas1e";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
-import Input from "@/components/ui/Input";
-import Button from "@/components/ui/Button";
+import { auth, db } from "@/lib/firebas1e";
+
+type Ingredient = { name: string; measure?: string };
 
 export default function NewRecipePage() {
   const router = useRouter();
   const [title, setTitle] = useState("");
-  const [image, setImage] = useState("");
+  const [description, setDescription] = useState("");
+  const [timeMinutes, setTimeMinutes] = useState("");
+  const [servings, setServings] = useState("");
+  const [category, setCategory] = useState("");
+  const [area, setArea] = useState("");
+  const [imageURL, setImageURL] = useState("");
   const [ingredientsText, setIngredientsText] = useState("");
-  const [instructions, setInstructions] = useState("");
+  const [stepsText, setStepsText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-
-  const handleTitleChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setTitle(event.currentTarget.value);
-  };
-  const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setImage(event.currentTarget.value);
-  };
-  const handleIngredientsChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
-    setIngredientsText(event.currentTarget.value);
-  };
-  const handleInstructionsChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
-    setInstructions(event.currentTarget.value);
-  };
 
   useEffect(() => {
     if (!auth.currentUser) router.replace("/auth/login");
   }, [router]);
 
-  function parseIngredients(text: string) {
-    const lines = text
+  const parseIngredients = (): Ingredient[] => {
+    return ingredientsText
       .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean);
-    return lines.map((l) => {
-      const parts = l.split(" - ");
-      if (parts.length === 2) return { name: parts[0], measure: parts[1] };
-      return { name: l, measure: "" };
-    });
-  }
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [name, measure] = line.split("-").map((part) => part.trim());
+        return { name, measure: measure || "" };
+      });
+  };
 
-  async function submit() {
-    setErr(null);
+  const validate = () => {
+    if (!auth.currentUser) return "You must be signed in.";
+    if (!title.trim()) return "Title is required.";
+    if (!timeMinutes.trim() || Number(timeMinutes) <= 0) return "Time (minutes) is required.";
+    if (!servings.trim() || Number(servings) <= 0) return "Servings is required.";
+    if (!category.trim()) return "Category is required.";
+    if (!area.trim()) return "Area is required.";
+    return null;
+  };
+
+  const createRecipe = async (event: FormEvent) => {
+    event.preventDefault();
+    const error = validate();
+    if (error) {
+      setErr(error);
+      return;
+    }
+
     const u = auth.currentUser;
-    if (!u) { router.replace("/auth/login"); return; }
-    if (!title.trim()) { setErr("Please enter a title."); return; }
+    if (!u) {
+      router.replace("/auth/login");
+      return;
+    }
 
     setBusy(true);
+    setErr(null);
     try {
-      const ingredients = parseIngredients(ingredientsText);
       await addDoc(collection(db, "recipes"), {
         uid: u.uid,
         author: {
@@ -64,9 +73,14 @@ export default function NewRecipePage() {
         },
         title: title.trim(),
         titleLower: title.trim().toLowerCase(),
-        imageURL: image.trim() || null,
-        ingredients,
-        instructions: instructions.trim() || null,
+        description: description.trim(),
+        timeMinutes: Number(timeMinutes),
+        servings: Number(servings),
+        category: category.trim(),
+        area: area.trim(),
+        imageURL: imageURL.trim() || null,
+        ingredients: parseIngredients(),
+        instructions: stepsText.trim(),
         createdAt: serverTimestamp(),
       });
       router.push("/recipes");
@@ -76,47 +90,142 @@ export default function NewRecipePage() {
     } finally {
       setBusy(false);
     }
-  }
+  };
 
   return (
-    <main className="container">
-      <h1 className="pageTitle">Add a Recipe</h1>
+    <main className="container section recipePublic">
+      <header className="recipePublicBar">
+        <Link className="btn-base btn--secondary btn--sm" href="/recipes">
+          Back to recipes
+        </Link>
+        <span className="recipePublicHint">Create a new recipe</span>
+      </header>
 
-      <section className="card">
-        <div className="grid">
-          <Input label="Title" value={title} onChange={handleTitleChange} placeholder="Best Tomato Pasta" />
-          <Input label="Image URL (optional)" value={image} onChange={handleImageChange} placeholder="https://example.com/recipe.jpg" />
+      {err ? (
+        <div className="card alert-error" role="alert">
+          {err}
         </div>
+      ) : null}
 
-        <div className="field">
-          <label className="label">Ingredients (one per line)</label>
-          <textarea className="ta" rows={8} value={ingredientsText} onChange={handleIngredientsChange} placeholder="pasta - 250 g&#10;tomato - 2 pcs&#10;garlic - 2 cloves" />
-        </div>
+      <form onSubmit={createRecipe}>
+        <section className="recipePublicHero">
+          <div className="recipePublicCover card">
+            {imageURL ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img className="recipePublicCoverImg" src={imageURL} alt="" />
+            ) : (
+              <div className="recipePublicCoverPh" aria-hidden>
+                <span className="muted">Paste an image URL to preview</span>
+              </div>
+            )}
+          </div>
 
-        <div className="field">
-          <label className="label">Instructions</label>
-          <textarea className="ta" rows={8} value={instructions} onChange={handleInstructionsChange} placeholder="Write the steps here..." />
-        </div>
+          <div className="card recipePublicHead">
+            <h1 className="recipePublicTitle">New recipe</h1>
 
-        {err && <p className="error">{err}</p>}
-        <div className="actions">
-          <Button onClick={submit} disabled={busy}>{busy ? "Saving…" : "Create recipe"}</Button>
-          <Button variant="secondary" onClick={()=>router.push("/recipes")} disabled={busy}>Cancel</Button>
-        </div>
-      </section>
+            <div className="recipeForm">
+              <div>
+                <label>Title *</label>
+                <input value={title} onChange={(e) => setTitle(e.currentTarget.value)} />
+              </div>
 
-      <style jsx>{`
-        .container { max-width: 900px; margin: 0 auto; padding: 24px; }
-        .pageTitle { font-size: 28px; font-weight: 800; margin-bottom: 16px; }
-        .card { border:1px solid #e5e7eb; background:#fff; border-radius:16px; padding:16px; }
-        .grid { display:grid; grid-template-columns: 1fr 1fr; gap:12px 16px; }
-        @media (max-width: 860px){ .grid{ grid-template-columns: 1fr; } }
-        .field { margin-top:12px; }
-        .label { display:block; margin-bottom:6px; font-weight:600; }
-        .ta { width:100%; border:1px solid #d1d5db; border-radius:12px; padding:10px 12px; font-size:14px; background:#fff; }
-        .actions { margin-top:12px; display:flex; gap:10px; justify-content:flex-end; }
-        .error { margin-top:10px; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:8px 10px; font-size:13px; }
-      `}</style>
+              <div>
+                <label>Description</label>
+                <textarea
+                  rows={3}
+                  value={description}
+                  onChange={(e) => setDescription(e.currentTarget.value)}
+                />
+              </div>
+
+              <div className="formRow2">
+                <div>
+                  <label>Time (minutes) *</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={timeMinutes}
+                    onChange={(e) => setTimeMinutes(e.currentTarget.value)}
+                  />
+                </div>
+                <div>
+                  <label>Servings *</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={servings}
+                    onChange={(e) => setServings(e.currentTarget.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="formRow2">
+                <div>
+                  <label>Category *</label>
+                  <input
+                    value={category}
+                    onChange={(e) => setCategory(e.currentTarget.value)}
+                    placeholder="e.g., Dinner"
+                  />
+                </div>
+                <div>
+                  <label>Area *</label>
+                  <input
+                    value={area}
+                    onChange={(e) => setArea(e.currentTarget.value)}
+                    placeholder="e.g., Italian"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label>Cover image URL</label>
+                <input
+                  value={imageURL}
+                  onChange={(e) => setImageURL(e.currentTarget.value)}
+                  placeholder="https://..."
+                />
+              </div>
+
+              <div className="formActions">
+                <button className="btn-base btn--primary btn--md" type="submit" disabled={busy}>
+                  {busy ? "Creating..." : "Create recipe"}
+                </button>
+                <Link className="btn-base btn--secondary btn--md" href="/recipes">
+                  Cancel
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="recipePublicGrid">
+          <aside className="card recipePublicPanel">
+            <div className="recipePublicPanelHead">
+              <span className="recipePublicDot" /> Ingredients
+            </div>
+            <p className="muted" style={{ marginTop: 0 }}>
+              One per line. Use "-" for quantity (example: "Chicken - 200g").
+            </p>
+            <textarea
+              rows={10}
+              value={ingredientsText}
+              onChange={(e) => setIngredientsText(e.currentTarget.value)}
+              placeholder={"Chicken - 200g\nRice - 1 cup\nTomato"}
+            />
+          </aside>
+
+          <article className="card recipePublicBody">
+            <h2 className="recipePublicH2">Steps</h2>
+            <textarea
+              rows={14}
+              value={stepsText}
+              onChange={(e) => setStepsText(e.currentTarget.value)}
+              placeholder={"1. Prep ingredients...\n2. Cook...\n3. Serve..."}
+            />
+          </article>
+        </section>
+      </form>
     </main>
   );
 }

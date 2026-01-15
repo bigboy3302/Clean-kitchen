@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard, Boxes, BookOpen, Dumbbell, User,
+  LayoutDashboard, Boxes, BookOpen, Dumbbell, User, Bookmark,
 } from "lucide-react";
 import clsx from "clsx";
 import { useExpiringAlerts } from "@/hooks/useExpiringAlerts";
@@ -12,6 +12,7 @@ const tabs = [
   { href: "/dashboard", label: "Home", Icon: LayoutDashboard },
   { href: "/pantry", label: "Pantry", Icon: Boxes },
   { href: "/recipes", label: "Recipes", Icon: BookOpen },
+  { href: "/saved", label: "Saved Foods", Icon: Bookmark },
   { href: "/fitness", label: "Fitness", Icon: Dumbbell },
   { href: "/profile", label: "Profile", Icon: User },
 ];
@@ -51,14 +52,14 @@ export default function BottomNav() {
 
       <style jsx>{`
         .bn-shell {
-          width: min(520px, 100%);
+          width: min(640px, 100%);
           margin: 0 auto;
           background: color-mix(in oklab, var(--bg2) 90%, transparent);
           border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
           border-radius: 26px;
           padding: 8px 10px;
           display: grid;
-          grid-template-columns: repeat(5, minmax(0, 1fr));
+          grid-template-columns: repeat(6, minmax(0, 1fr));
           gap: 8px;
           box-shadow: 0 20px 40px color-mix(in oklab, var(--primary) 8%, transparent);
           backdrop-filter: blur(16px);

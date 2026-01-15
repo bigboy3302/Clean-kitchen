@@ -501,8 +501,6 @@ export default function DayPlannerPage() {
       {openRecipe ? (
         <RecipeModal
           recipe={openRecipe}
-          isFavorite={false}
-          onToggleFavorite={() => {}}
           onClose={() => setOpenRecipe(null)}
         />
       ) : null}

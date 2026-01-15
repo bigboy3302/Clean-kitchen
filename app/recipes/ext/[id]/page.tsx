@@ -1,383 +1,198 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import Image from "next/image";
+import { useEffect, useRef, useState } from "react";
+import { useParams } from "next/navigation";
+import Link from "next/link";
 
-type Recipe = {
+type MealDBDetails = {
+  source: "themealdb";
   id: string;
   title: string;
-  image?: string | null;
-  url?: string | null;
-  servings?: number | null;
-  readyInMinutes?: number | null;
-  calories?: number | null;
-  instructionsHtml?: string | null;
-  ingredients?: Array<{ name: string; amount?: string | number; unit?: string }> | null;
+  imageURL: string | null;
+  category: string | null;
+  area: string | null;
+  ingredients: { name: string; measure: string }[];
+  instructions: string;
+  sourceUrl: string | null;
+  youtubeUrl: string | null;
 };
 
-type ApiErrorResponse = { error: string };
+function parseMealDbSteps(raw?: string | null): string[] {
+  if (!raw) return [];
+  const lines = String(raw)
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
 
-const hasApiError = (value: unknown): value is ApiErrorResponse => {
-  if (typeof value !== "object" || value === null) return false;
-  const errorValue = (value as { error?: unknown }).error;
-  return typeof errorValue === "string" && errorValue.length > 0;
-};
+  const steps: string[] = [];
+  let buf: string[] = [];
 
-const isRecipe = (value: unknown): value is Recipe => {
-  if (typeof value !== "object" || value === null) return false;
-  const maybe = value as Partial<Recipe>;
-  return typeof maybe.id === "string" && typeof maybe.title === "string";
-};
+  const flush = () => {
+    const joined = buf.join(" ").replace(/\s+/g, " ").trim();
+    if (joined) steps.push(joined);
+    buf = [];
+  };
+
+  for (const line of lines) {
+    if (/^\d+$/.test(line)) {
+      flush();
+      continue;
+    }
+    if (/servings?/i.test(line) && line.length <= 24) continue;
+    buf.push(line);
+  }
+  flush();
+  return steps.length ? steps : [];
+}
 
 export default function ExternalRecipePage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
-  const search = useSearchParams();
 
-  const [recipe, setRecipe] = useState<Recipe | null>(null);
-  const [loading, setLoading] = useState(true);
+  const reqSeq = useRef(0);
+  const [data, setData] = useState<MealDBDetails | null>(null);
   const [err, setErr] = useState<string | null>(null);
-
-  const backHref = useMemo(() => {
-    return search.get("back") || "/fitness/day";
-  }, [search]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let ignore = false;
-    async function run() {
+    if (!id) return;
+    const mySeq = ++reqSeq.current;
+
+    (async () => {
+      setLoading(true);
+      setErr(null);
+      setData(null);
+
       try {
-        setLoading(true);
-        setErr(null);
-        const res = await fetch(`/api/recipes/enrich?id=${encodeURIComponent(String(id))}`, {
-          cache: "no-store",
-        });
+        const res = await fetch(`/api/recipes/${id}`, { cache: "no-store" });
         if (!res.ok) {
-          if (!ignore) {
-            setRecipe(null);
-            setErr("This recipe doesn't exist (or was deleted).");
-          }
-          return;
+          const text = await res.text().catch(() => "");
+          throw new Error(`API ${res.status}: ${text.slice(0, 200)}`);
         }
-        const raw: unknown = await res.json();
-        if (hasApiError(raw)) {
-          if (!ignore) {
-            setRecipe(null);
-            setErr("This recipe doesn't exist (or was deleted).");
-          }
-          return;
-        }
-        if (!isRecipe(raw)) {
-          if (!ignore) {
-            setRecipe(null);
-            setErr("Could not parse recipe details.");
-          }
-          return;
-        }
-        if (!ignore) setRecipe(raw);
-      } catch (error: unknown) {
-        if (!ignore) {
-          const message = error instanceof Error ? error.message : "Failed to load recipe.";
-          setRecipe(null);
-          setErr(message);
-        }
+        const json = (await res.json()) as MealDBDetails;
+
+        if (reqSeq.current !== mySeq) return;
+        setData(json);
+      } catch (e: any) {
+        if (reqSeq.current !== mySeq) return;
+        setErr(e?.message ?? "Failed to load recipe.");
       } finally {
-        if (!ignore) setLoading(false);
+        if (reqSeq.current !== mySeq) return;
+        setLoading(false);
       }
-    }
-    if (id) run();
-    return () => {
-      ignore = true;
-    };
+    })();
   }, [id]);
 
-  function goBack() {
- 
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
-      return;
-    }
-
-    router.push(backHref);
+  if (loading) {
+    return (
+      <main className="xp-container">
+        <div className="xp-loading">
+          <div className="xp-skel-hero" />
+          <div className="xp-skel-grid">
+            <div className="xp-skel-box" />
+            <div className="xp-skel-box" />
+          </div>
+        </div>
+      </main>
+    );
   }
 
+  if (err || !data) {
+    return (
+      <main className="xp-container">
+        <div className="xp-error">
+          <h3>Recipe not found</h3>
+          <p className="muted">{err || "We couldn't locate the requested recipe."}</p>
+          <Link className="btn primary" href="/recipes" style={{ marginTop: 12 }}>
+            Back to recipes
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  const steps = parseMealDbSteps(data.instructions);
+
   return (
-    <main className="wrap">
+    <main className="xp-container">
+      <header className="xp-header">
+        <Link className="xp-back-btn" href="/recipes">
+          Back to recipes
+        </Link>
+        <span className="xp-badge">External Source</span>
+      </header>
 
-      {loading ? (
-        <div className="card skelly">
-          <div className="sk-title" />
-          <div className="sk-hero" />
-          <div className="sk-row" />
-          <div className="sk-row" />
+      <section className="xp-hero">
+        <div className="xp-image-card">
+          {data.imageURL ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={data.imageURL} alt={data.title} className="xp-img" />
+          ) : (
+            <div className="xp-img-ph">No Image Available</div>
+          )}
         </div>
-      ) : err ? (
-        <div className="card bad">
-          <p className="err">{err}</p>
-          <div className="row">
-            <button className="btn" onClick={goBack}>← Back to plan</button>
+
+        <div className="xp-info-card">
+          <h1 className="xp-title">{data.title}</h1>
+
+          <div className="xp-tags">
+            {data.category && <span className="xp-tag">{data.category}</span>}
+            {data.area && <span className="xp-tag">{data.area}</span>}
+          </div>
+
+          <div className="xp-actions">
+            {data.youtubeUrl && (
+              <a className="xp-btn xp-btn-yt" href={data.youtubeUrl} target="_blank" rel="noreferrer">
+                Watch Video
+              </a>
+            )}
+            {data.sourceUrl && (
+              <a className="xp-btn xp-btn-source" href={data.sourceUrl} target="_blank" rel="noreferrer">
+                View Original
+              </a>
+            )}
           </div>
         </div>
-      ) : recipe ? (
-        <article className="recipe">
-          {/* Title & chips */}
-          <header className="head">
-            <h1 className="title">{recipe.title}</h1>
-            <div className="chips">
-              {recipe.readyInMinutes ? <span className="chip">⏱ {recipe.readyInMinutes}m</span> : null}
-              {recipe.servings ? <span className="chip">🍽 {recipe.servings} servings</span> : null}
-              {recipe.calories ? <span className="chip">🔥 {recipe.calories} kcal</span> : null}
+      </section>
+
+      <section className="xp-grid">
+        <aside className="xp-panel">
+          <h3 className="xp-h3">Ingredients</h3>
+
+          {data.ingredients?.length ? (
+            <ul className="xp-ing-list">
+              {data.ingredients.map((it, idx) => (
+                <li key={idx} className="xp-ing-item">
+                  <div className="xp-check" />
+                  <span className="xp-ing-name">
+                    {it.name}
+                    {it.measure && <span className="xp-ing-measure">({it.measure})</span>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted">No ingredients listed.</p>
+          )}
+        </aside>
+
+        <article className="xp-body">
+          <h2 className="xp-h2">Instructions</h2>
+
+          {steps.length ? (
+            <div className="xp-steps">
+              {steps.map((line, i) => (
+                <div key={i} className="xp-step">
+                  <div className="xp-step-num">{i + 1}</div>
+                  <p className="xp-step-txt">{line}</p>
+                </div>
+              ))}
             </div>
-          </header>
-
-          {/* Media */}
-          <div className="hero">
-            <Image
-              src={recipe.image || "/placeholder.png"}
-              alt={recipe.title}
-              width={1600}
-              height={1000}
-              className="img"
-              priority
-            />
-          </div>
-
-          {/* Actions (desktop/tablet) */}
-          <div className="actions">
-            <button className="btn" onClick={goBack}>← Back to plan</button>
-            {recipe.url ? (
-              <a className="btn primary" href={recipe.url} target="_blank" rel="noopener noreferrer">
-                Open source recipe
-              </a>
-            ) : null}
-          </div>
-
-          {/* Content */}
-          <section className="grid">
-            {recipe.ingredients?.length ? (
-              <div className="block">
-                <h2 className="h2">Ingredients</h2>
-                <ul className="list">
-                  {recipe.ingredients.map((ing, i) => (
-                    <li key={i}>
-                      {ing.amount ? <strong>{ing.amount}</strong> : null}{" "}
-                      {ing.unit ? <em>{ing.unit}</em> : null} {ing.name}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            {recipe.instructionsHtml ? (
-              <div className="block">
-                <h2 className="h2">Instructions</h2>
-                <div
-                  className="prose"
-                  dangerouslySetInnerHTML={{ __html: recipe.instructionsHtml }}
-                />
-              </div>
-            ) : null}
-          </section>
-
-          {/* Sticky bottom actions (mobile) */}
-          <div className="fabBar" role="region" aria-label="Recipe actions">
-            {recipe.url ? (
-              <a className="btn primary" href={recipe.url} target="_blank" rel="noopener noreferrer">
-                Open source
-              </a>
-            ) : null}
-          </div>
+          ) : (
+            <p className="muted">No steps provided.</p>
+          )}
         </article>
-      ) : (
-        <div className="card bad">{"This recipe doesn't exist (or was deleted)."}</div>
-      )}
-
-      <style jsx>{`
-        .wrap {
-          max-width: 1000px;
-          margin: 0 auto;
-          padding: 70px 14px 96px; /* room for sticky bars */
-        }
-
-        /* Top app bar */
-        .topbar {
-          position: sticky;
-          top: 0;
-          z-index: 50;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 10px;
-          padding: 10px 12px;
-          background: color-mix(in oklab, var(--card-bg) 88%, transparent);
-          backdrop-filter: blur(10px);
-          border-bottom: 1px solid var(--border);
-          margin: -10px -12px 14px; /* cancel main padding at top */
-        }
-        .backBtn {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          border: 1px solid var(--border);
-          background: var(--bg2);
-          color: var(--text);
-          border-radius: 999px;
-          padding: 6px 12px;
-          font-weight: 700;
-          cursor: pointer;
-        }
-        .backText { display: inline-block; }
-        .backLink {
-          border: 1px solid var(--border);
-          background: var(--bg2);
-          color: var(--text);
-          border-radius: 999px;
-          padding: 6px 12px;
-          font-weight: 700;
-          text-decoration: none;
-        }
-
-        /* Skeleton */
-        .skelly { display: grid; gap: 12px; }
-        .sk-title { height: 28px; background: var(--bg2); border-radius: 10px; }
-        .sk-hero { height: 280px; background: var(--bg2); border-radius: 16px; }
-        .sk-row { height: 16px; background: var(--bg2); border-radius: 8px; }
-
-        .card {
-          border: 1px solid var(--border);
-          background: var(--card-bg);
-          border-radius: 16px;
-          padding: 14px;
-        }
-        .bad {
-          background: color-mix(in oklab, #ef4444 15%, var(--card-bg));
-          border-color: color-mix(in oklab, #ef4444 35%, var(--border));
-          color: #7f1d1d;
-        }
-        .err { margin: 0 0 10px; }
-
-        .recipe { display: grid; gap: 16px; }
-        .head { display: grid; gap: 6px; }
-        .title {
-          margin: 0;
-          font-size: clamp(22px, 2.2vw + 14px, 32px);
-          font-weight: 900;
-          color: var(--text);
-          line-height: 1.15;
-        }
-        .chips { display: flex; gap: 8px; flex-wrap: wrap; }
-        .chip {
-          border: 1px solid var(--border);
-          background: var(--bg2);
-          color: var(--text);
-          border-radius: 999px;
-          padding: 4px 10px;
-          font-size: 12px;
-          font-weight: 700;
-        }
-
-        .hero {
-          border: 1px solid var(--border);
-          border-radius: 16px;
-          overflow: hidden;
-          background: #000;
-          /* maintain nice aspect on mobile */
-          aspect-ratio: 16 / 9;
-        }
-        .img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          display: block;
-        }
-
-        .actions {
-          display: flex;
-          gap: 10px;
-          justify-content: flex-end;
-          flex-wrap: wrap;
-        }
-        .btn {
-          border-radius: 999px;
-          padding: 9px 14px;
-          font-weight: 800;
-          text-decoration: none;
-          border: 1px solid var(--border);
-          background: var(--bg2);
-          color: var(--text);
-          cursor: pointer;
-        }
-        .btn.primary {
-          background: var(--primary);
-          color: var(--primary-contrast);
-          border-color: var(--primary);
-        }
-        .btn.ghost {
-          background: transparent;
-        }
-
-        .grid {
-          display: grid;
-          grid-template-columns: 1.1fr 1fr;
-          gap: 16px;
-        }
-        @media (max-width: 880px) {
-          .grid { grid-template-columns: 1fr; }
-        }
-
-        .block {
-          border: 1px solid var(--border);
-          background: var(--card-bg);
-          border-radius: 16px;
-          padding: 14px;
-          display: grid;
-          gap: 10px;
-        }
-        .h2 {
-          margin: 0;
-          font-size: 18px;
-          font-weight: 800;
-          color: var(--text);
-        }
-        .list {
-          margin: 0;
-          padding-left: 18px;
-          display: grid;
-          gap: 6px;
-        }
-        .prose :global(p) {
-          margin: 0 0 10px;
-          color: var(--text);
-          line-height: 1.7;
-        }
-        .prose :global(ol), .prose :global(ul) {
-          padding-left: 20px;
-          margin: 0 0 10px;
-        }
-
-        /* Sticky bottom action bar for mobile */
-        .fabBar {
-          position: sticky;
-          bottom: -1px;
-          margin: 8px -6px -8px;
-          padding: 10px 8px;
-          display: none;
-          gap: 10px;
-          justify-content: space-between;
-          align-items: center;
-          background: color-mix(in oklab, var(--card-bg) 92%, transparent);
-          border-top: 1px solid var(--border);
-          backdrop-filter: blur(10px);
-          z-index: 40;
-        }
-        @media (max-width: 640px) {
-          .fabBar { display: flex; }
-          .actions { display: none; }
-          .backText { display: none; } /* tighten the top-button on very small screens */
-        }
-
-        .row { display: flex; gap: 8px; }
-      `}</style>
+      </section>
     </main>
   );
 }

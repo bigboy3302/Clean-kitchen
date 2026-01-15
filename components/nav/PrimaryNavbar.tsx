@@ -10,6 +10,7 @@ import {
   Dumbbell,
   LayoutDashboard,
   LogOut,
+  Bookmark,
 } from "lucide-react";
 import clsx from "clsx";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -29,6 +30,7 @@ const primaryLinks: LinkItem[] = [
   { href: "/dashboard", label: "Dashboard", description: "Today", Icon: LayoutDashboard },
   { href: "/pantry", label: "Pantry", description: "Inventory", Icon: Boxes },
   { href: "/recipes", label: "Recipes", description: "Ideas", Icon: BookOpen },
+  { href: "/saved", label: "Saved Foods", description: "Keeps", Icon: Bookmark },
   { href: "/fitness", label: "Fitness", description: "Training", Icon: Dumbbell },
 ];
 

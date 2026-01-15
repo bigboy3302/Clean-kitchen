@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard, Boxes, BookOpen, User, Dumbbell,
+  LayoutDashboard, Boxes, BookOpen, User, Dumbbell, Bookmark,
   type LucideIcon,
 } from "lucide-react";
 import clsx from "clsx";
@@ -15,6 +15,7 @@ const items: Item[] = [
   { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
   { href: "/pantry", label: "Pantry", Icon: Boxes },
   { href: "/recipes", label: "Recipes", Icon: BookOpen },
+  { href: "/saved", label: "Saved Foods", Icon: Bookmark },
   { href: "/fitness", label: "Fitness", Icon: Dumbbell },
   { href: "/profile", label: "Profile", Icon: User },
 ];

@@ -5,9 +5,9 @@ import type { CommonRecipe, Ingredient } from "./types";
 
 type Props = {
   recipe: CommonRecipe;
-  isFavorite: boolean;
   onClose: () => void;
-  onToggleFavorite: (r: CommonRecipe) => void | Promise<void>;
+  isFavorite?: boolean;
+  onToggleFavorite?: (r: CommonRecipe) => void | Promise<void>;
 };
 
 function ItemRow({ name, measure }: Ingredient) {
@@ -24,12 +24,13 @@ function ItemRow({ name, measure }: Ingredient) {
   );
 }
 
-export default function RecipeModal({ recipe, isFavorite, onToggleFavorite, onClose }: Props) {
+export default function RecipeModal({ recipe, isFavorite = false, onToggleFavorite, onClose }: Props) {
   const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
   const steps = (recipe.instructions ? String(recipe.instructions) : "")
     .split("\n")
     .map(s => s.trim())
     .filter(Boolean);
+  const canFavorite = typeof onToggleFavorite === "function";
 
   return (
     <div className="ov" role="dialog" aria-modal onClick={onClose}>
@@ -40,19 +41,21 @@ export default function RecipeModal({ recipe, isFavorite, onToggleFavorite, onCl
             <div className="meta">
               {recipe.area ? <span className="pill">{recipe.area}</span> : null}
               {recipe.category ? <span className="pill">{recipe.category}</span> : null}
-              <span className="pill src">{recipe.source === "api" ? "API" : "My recipe"}</span>
+              <span className="pill src">{recipe.source === "user" ? "My recipe" : "External"}</span>
             </div>
           </div>
           <div className="right">
-            <button
-              className={`fav ${isFavorite ? "on" : ""}`}
-              onClick={() => onToggleFavorite(recipe)}
-              aria-pressed={isFavorite}
-              title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-              type="button"
-            >
-              {isFavorite ? "★ Favorited" : "☆ Favorite"}
-            </button>
+            {canFavorite ? (
+              <button
+                className={`fav ${isFavorite ? "on" : ""}`}
+                onClick={() => onToggleFavorite(recipe)}
+                aria-pressed={isFavorite}
+                title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                type="button"
+              >
+                {isFavorite ? "★ Favorited" : "☆ Favorite"}
+              </button>
+            ) : null}
             <button className="x" onClick={onClose} aria-label="Close" type="button">✕</button>
           </div>
         </header>

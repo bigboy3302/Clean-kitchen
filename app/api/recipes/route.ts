@@ -70,6 +70,9 @@ type SpoonacularRecipe = {
   cuisines?: string[];
   extendedIngredients?: SpoonacularIngredient[];
   analyzedInstructions?: Array<{ steps?: Array<{ number: number; step: string }> }>;
+  vegetarian?: boolean;
+  vegan?: boolean;
+  nutrition?: { nutrients?: Array<{ name?: string; amount?: number; unit?: string }> };
 };
 
 type CommonRecipe = {
@@ -79,6 +82,9 @@ type CommonRecipe = {
   image: string | null;
   category: string | null;
   area: string | null;
+  vegetarian?: boolean | null;
+  vegan?: boolean | null;
+  calories?: number | null;
   ingredients: { name: string; measure?: string | null }[];
   instructions: string | null;
   minutes?: number | null;
@@ -133,6 +139,9 @@ function toCommon(r: SpoonacularRecipe): CommonRecipe {
     return { name, measure };
   });
   const cuisine = Array.isArray(r.cuisines) && r.cuisines.length ? r.cuisines[0] ?? null : null;
+  const nutrients = r.nutrition?.nutrients || [];
+  const calories =
+    nutrients.find((n) => (n.name || "").toLowerCase() === "calories")?.amount ?? null;
 
   return {
     id: String(r.id),
@@ -141,6 +150,9 @@ function toCommon(r: SpoonacularRecipe): CommonRecipe {
     image: r.image || null,
     category: null,
     area: cuisine,
+    vegetarian: typeof r.vegetarian === "boolean" ? r.vegetarian : null,
+    vegan: typeof r.vegan === "boolean" ? r.vegan : null,
+    calories: typeof calories === "number" ? calories : null,
     ingredients,
     instructions,
     minutes: r.readyInMinutes ?? null,
@@ -184,6 +196,9 @@ function mealDbToCommon(meal: MealDbRecipe): CommonRecipe {
     image: asTrimmedString(meal.strMealThumb) ?? null,
     category: asTrimmedString(meal.strCategory) ?? null,
     area: asTrimmedString(meal.strArea) ?? null,
+    vegetarian: null,
+    vegan: null,
+    calories: null,
     ingredients,
     instructions: rawInstr || null,
     minutes: null,
@@ -245,30 +260,74 @@ function safeJSON(s: string): unknown {
   }
 }
 
-async function spoonacularByName(q: string, limit = 20, area?: string) {
+async function spoonacularByName(
+  q: string,
+  limit = 20,
+  area?: string,
+  diet?: string,
+  sort?: "match" | "fast" | "calories",
+  maxTime?: number
+) {
   const params: CacheParams = {
     query: q,
     number: Math.min(Math.max(limit, 1), 60),
     addRecipeInformation: true,
+    addRecipeNutrition: true,
   };
   if (area && area !== "any") params.cuisine = area;
+  if (diet && diet !== "any") params.diet = diet;
+  if (typeof maxTime === "number") params.maxReadyTime = maxTime;
+  if (sort === "fast") {
+    params.sort = "time";
+    params.sortDirection = "asc";
+  } else if (sort === "calories") {
+    params.sort = "calories";
+    params.sortDirection = "asc";
+  }
   const data = await upstream<{ results: SpoonacularRecipe[] }>("/recipes/complexSearch", params);
   return (data.results || []).map(toCommon);
 }
 
-async function spoonacularByIngredients(ings: string[], limit = 20, mode: "intersect" | "union" = "intersect") {
+async function spoonacularByIngredients(
+  ings: string[],
+  limit = 20,
+  mode: "intersect" | "union" = "intersect",
+  diet?: string,
+  maxTime?: number,
+  sort?: "match" | "fast" | "calories"
+) {
   const ingredientsParam = ings.map((s) => s.trim()).filter(Boolean).slice(0, 10).join(",");
   if (!ingredientsParam) return [];
-  const data = await upstream<
-    Array<SpoonacularRecipe & { usedIngredientCount?: number; missedIngredientCount?: number }>
-  >("/recipes/findByIngredients", {
-    ingredients: ingredientsParam,
-    number: Math.min(Math.max(limit, 1), 60),
-    ranking: 2,
-    ignorePantry: true,
-  });
-
-  let rows = (data || []).map(toCommon);
+  let rows: CommonRecipe[] = [];
+  if (mode === "union") {
+    const data = await upstream<
+      Array<SpoonacularRecipe & { usedIngredientCount?: number; missedIngredientCount?: number }>
+    >("/recipes/findByIngredients", {
+      ingredients: ingredientsParam,
+      number: Math.min(Math.max(limit, 1), 60),
+      ranking: 2,
+      ignorePantry: true,
+    });
+    rows = (data || []).map(toCommon);
+  } else {
+    const params: CacheParams = {
+      includeIngredients: ingredientsParam,
+      number: Math.min(Math.max(limit, 1), 60),
+      addRecipeInformation: true,
+      addRecipeNutrition: true,
+    };
+    if (diet && diet !== "any") params.diet = diet;
+    if (typeof maxTime === "number") params.maxReadyTime = maxTime;
+    if (sort === "fast") {
+      params.sort = "time";
+      params.sortDirection = "asc";
+    } else if (sort === "calories") {
+      params.sort = "calories";
+      params.sortDirection = "asc";
+    }
+    const data = await upstream<{ results: SpoonacularRecipe[] }>("/recipes/complexSearch", params);
+    rows = (data?.results || []).map(toCommon);
+  }
   if (mode === "intersect" && ings.length > 1) {
     const terms = ings.map((s) => s.toLowerCase());
     rows = rows.filter((r) => {
@@ -281,7 +340,7 @@ async function spoonacularByIngredients(ings: string[], limit = 20, mode: "inter
 
 async function spoonacularOne(id: string) {
   const data = await upstream<SpoonacularRecipe>(`/recipes/${encodeURIComponent(id)}/information`, {
-    includeNutrition: false,
+    includeNutrition: true,
   });
   return toCommon(data);
 }
@@ -384,6 +443,12 @@ export async function GET(req: NextRequest) {
     const area = (searchParams.get("area") || "").trim().toLowerCase();
     const limit = parseLimit(searchParams.get("limit"), 30, 1, 60);
     const mode = searchParams.get("mode") === "union" ? "union" : "intersect";
+    const dietParam = (searchParams.get("diet") || "").trim().toLowerCase();
+    const sortParam = (searchParams.get("sort") || "").trim().toLowerCase();
+    const maxParam = searchParams.get("max");
+    const diet = dietParam && dietParam !== "any" ? dietParam : "any";
+    const sort = sortParam === "fast" ? "fast" : sortParam === "calories" ? "calories" : "match";
+    const maxTime = maxParam ? parseLimit(maxParam, 0, 1, 300) : undefined;
 
     const spoonReady = Boolean(RAPID_KEY);
 
@@ -422,7 +487,7 @@ export async function GET(req: NextRequest) {
     if (q) {
       if (spoonReady) {
         try {
-          const list = await spoonacularByName(q, limit, area || undefined);
+          const list = await spoonacularByName(q, limit, area || undefined, diet, sort, maxTime);
           return NextResponse.json({ ok: true, recipes: list });
         } catch (error) {
           if (getErrorStatus(error) !== 429) throw error;
@@ -436,7 +501,7 @@ export async function GET(req: NextRequest) {
       const ingredients = ingredientsParam.split(",").map((s) => s.trim()).filter(Boolean);
       if (spoonReady) {
         try {
-          let list = await spoonacularByIngredients(ingredients, limit, mode);
+          let list = await spoonacularByIngredients(ingredients, limit, mode, diet, maxTime, sort);
           if (area && area !== "any") {
             list = list.filter((recipe) => (recipe.area || "").toLowerCase() === area);
           }
