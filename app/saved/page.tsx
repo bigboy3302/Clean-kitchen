@@ -7,7 +7,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebas1e";
 
 type SavedFood = {
-  source?: "internal" | "external";
+  source?: "internal" | "external" | "api" | "themealdb";
   id?: string;
   recipeId?: number | string;
   title: string;
