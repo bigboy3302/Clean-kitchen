@@ -151,6 +151,7 @@ export async function searchMealsByIngredientsAND(
   _mode: "intersect" | "union" = "intersect",
   options?: SearchOptions
 ): Promise<CommonRecipe[]> {
+  void _mode;
   const params = new URLSearchParams({
     ingredients: ings.join(","),
     number: String(limit),

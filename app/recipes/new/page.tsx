@@ -205,7 +205,7 @@ export default function NewRecipePage() {
               <span className="recipePublicDot" /> Ingredients
             </div>
             <p className="muted" style={{ marginTop: 0 }}>
-              One per line. Use "-" for quantity (example: "Chicken - 200g").
+              One per line. Use &quot;-&quot; for quantity (example: &quot;Chicken - 200g&quot;).
             </p>
             <textarea
               rows={10}

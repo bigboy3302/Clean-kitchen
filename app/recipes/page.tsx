@@ -1074,6 +1074,7 @@ export default function RecipesPage() {
     if (didAutoSearch.current) return;
     didAutoSearch.current = true;
     runIngredientSearch(ingredientChips);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, ingredientChips]);
 
   /* ---------- pantry picker → AND search ---------- */

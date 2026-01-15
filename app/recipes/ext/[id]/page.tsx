@@ -73,9 +73,10 @@ export default function ExternalRecipePage() {
 
         if (reqSeq.current !== mySeq) return;
         setData(json);
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (reqSeq.current !== mySeq) return;
-        setErr(e?.message ?? "Failed to load recipe.");
+        const message = e instanceof Error ? e.message : "Failed to load recipe.";
+        setErr(message);
       } finally {
         if (reqSeq.current !== mySeq) return;
         setLoading(false);
@@ -102,7 +103,7 @@ export default function ExternalRecipePage() {
       <main className="xp-container">
         <div className="xp-error">
           <h3>Recipe not found</h3>
-          <p className="muted">{err || "We couldn't locate the requested recipe."}</p>
+          <p className="muted">{err || "We could not locate the requested recipe."}</p>
           <Link className="btn primary" href="/recipes" style={{ marginTop: 12 }}>
             Back to recipes
           </Link>
