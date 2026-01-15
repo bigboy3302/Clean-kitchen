@@ -2,11 +2,19 @@ import { NextResponse } from "next/server";
 
 const BASE = "https://www.themealdb.com/api/json/v1/1";
 
-function parseIngredients(meal: any) {
+type MealRecord = Record<string, unknown>;
+
+function getString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
+function parseIngredients(meal: MealRecord) {
   const out: { name: string; measure: string }[] = [];
   for (let i = 1; i <= 20; i++) {
-    const name = (meal[`strIngredient${i}`] || "").trim();
-    const measure = (meal[`strMeasure${i}`] || "").trim();
+    const name = getString(meal[`strIngredient${i}`]) ?? "";
+    const measure = getString(meal[`strMeasure${i}`]) ?? "";
     if (name) out.push({ name, measure });
   }
   return out;
@@ -29,30 +37,32 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       clearTimeout(t);
     }
 
-    const data = await r.json();
-
-    const meal = data?.meals?.[0];
+    const data = (await r.json()) as { meals?: MealRecord[] | null };
+    const meal = Array.isArray(data?.meals) ? data.meals[0] : null;
     if (!meal) return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
 
     return NextResponse.json({
       source: "themealdb",
-      id: String(meal.idMeal),
-      title: meal.strMeal,
+      id: String(getString(meal.idMeal) ?? ""),
+      title: getString(meal.strMeal) ?? "Recipe",
       description: null,
-      imageURL: meal.strMealThumb || null,
-      category: meal.strCategory || null,
-      area: meal.strArea || null,
+      imageURL: getString(meal.strMealThumb),
+      category: getString(meal.strCategory),
+      area: getString(meal.strArea),
       timeMinutes: null,
       servings: null,
       ingredients: parseIngredients(meal),
-      instructions: meal.strInstructions || "",
-      sourceUrl: meal.strSource || null,
-      youtubeUrl: meal.strYoutube || null,
+      instructions: getString(meal.strInstructions) ?? "",
+      sourceUrl: getString(meal.strSource),
+      youtubeUrl: getString(meal.strYoutube),
     });
-  } catch (e: any) {
-    if (e?.name === "AbortError") {
+  } catch (e: unknown) {
+    const isAbort =
+      typeof e === "object" && e !== null && "name" in e && (e as { name?: unknown }).name === "AbortError";
+    if (isAbort) {
       return NextResponse.json({ error: "TheMealDB request timed out" }, { status: 504 });
     }
-    return NextResponse.json({ error: e?.message ?? "Failed" }, { status: 500 });
+    const message = e instanceof Error ? e.message : "Failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

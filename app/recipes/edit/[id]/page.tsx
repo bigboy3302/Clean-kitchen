@@ -296,7 +296,7 @@ export default function EditRecipePage() {
             <span className="dot" /> Ingredients
           </div>
           <p className="muted" style={{ marginTop: 0 }}>
-            One per line. Optional: use "-" for quantity (example: "Chicken - 200g").
+            One per line. Optional: use &quot;-&quot; for quantity (example: &quot;Chicken - 200g&quot;).
           </p>
           <textarea
             rows={12}

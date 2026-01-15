@@ -3,12 +3,20 @@ import { NextResponse } from "next/server";
 const BASE = "https://www.themealdb.com/api/json/v1/1";
 const MAX_PAGE_SIZE = 24;
 
-function normalizeListItem(meal: any) {
+type MealRecord = Record<string, unknown>;
+
+function getString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
+function normalizeListItem(meal: MealRecord) {
   return {
     source: "themealdb" as const,
-    id: String(meal.idMeal),
-    title: String(meal.strMeal || "Untitled"),
-    imageURL: meal.strMealThumb ? String(meal.strMealThumb) : null,
+    id: String(getString(meal.idMeal) ?? ""),
+    title: getString(meal.strMeal) ?? "Untitled",
+    imageURL: getString(meal.strMealThumb),
     timeMinutes: null,
     servings: null,
     category: null,
@@ -46,9 +54,9 @@ export async function GET(req: Request) {
 
       url = `${BASE}/filter.php?i=${encodeURIComponent(first)}`;
       const r = await fetch(url, { cache: "no-store" });
-      const data = await r.json();
+      const data = (await r.json()) as { meals?: MealRecord[] | null };
 
-      const meals = data?.meals ?? [];
+      const meals = Array.isArray(data?.meals) ? data.meals : [];
       const normalized = meals.map(normalizeListItem);
       const results = normalized.slice(offset, offset + number);
 
@@ -66,16 +74,17 @@ export async function GET(req: Request) {
     if (q) {
       url = `${BASE}/search.php?s=${encodeURIComponent(q)}`;
       const r = await fetch(url, { cache: "no-store" });
-      const data = await r.json();
+      const data = (await r.json()) as { meals?: MealRecord[] | null };
 
-      const meals = data?.meals ?? [];
+      const meals = Array.isArray(data?.meals) ? data.meals : [];
       const normalized = meals.map(normalizeListItem);
       const results = normalized.slice(offset, offset + number);
       return NextResponse.json({ results, totalResults: normalized.length, number, offset });
     }
 
     return NextResponse.json({ results: [], totalResults: 0, number, offset });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "Failed" }, { status: 500 });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
