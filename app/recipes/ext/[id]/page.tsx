@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import DisableBackgroundMotion from "@/components/background/DisableBackgroundMotion";
 
 type MealDBDetails = {
   source: "themealdb";
@@ -87,6 +88,7 @@ export default function ExternalRecipePage() {
   if (loading) {
     return (
       <main className="xp-container">
+        <DisableBackgroundMotion />
         <div className="xp-loading">
           <div className="xp-skel-hero" />
           <div className="xp-skel-grid">
@@ -101,6 +103,7 @@ export default function ExternalRecipePage() {
   if (err || !data) {
     return (
       <main className="xp-container">
+        <DisableBackgroundMotion />
         <div className="xp-error">
           <h3>Recipe not found</h3>
           <p className="muted">{err || "We could not locate the requested recipe."}</p>
@@ -116,6 +119,7 @@ export default function ExternalRecipePage() {
 
   return (
     <main className="xp-container">
+      <DisableBackgroundMotion />
       <header className="xp-header">
         <Link className="xp-back-btn" href="/recipes">
           Back to recipes

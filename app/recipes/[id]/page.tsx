@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/firebas1e";
 import { doc, onSnapshot, type FirestoreError, type Timestamp } from "firebase/firestore";
+import DisableBackgroundMotion from "@/components/background/DisableBackgroundMotion";
 
 type Author = {
   uid?: string | null;
@@ -145,9 +146,10 @@ export default function RecipePublicPage() {
 
   return (
     <main className="container section recipePublic">
+      <DisableBackgroundMotion />
       <header className="recipePublicBar">
         <Link className="btn-base btn--secondary btn--sm" href="/recipes">
-          ← All recipes
+          Back to recipes
         </Link>
         <div className="recipePublicBarActions">
           <span className="recipePublicHint">You’re viewing a public recipe</span>

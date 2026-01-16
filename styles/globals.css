@@ -742,6 +742,14 @@ img, video { max-width: 100%; height: auto; }
   transform: none !important;
 }
 
+html[data-bg-lock="true"] .ck-bg,
+html[data-bg-lock="true"] .ck-bg__layer,
+html[data-bg-lock="true"] .ck-bg__waves,
+html[data-bg-lock="true"] .ck-bg__blob {
+  animation: none !important;
+  transform: none !important;
+}
+
 .ck-bg__waves {
   position: absolute;
   inset: -30%;
