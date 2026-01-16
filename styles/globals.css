@@ -52,13 +52,18 @@
 }
 
 * { box-sizing: border-box }
-html, body { height: 100% }
+html, body {
+  height: 100%;
+  overscroll-behavior: none;
+}
 body {
   margin: 0;
   font-family: var(--font-sans);
   line-height: var(--leading);
   color: var(--text);
   background: var(--bg);
+  min-height: 100dvh;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -593,7 +598,7 @@ img, video { max-width: 100%; height: auto; }
 
 .appRoot {
   position: relative;
-  z-index: 10;
+  z-index: 1;
   min-height: 100vh;
 }
 
@@ -667,6 +672,19 @@ img, video { max-width: 100%; height: auto; }
 }
 
 /* --- Clean Kitchen Moving Background --- */
+#bg-root {
+  position: fixed;
+  inset: 0;
+  width: 100dvw;
+  height: 100dvh;
+  pointer-events: none;
+  z-index: 0;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  contain: paint;
+  isolation: isolate;
+}
+
 .ck-bg {
   position: fixed;
   inset: 0;
@@ -677,7 +695,7 @@ img, video { max-width: 100%; height: auto; }
 
 .appRoot {
   position: relative;
-  z-index: 10;
+  z-index: 1;
 }
 
 :root {

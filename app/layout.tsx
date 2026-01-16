@@ -6,8 +6,8 @@ import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import EnsureUserDoc from "@/components/auth/EnsureUserDoc";
 import AuthGate from "@/components/auth/AuthGate";
 import AppShell from "@/components/shell/AppShell";
+import BackgroundPortal from "@/components/background/BackgroundPortal";
 import { MotionSettingsProvider } from "../components/background/MotionSettingsProvider";
-import MovingBackground from "../components/background/MovingBackground";
 export const metadata: Metadata = {
   title: "Clean Kitchen",
   description: "Plan, cook, and enjoy.",
@@ -28,7 +28,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body>
         <MotionSettingsProvider>
-          <MovingBackground />
+          <BackgroundPortal />
           <div className="appRoot">
             <ThemeProvider>
               {/* Wait for auth so client SDK calls don't race before user state is known */}
