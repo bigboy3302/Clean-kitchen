@@ -376,8 +376,13 @@ export default function DashboardPage() {
           postPreview,
         }),
       });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null);
+      let payload = null;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
+      }
+      if (!response.ok || !payload?.ok) {
         const message =
           payload?.error || payload?.message || `Failed to deliver report (status ${response.status}).`;
         throw new Error(message);

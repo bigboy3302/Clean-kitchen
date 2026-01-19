@@ -4,8 +4,6 @@ import sgMail from "@sendgrid/mail";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
-
 type SendGridError = {
   response?: {
     body?: unknown;
@@ -24,40 +22,40 @@ export async function POST(req: Request) {
     const body = (await req.json()) as {
       postId?: string;
       reason?: string;
-      uid?: string;
+      reporterUid?: string;
     };
 
-    const to = process.env.REPORT_EMAIL_TO!;
-    const from = process.env.REPORT_EMAIL_FROM!;
+    const { postId, reason, reporterUid } = body;
+    if (!postId || !reason) {
+      return NextResponse.json(
+        { ok: false, error: "Missing postId or reason" },
+        { status: 400 }
+      );
+    }
 
-    const [resp] = await sgMail.send({
-      to,
-      from: { email: from, name: "Clean Kitchen Reports" },
-      subject: `New report for post ${body.postId ?? ""}`,
-      text:
-        `Report submitted.\n\n` +
-        `Post: ${body.postId ?? ""}\n` +
-        `Reason: ${body.reason ?? ""}\n` +
-        `Reporter: ${body.uid ?? ""}`,
-      html: `
-        <h2>New Report</h2>
-        <p><b>Post:</b> ${body.postId ?? ""}</p>
-        <p><b>Reason:</b> ${body.reason ?? ""}</p>
-        <p><b>Reporter UID:</b> ${body.uid ?? ""}</p>
-      `,
+    const apiKey = process.env.SENDGRID_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json(
+        { ok: false, error: "SENDGRID_API_KEY not set" },
+        { status: 500 }
+      );
+    }
+
+    sgMail.setApiKey(apiKey);
+
+    await sgMail.send({
+      to: process.env.REPORT_EMAIL_TO!,
+      from: process.env.REPORT_EMAIL_FROM!,
+      replyTo: process.env.REPORT_EMAIL_TO!,
+      subject: `New report for post ${postId}`,
+      text: `Post: ${postId}\nReporter: ${reporterUid ?? "unknown"}\n\nReason:\n${reason}`,
     });
 
-    console.log("SendGrid accepted:", {
-      statusCode: resp.statusCode,
-      messageId: resp.headers["x-message-id"],
-    });
-
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err: unknown) {
-    const details = getSendGridDetails(err);
-    console.error("Report email failed:", JSON.stringify(details ?? err, null, 2));
+    console.error("Report email failed:", getSendGridDetails(err));
     return NextResponse.json(
-      { error: "Email failed", details },
+      { ok: false, error: "Email failed" },
       { status: 500 }
     );
   }
