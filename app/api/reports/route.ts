@@ -6,6 +6,19 @@ export const dynamic = "force-dynamic";
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
 
+type SendGridError = {
+  response?: {
+    body?: unknown;
+  };
+  message?: string;
+};
+
+function getSendGridDetails(err: unknown): unknown {
+  if (!err || typeof err !== "object") return err;
+  const maybe = err as SendGridError;
+  return maybe.response?.body ?? maybe.message ?? err;
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as {
@@ -40,13 +53,11 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
-    console.error(
-      "Report email failed:",
-      JSON.stringify(err?.response?.body ?? err, null, 2)
-    );
+  } catch (err: unknown) {
+    const details = getSendGridDetails(err);
+    console.error("Report email failed:", JSON.stringify(details ?? err, null, 2));
     return NextResponse.json(
-      { error: "Email failed", details: err?.response?.body ?? err?.message },
+      { error: "Email failed", details },
       { status: 500 }
     );
   }
