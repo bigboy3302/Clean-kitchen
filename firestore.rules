@@ -282,16 +282,15 @@ service cloud.firestore {
       match /reports/{uid} {
         // Keep reports private by default
         allow read: if isAdmin();
-        // Only the signed-in user can create their own report
-        allow create: if isSignedIn()
-                      && request.auth.uid == uid
-                      && request.resource.data.uid == uid
-                      && request.resource.data.postId == postId
-                      && request.resource.data.reason is string
-                      && request.resource.data.reason.size() >= 10
-                      && request.resource.data.reason.size() <= 2000;
-        // No updates/deletes (immutability)
-        allow update, delete: if false;
+        // Allow create/update for the reporting user on their own report doc
+        allow create, update: if isSignedIn()
+                              && request.auth.uid == uid
+                              && request.resource.data.uid == uid
+                              && request.resource.data.postId == postId
+                              && request.resource.data.reason is string
+                              && request.resource.data.reason.size() >= 10
+                              && request.resource.data.reason.size() <= 2000;
+        allow delete: if false;
       }
     }
 
