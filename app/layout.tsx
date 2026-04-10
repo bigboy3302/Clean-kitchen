@@ -6,8 +6,10 @@ import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import EnsureUserDoc from "@/components/auth/EnsureUserDoc";
 import AuthGate from "@/components/auth/AuthGate";
 import AppShell from "@/components/shell/AppShell";
+import AuthModal from "@/components/auth/AuthModal";
 import BackgroundPortal from "@/components/background/BackgroundPortal";
 import { MotionSettingsProvider } from "../components/background/MotionSettingsProvider";
+import { AuthModalProvider } from "@/context/AuthModalContext";
 export const metadata: Metadata = {
   title: "Clean Kitchen",
   description: "Plan, cook, and enjoy.",
@@ -31,11 +33,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <BackgroundPortal />
           <div className="appRoot">
             <ThemeProvider>
-              {/* Wait for auth so client SDK calls don't race before user state is known */}
-              <AuthGate>
-                <EnsureUserDoc />
-                <AppShell>{children}</AppShell>
-              </AuthGate>
+              <AuthModalProvider>
+                {/* Wait for auth so client SDK calls don't race before user state is known */}
+                <AuthGate>
+                  <EnsureUserDoc />
+                  <AppShell>{children}</AppShell>
+                </AuthGate>
+                <AuthModal />
+              </AuthModalProvider>
             </ThemeProvider>
           </div>
         </MotionSettingsProvider>

@@ -6,6 +6,7 @@ import type { ChangeEvent } from "react";
 import { auth, db } from "@/lib/firebas1e";
 import { addDoc, collection, serverTimestamp, doc, getDoc } from "firebase/firestore";
 import { addMediaToPost } from "@/lib/postMedia";
+import { useAuthModal } from "@/context/AuthModalContext";
 
 type MediaPreview = { url: string; type: "image" | "video" };
 type Author = { username: string | null; displayName: string | null; avatarURL: string | null };
@@ -70,6 +71,7 @@ async function optimiseImage(file: File, maxDim = MAX_IMAGE_DIMENSION): Promise<
 }
 
 export default function PostComposer() {
+  const { openLogin } = useAuthModal();
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<MediaPreview[]>([]);
@@ -114,7 +116,11 @@ export default function PostComposer() {
   async function createPost() {
     setErr(null);
     const user = auth.currentUser;
-    if (!user) { setErr("Please sign in."); return; }
+    if (!user) {
+      setErr("Please sign in.");
+      openLogin("/dashboard");
+      return;
+    }
     if (!text.trim() && files.length === 0) { setErr("Nothing to publish."); return; }
 
     setBusy(true);

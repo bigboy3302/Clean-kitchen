@@ -2,9 +2,10 @@
 
 import { ReactNode, useEffect, useState } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebas1e";
 import { doc, getDoc } from "firebase/firestore";
+import { useAuthModal } from "@/context/AuthModalContext";
 
 export default function RequireAuth({
   children,
@@ -16,12 +17,18 @@ export default function RequireAuth({
   requireProfile?: boolean;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const { openLogin } = useAuthModal();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const off = onAuthStateChanged(auth, async (u: User | null) => {
       if (!u) {
-        router.replace(redirectTo);
+        if (redirectTo === "/auth/login") {
+          openLogin(pathname);
+        } else {
+          router.replace(redirectTo);
+        }
         return;
       }
       if (requireProfile) {
@@ -43,7 +50,7 @@ export default function RequireAuth({
       setReady(true);
     });
     return () => off();
-  }, [router, redirectTo, requireProfile]);
+  }, [openLogin, pathname, redirectTo, requireProfile, router]);
 
   if (!ready) {
     return (

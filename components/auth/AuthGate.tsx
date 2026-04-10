@@ -12,7 +12,8 @@ export default function AuthGate({ children, fallback = null }: { children: Reac
   const isPublic =
     pathname.startsWith("/recipes/ext") ||
     pathname.startsWith("/login") ||
-    pathname.startsWith("/register");
+    pathname.startsWith("/register") ||
+    pathname.startsWith("/auth/");
   if (isPublic) return <>{children}</>;
   return ready ? <>{children}</> : <>{fallback}</>;
 }

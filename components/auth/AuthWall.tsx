@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
+import { usePathname } from "next/navigation";
+import { useAuthModal } from "@/context/AuthModalContext";
 
 export default function AuthWall({
   title = "Sign in to continue",
@@ -11,6 +12,8 @@ export default function AuthWall({
   description?: string;
 }) {
   const [open, setOpen] = useState(true);
+  const pathname = usePathname();
+  const { openLogin, openRegister } = useAuthModal();
   if (!open) return null;
 
   return (
@@ -22,18 +25,20 @@ export default function AuthWall({
         </div>
 
         <div className="space-y-3 px-6 py-5">
-          <Link
-            href="/auth/login"
+          <button
+            type="button"
+            onClick={() => openLogin(pathname)}
             className="inline-flex w-full items-center justify-center rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-medium hover:bg-gray-50"
           >
             Log in
-          </Link>
-          <Link
-            href="/auth/register"
+          </button>
+          <button
+            type="button"
+            onClick={() => openRegister(pathname)}
             className="inline-flex w-full items-center justify-center rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
           >
             Create an account
-          </Link>
+          </button>
           <button
             onClick={() => setOpen(false)}
             className="block w-full text-center text-sm text-gray-500 hover:text-gray-700"

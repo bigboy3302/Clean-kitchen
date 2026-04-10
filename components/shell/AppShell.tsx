@@ -7,7 +7,6 @@ import BottomNav from "@/components/nav/BottomNav";
 import PrimaryNavbar from "@/components/nav/PrimaryNavbar";
 
 const HIDE_CHROME_PATHS = new Set([
-  "/",
   "/auth/forgot",
   "/onboarding",
 ]);

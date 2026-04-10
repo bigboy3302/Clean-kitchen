@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
   BookOpen,
@@ -18,6 +18,7 @@ import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import ExpiryBell from "@/components/nav/ExpiryBell";
 import Avatar from "@/components/ui/Avatar";
 import { auth } from "@/lib/firebas1e";
+import { useAuthModal } from "@/context/AuthModalContext";
 
 type LinkItem = {
   href: string;
@@ -36,6 +37,7 @@ const primaryLinks: LinkItem[] = [
 
 export default function PrimaryNavbar() {
   const pathname = usePathname();
+  const { openLogin } = useAuthModal();
   const today = useMemo(() => {
     try {
       return new Intl.DateTimeFormat("en-US", {
@@ -51,7 +53,6 @@ export default function PrimaryNavbar() {
   const [user, setUser] = useState<User | null>(auth.currentUser);
   useEffect(() => onAuthStateChanged(auth, (u) => setUser(u)), []);
 
-  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -69,7 +70,7 @@ export default function PrimaryNavbar() {
     try {
       await signOut(auth);
       setMenuOpen(false);
-      router.replace("/auth/login");
+      openLogin(pathname);
     } catch (error) {
       console.error("Sign out failed", error);
     }
@@ -207,10 +208,14 @@ export default function PrimaryNavbar() {
                   </div>
                 </>
               ) : (
-                <Link href="/auth/login" className="profileBtn ghost">
+                <button
+                  type="button"
+                  className="profileBtn ghost"
+                  onClick={() => openLogin(pathname)}
+                >
                   <span className="profileAvatar ph">{profileInitial}</span>
                   <span className="profileName">Sign in</span>
-                </Link>
+                </button>
               )}
             </div>
           </div>

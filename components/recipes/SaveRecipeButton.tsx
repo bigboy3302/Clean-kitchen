@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { deleteDoc, doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebas1e";
+import { useAuthModal } from "@/context/AuthModalContext";
 
 type Props = {
   recipe: {
@@ -19,6 +20,7 @@ type Props = {
 };
 
 export default function SaveRecipeButton({ recipe, source = "themealdb", variant = "primary" }: Props) {
+  const { openLogin } = useAuthModal();
   const [uid, setUid] = useState<string | null>(auth.currentUser?.uid ?? null);
   const [isSaved, setIsSaved] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -41,7 +43,7 @@ export default function SaveRecipeButton({ recipe, source = "themealdb", variant
 
   const toggleSave = async () => {
     if (!uid) {
-      window.alert("Please sign in to save recipes.");
+      openLogin("/recipes");
       return;
     }
 
@@ -71,7 +73,7 @@ export default function SaveRecipeButton({ recipe, source = "themealdb", variant
   };
 
   return (
-    <button className={cls} type="button" onClick={toggleSave} disabled={busy}>
+    <button className={cls} type="button" onClick={toggleSave} disabled={busy} aria-disabled={!uid}>
       {isSaved ? "Saved" : "Save"}
     </button>
   );

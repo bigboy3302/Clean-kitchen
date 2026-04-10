@@ -4,12 +4,16 @@ import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
-import { auth, db } from "@/lib/firebas1e";
+import { db } from "@/lib/firebas1e";
+import { useAuth } from "@/hooks/useAuth";
+import { useAuthModal } from "@/context/AuthModalContext";
 
 type Ingredient = { name: string; measure?: string };
 
 export default function NewRecipePage() {
   const router = useRouter();
+  const { user, loading } = useAuth();
+  const { openRegister } = useAuthModal();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [timeMinutes, setTimeMinutes] = useState("");
@@ -23,8 +27,8 @@ export default function NewRecipePage() {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!auth.currentUser) router.replace("/auth/login");
-  }, [router]);
+    if (!loading && !user) openRegister("/recipes/new");
+  }, [loading, openRegister, user]);
 
   const parseIngredients = (): Ingredient[] => {
     return ingredientsText
@@ -38,7 +42,7 @@ export default function NewRecipePage() {
   };
 
   const validate = () => {
-    if (!auth.currentUser) return "You must be signed in.";
+    if (!user) return "You must be signed in.";
     if (!title.trim()) return "Title is required.";
     if (!timeMinutes.trim() || Number(timeMinutes) <= 0) return "Time (minutes) is required.";
     if (!servings.trim() || Number(servings) <= 0) return "Servings is required.";
@@ -55,9 +59,9 @@ export default function NewRecipePage() {
       return;
     }
 
-    const u = auth.currentUser;
+    const u = user;
     if (!u) {
-      router.replace("/auth/login");
+      openRegister("/recipes/new");
       return;
     }
 
@@ -94,6 +98,11 @@ export default function NewRecipePage() {
 
   return (
     <main className="container section recipePublic">
+      {!user && !loading ? (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <strong>Account required.</strong> Sign up to publish recipes. You can still browse the public recipe library.
+        </div>
+      ) : null}
       <header className="recipePublicBar">
         <Link className="btn-base btn--secondary btn--sm" href="/recipes">
           Back to recipes
@@ -126,16 +135,17 @@ export default function NewRecipePage() {
             <div className="recipeForm">
               <div>
                 <label>Title *</label>
-                <input value={title} onChange={(e) => setTitle(e.currentTarget.value)} />
+                  <input value={title} onChange={(e) => setTitle(e.currentTarget.value)} disabled={!user} />
               </div>
 
               <div>
                 <label>Description</label>
-                <textarea
-                  rows={3}
-                  value={description}
-                  onChange={(e) => setDescription(e.currentTarget.value)}
-                />
+                  <textarea
+                    rows={3}
+                    value={description}
+                    onChange={(e) => setDescription(e.currentTarget.value)}
+                    disabled={!user}
+                  />
               </div>
 
               <div className="formRow2">
@@ -146,6 +156,7 @@ export default function NewRecipePage() {
                     min={1}
                     value={timeMinutes}
                     onChange={(e) => setTimeMinutes(e.currentTarget.value)}
+                    disabled={!user}
                   />
                 </div>
                 <div>
@@ -155,6 +166,7 @@ export default function NewRecipePage() {
                     min={1}
                     value={servings}
                     onChange={(e) => setServings(e.currentTarget.value)}
+                    disabled={!user}
                   />
                 </div>
               </div>

@@ -5,7 +5,6 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db, storage } from "@/lib/firebas1e";
 import {
-  onAuthStateChanged,
   sendPasswordResetEmail,
   sendEmailVerification,
   updateProfile,
@@ -42,6 +41,8 @@ import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import BackgroundMotionControl from "@/components/background/BackgroundMotionControl";
+import { useAuthModal } from "@/context/AuthModalContext";
+import { useAuth } from "@/hooks/useAuth";
 
 
 type UserDoc = {
@@ -78,6 +79,8 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 export default function ProfilePage() {
   const router = useRouter();
   const { mode, setMode } = useTheme();
+  const { openLogin } = useAuthModal();
+  const { user, loading } = useAuth();
 
  
   const [authReady, setAuthReady] = useState(false);
@@ -131,13 +134,15 @@ export default function ProfilePage() {
   };
   
   useEffect(() => {
-    const stop = onAuthStateChanged(auth, (u) => {
-      setMe(u || null);
-      setAuthReady(true);
-      if (!u) router.replace("/auth/login");
-    });
-    return () => stop();
-  }, [router]);
+    setMe(user);
+    setAuthReady(!loading);
+  }, [loading, user]);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      openLogin("/profile");
+    }
+  }, [loading, openLogin, user]);
 
   useEffect(() => {
     if (!authReady || !me) return;
@@ -193,7 +198,6 @@ export default function ProfilePage() {
       }
     })();
   }, [authReady, me, setMode]);
-
 
   useEffect(() => {
     if (!username) {

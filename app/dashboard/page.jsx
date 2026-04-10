@@ -1,7 +1,6 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import NextImage from "next/image";
 import { onAuthStateChanged } from "firebase/auth";
@@ -23,6 +22,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 
 import { auth, db, storage } from "@/lib/firebas1e";
 import PostCard from "@/components/posts/PostCard";
+import { useAuthModal } from "@/context/AuthModalContext";
 
 
 function getImageDims(file) {
@@ -97,7 +97,7 @@ function formatRelativeFromMs(ms) {
 }
 
 export default function DashboardPage() {
-  const router = useRouter();
+  const { openLogin, openRegister } = useAuthModal();
   const [uid, setUid] = useState(null);
   const [userEmail, setUserEmail] = useState("");
   const [ready, setReady] = useState(false);
@@ -173,7 +173,6 @@ export default function DashboardPage() {
         setUid(null);
         setUserEmail("");
         setReady(true);
-        router.replace("/auth/login");
         return;
       }
       setUid(u.uid);
@@ -181,7 +180,7 @@ export default function DashboardPage() {
       setReady(true);
     });
     return () => stop();
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     const qy = query(
@@ -243,8 +242,8 @@ export default function DashboardPage() {
   async function handleToggleLike(post, liked) {
     const curUid = auth.currentUser?.uid || null;
     if (!curUid) {
-      console.warn("Like blocked: no auth user");
-      throw new Error("Not signed in");
+      openLogin("/dashboard");
+      throw new Error("AUTH_REQUIRED");
     }
     if (!post?.id) return;
 
@@ -268,7 +267,11 @@ export default function DashboardPage() {
   }
 
   async function handleToggleRepost(post, next) {
-    if (!uid || !post?.id) return;
+    if (!uid) {
+      openLogin("/dashboard");
+      return;
+    }
+    if (!post?.id) return;
     const rRef = doc(db, "posts", post.id, "reposts", uid);
     const rSnap = await getDoc(rRef);
     if (next) {
@@ -328,7 +331,8 @@ export default function DashboardPage() {
   async function handleReport(post, details) {
     const me = auth.currentUser;
     if (!me || !post?.id) {
-      throw new Error("You must be signed in to report posts.");
+      openLogin(`/posts/${post?.id ?? ""}`);
+      throw new Error("AUTH_REQUIRED");
     }
     const reason = typeof details?.reason === "string" ? details.reason.trim() : "";
     if (reason.length < 10) {
@@ -408,7 +412,10 @@ export default function DashboardPage() {
   }
 
   async function createPost() {
-    if (!uid) return;
+    if (!uid) {
+      openRegister("/dashboard");
+      return;
+    }
     const text = postText.trim();
     if (!text && postFiles.length === 0) return;
 
@@ -500,8 +507,22 @@ export default function DashboardPage() {
             <p className="hero-copy">
               Share pantry, fitness progress, and kitchen inspiration with the community.
             </p>
+            {!uid && (
+              <div className="heroNotice" role="status">
+                Explore the feed in read-only mode. Sign in to create posts, like, repost, and report.
+              </div>
+            )}
             <div className="hero-actions">
-              <button className="hero-primary" onClick={() => setOpenComposer(true)}>
+              <button
+                className="hero-primary"
+                onClick={() => {
+                  if (!uid) {
+                    openRegister("/dashboard");
+                    return;
+                  }
+                  setOpenComposer(true);
+                }}
+              >
                 Create post
               </button>
             </div>
@@ -753,6 +774,17 @@ export default function DashboardPage() {
           display: flex;
           flex-wrap: wrap;
           gap: 12px;
+        }
+        .heroNotice {
+          width: fit-content;
+          max-width: 44ch;
+          padding: 12px 14px;
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.14);
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          color: rgba(255, 255, 255, 0.92);
+          line-height: 1.5;
+          font-size: 14px;
         }
         .hero-primary {
           border: 0;

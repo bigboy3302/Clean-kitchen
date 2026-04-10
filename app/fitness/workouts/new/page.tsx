@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { SavedWorkoutVisibility, WorkoutContent } from "@/lib/workouts/types";
-import { auth } from "@/lib/firebas1e";
 import { uploadWorkoutMedia } from "@/lib/uploads";
 import { saveWorkout } from "@/lib/workouts/client";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
+import { useAuth } from "@/hooks/useAuth";
+import { useAuthModal } from "@/context/AuthModalContext";
 
 const VISIBILITY_OPTIONS: SavedWorkoutVisibility[] = ["private", "public"];
 
@@ -39,6 +40,8 @@ function detectMediaType(urlOrMime: string | null): WorkoutContent["mediaType"] 
 
 export default function NewWorkoutPage() {
   const router = useRouter();
+  const { user, loading } = useAuth();
+  const { openRegister } = useAuthModal();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [instructions, setInstructions] = useState("");
@@ -58,10 +61,10 @@ export default function NewWorkoutPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!auth.currentUser) {
-      router.replace("/auth/login");
+    if (!loading && !user) {
+      openRegister("/fitness/workouts/new");
     }
-  }, [router]);
+  }, [loading, openRegister, user]);
 
   const combinedMediaUrl = mediaUrl || externalMedia.trim();
 
@@ -70,7 +73,8 @@ export default function NewWorkoutPage() {
   const handleFileChange = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!auth.currentUser) {
+    if (!user) {
+      openRegister("/fitness/workouts/new");
       setError("Sign in to upload media.");
       event.target.value = "";
       return;
@@ -78,7 +82,7 @@ export default function NewWorkoutPage() {
     setError(null);
     setUploading(true);
     try {
-      const uploadedUrl = await uploadWorkoutMedia(auth.currentUser.uid, file);
+      const uploadedUrl = await uploadWorkoutMedia(user.uid, file);
       setMediaUrl(uploadedUrl);
       setMediaKind(file.type.startsWith("video/") ? "mp4" : file.type.toLowerCase().includes("gif") ? "gif" : "image");
       setMediaName(file.name);
@@ -89,13 +93,12 @@ export default function NewWorkoutPage() {
       setUploading(false);
       event.target.value = "";
     }
-  }, []);
+  }, [openRegister, user]);
 
   async function handleSubmit() {
     setError(null);
-    const user = auth.currentUser;
     if (!user) {
-      router.replace("/auth/login");
+      openRegister("/fitness/workouts/new");
       return;
     }
     if (!title.trim()) {
@@ -146,10 +149,10 @@ export default function NewWorkoutPage() {
 
       <section className="card">
         <div className="grid">
-          <Input label="Title" value={title} onChange={(event) => setTitle(event.currentTarget.value)} placeholder="Mountain climber finisher" />
-          <Input label="Body part" value={bodyPart} onChange={(event) => setBodyPart(event.currentTarget.value)} placeholder="Full body" />
-          <Input label="Target muscle" value={target} onChange={(event) => setTarget(event.currentTarget.value)} placeholder="Core" />
-          <Input label="Equipment" value={equipment} onChange={(event) => setEquipment(event.currentTarget.value)} placeholder="Bodyweight, dumbbells…" />
+          <Input label="Title" value={title} onChange={(event) => setTitle(event.currentTarget.value)} placeholder="Mountain climber finisher" disabled={!user} />
+          <Input label="Body part" value={bodyPart} onChange={(event) => setBodyPart(event.currentTarget.value)} placeholder="Full body" disabled={!user} />
+          <Input label="Target muscle" value={target} onChange={(event) => setTarget(event.currentTarget.value)} placeholder="Core" disabled={!user} />
+          <Input label="Equipment" value={equipment} onChange={(event) => setEquipment(event.currentTarget.value)} placeholder="Bodyweight, dumbbells…" disabled={!user} />
         </div>
 
         <div className="field">
@@ -160,6 +163,7 @@ export default function NewWorkoutPage() {
             value={description}
             onChange={(event) => setDescription(event.currentTarget.value)}
             placeholder="Describe what this movement focuses on or how to set it up."
+            disabled={!user}
           />
         </div>
 
@@ -171,6 +175,7 @@ export default function NewWorkoutPage() {
             value={instructions}
             onChange={(event) => setInstructions(event.currentTarget.value)}
             placeholder="Step 1…"
+            disabled={!user}
           />
           <span className="hint">Use blank lines to separate paragraphs.</span>
         </div>
@@ -181,18 +186,21 @@ export default function NewWorkoutPage() {
             value={primaryMuscles}
             onChange={(event) => setPrimaryMuscles(event.currentTarget.value)}
             placeholder="Chest, triceps"
+            disabled={!user}
           />
           <Input
             label="Secondary muscles (comma separated)"
             value={secondaryMuscles}
             onChange={(event) => setSecondaryMuscles(event.currentTarget.value)}
             placeholder="Shoulders"
+            disabled={!user}
           />
           <Input
             label="Equipment list (comma separated)"
             value={equipmentList}
             onChange={(event) => setEquipmentList(event.currentTarget.value)}
             placeholder="Yoga mat, timer"
+            disabled={!user}
           />
           <Input
             label="External media URL"
@@ -200,13 +208,14 @@ export default function NewWorkoutPage() {
             onChange={(event) => setExternalMedia(event.currentTarget.value)}
             placeholder="https://…"
             hint="Optional: paste a gif/video URL if you already host it"
+            disabled={!user}
           />
         </div>
 
         <div className="mediaUpload">
           <div>
             <label className="label">Upload media</label>
-            <input type="file" accept="image/*,video/*" onChange={handleFileChange} disabled={uploading || busy} />
+            <input type="file" accept="image/*,video/*" onChange={handleFileChange} disabled={!user || uploading || busy} />
             <span className="hint">Images up to 20 MB, videos up to 120 MB.</span>
             {mediaName ? <p className="mediaName">Uploaded: {mediaName}</p> : null}
           </div>

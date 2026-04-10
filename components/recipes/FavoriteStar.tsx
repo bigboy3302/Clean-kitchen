@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { auth, db } from "@/lib/firebas1e";
 import { doc, onSnapshot, serverTimestamp, setDoc, deleteDoc } from "firebase/firestore";
+import { useAuthModal } from "@/context/AuthModalContext";
 
 type Props = {
   rid: string;               
@@ -13,6 +14,7 @@ type Props = {
 };
 
 export default function FavoriteStar({ rid, payload = {}, meUid, size = "md" }: Props) {
+  const { openLogin } = useAuthModal();
   const [starred, setStarred] = useState(false);
   const uid = meUid ?? auth.currentUser?.uid ?? null;
 
@@ -24,7 +26,10 @@ export default function FavoriteStar({ rid, payload = {}, meUid, size = "md" }: 
   }, [uid, rid]);
 
   async function toggle() {
-    if (!uid) return;
+    if (!uid) {
+      openLogin(`/recipes/${rid}`);
+      return;
+    }
     const ref = doc(db, "users", uid, "favoriteRecipes", rid);
     if (starred) await deleteDoc(ref);
     else await setDoc(ref, { ...payload, createdAt: serverTimestamp() });
