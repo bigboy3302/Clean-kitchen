@@ -6,6 +6,13 @@ export default function ThemeScript() {
         const LS_CUSTOM = "theme.custom";
         const LIGHT = { primary:"#0f172a", primaryContrast:"#ffffff", bg:"#f8fafc", bg2:"#ffffff", text:"#0f172a", muted:"#475569", border:"#e5e7eb", ring:"#93c5fd" };
         const DARK  = { primary:"#60a5fa", primaryContrast:"#0b1220", bg:"#0b1220", bg2:"#0f1629", text:"#e5e7eb", muted:"#9aa4b2", border:"#1f2937", ring:"#2563eb" };
+        const RANDOM = [
+          { primary:"#14b8a6", primaryContrast:"#042f2e", bg:"#08111f", bg2:"#111c2f", text:"#edfdfb", muted:"#9fc7c1", border:"#1f3b45", ring:"#5eead4" },
+          { primary:"#f97316", primaryContrast:"#fff7ed", bg:"#130f1d", bg2:"#201a2f", text:"#fff7ed", muted:"#c9b9a9", border:"#3a2c35", ring:"#fed7aa" },
+          { primary:"#a3e635", primaryContrast:"#17230b", bg:"#0b1510", bg2:"#142319", text:"#f5ffe8", muted:"#b7c9ab", border:"#2b3e2d", ring:"#bef264" },
+          { primary:"#38bdf8", primaryContrast:"#082f49", bg:"#081526", bg2:"#10233a", text:"#eff8ff", muted:"#a9bfd0", border:"#223c55", ring:"#7dd3fc" },
+          { primary:"#fb7185", primaryContrast:"#fff1f2", bg:"#180f19", bg2:"#281728", text:"#fff5f7", muted:"#d0b5bf", border:"#432537", ring:"#fda4af" }
+        ];
 
         const hexToRgb = (hex) => {
           const h = hex.replace("#", "");
@@ -31,6 +38,8 @@ export default function ThemeScript() {
           el.style.setProperty("--muted", palette.muted);
           el.style.setProperty("--border", palette.border);
           el.style.setProperty("--ring", palette.ring);
+          el.style.setProperty("--bg-accent", palette.primary);
+          el.style.setProperty("--bg-accent-2", palette.ring);
           el.style.setProperty("--card-bg", palette.bg2);
           el.style.setProperty("--card-border", palette.border);
           el.style.setProperty("--btn-bg", palette.primary);
@@ -51,13 +60,16 @@ export default function ThemeScript() {
           }
         };
 
-        const mode = localStorage.getItem(LS_MODE) || "system";
+        const mode = localStorage.getItem(LS_MODE);
         const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
         const systemPalette = prefersDark ? DARK : LIGHT;
 
         let palette = LIGHT;
         let dt = "light";
-        if (mode === "light") {
+        if (!mode) {
+          palette = RANDOM[Math.floor(Math.random() * RANDOM.length)] || DARK;
+          dt = "custom";
+        } else if (mode === "light") {
           palette = LIGHT;
           dt = "light";
         } else if (mode === "dark") {

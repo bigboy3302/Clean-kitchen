@@ -10,6 +10,8 @@
   --muted: #667085;        
   --border: #e5e7eb;      
   --ring: rgba(37, 99, 235, .25); 
+  --bg-accent: var(--primary);
+  --bg-accent-2: var(--ring);
   --card-bg: #ffffff;
   --card-border: #e5e7eb;
   --btn-bg: #2563eb;
@@ -61,7 +63,12 @@ body {
   font-family: var(--font-sans);
   line-height: var(--leading);
   color: var(--text);
-  background: var(--bg);
+  background:
+    radial-gradient(900px 620px at 12% -8%, color-mix(in oklab, var(--bg-accent) 24%, transparent), transparent 66%),
+    radial-gradient(760px 560px at 92% 8%, color-mix(in oklab, var(--bg-accent-2) 18%, transparent), transparent 68%),
+    radial-gradient(760px 520px at 50% 112%, color-mix(in oklab, var(--primary) 14%, transparent), transparent 70%),
+    linear-gradient(180deg, color-mix(in oklab, var(--bg) 94%, var(--primary) 6%), var(--bg));
+  background-attachment: fixed;
   min-height: 100dvh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
@@ -536,7 +543,7 @@ img, video { max-width: 100%; height: auto; }
   padding-inline: 16px;
 }
 :root {
-  --bottomnav-h: 82px;
+  --bottomnav-h: 96px;
 }
 
 @media (max-width: 768px) {
@@ -552,7 +559,7 @@ img, video { max-width: 100%; height: auto; }
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  padding: 8px 14px calc(10px + env(safe-area-inset-bottom));
   display: none;
   z-index: 1000;
   pointer-events: none;

@@ -36,7 +36,7 @@ import { ref as sref, uploadBytesResumable, getDownloadURL, listAll, deleteObjec
 
 import ThemePicker from "@/components/theme/ThemePicker";
 import { useTheme } from "@/components/theme/ThemeProvider";
-import type { ThemeMode } from "@/components/theme/ThemeProvider";
+import type { Palette, ThemeMode } from "@/components/theme/ThemeProvider";
 import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -55,6 +55,7 @@ type UserDoc = {
   prefs?: {
     units?: "metric" | "imperial";
     theme?: ThemeMode;
+    palette?: Palette | null;
     emailNotifications?: boolean;
   };
 };
@@ -78,7 +79,7 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { mode, setMode } = useTheme();
+  const { mode, setMode, palette } = useTheme();
   const { openLogin } = useAuthModal();
   const { user, loading } = useAuth();
 
@@ -178,11 +179,12 @@ export default function ProfilePage() {
           setUsername(d.username || "");
           setUnits(d.prefs?.units || "metric");
           const docTheme = d.prefs?.theme ?? null;
+          const docPalette = d.prefs?.palette ?? null;
           const storedMode =
             typeof window !== "undefined" ? (localStorage.getItem("theme.mode") as ThemeMode | null) : null;
           if (docTheme) {
             if (!storedMode || storedMode === docTheme) {
-              setMode(docTheme);
+              setMode(docTheme, docTheme === "custom" && docPalette ? { palette: docPalette } : undefined);
             }
           } else if (!storedMode) {
             setMode("system");
@@ -251,7 +253,8 @@ export default function ProfilePage() {
     setUploadProgress(0);
     setBusyUpload(true);
     try {
-      const r = sref(storage, `avatars/${me.uid}/avatar.jpg`);
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const r = sref(storage, `avatars/${me.uid}/avatar-${Date.now()}.${ext}`);
       const task = uploadBytesResumable(r, file, {
         contentType: file.type,
         cacheControl: "public,max-age=86400",
@@ -274,6 +277,14 @@ export default function ProfilePage() {
       const url = await getDownloadURL(task.snapshot.ref);
       await updateProfile(me, { photoURL: url });
       await updateDoc(doc(db, "users", me.uid), { photoURL: url });
+      await setDoc(
+        doc(db, "usersPublic", me.uid),
+        {
+          avatarURL: url,
+          photoURL: url,
+        },
+        { merge: true }
+      );
       setUserDoc((prev) => (prev ? { ...prev, photoURL: url } : prev));
       setFile(null);
       if (fileRef.current) fileRef.current.value = "";
@@ -303,6 +314,14 @@ export default function ProfilePage() {
       );
       await updateProfile(me, { photoURL: "" });
       await updateDoc(doc(db, "users", me.uid), { photoURL: null });
+      await setDoc(
+        doc(db, "usersPublic", me.uid),
+        {
+          avatarURL: null,
+          photoURL: null,
+        },
+        { merge: true }
+      );
       setUserDoc((prev) => (prev ? { ...prev, photoURL: null } : prev));
       setMsg("Profile photo removed.");
     } catch (error: unknown) {
@@ -354,7 +373,12 @@ export default function ProfilePage() {
             firstName: firstName.trim() || null,
             lastName: lastName.trim() || null,
             username: nextUsername || null,
-            prefs: { units, theme: mode, emailNotifications },
+            prefs: {
+              units,
+              theme: mode,
+              palette: mode === "custom" ? palette : null,
+              emailNotifications,
+            },
           },
           { merge: true }
         );
@@ -402,7 +426,12 @@ export default function ProfilePage() {
               firstName: firstName.trim() || null,
               lastName: lastName.trim() || null,
               username: appliedUsername,
-              prefs: { units, theme: mode, emailNotifications },
+              prefs: {
+                units,
+                theme: mode,
+                palette: mode === "custom" ? palette : undefined,
+                emailNotifications,
+              },
             }
           : prev
       );

@@ -429,25 +429,25 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
         <aside className="authModalBrand">
           <span className="authModalBadge">Clean Kitchen</span>
           <h2 className="authModalBrandTitle">
-            Cook smarter.
+            Plan your kitchen.
             <br />
-            Waste less.
+            Waste less food.
           </h2>
           <p className="authModalBrandCopy">
-            Pantry, recipes, and fitness in one deliberate workspace.
+            Keep your pantry, recipes, and fitness plans in one place.
           </p>
           <div className="authModalStats">
             <div>
-              <strong>Real-time</strong>
-              <span>pantry visibility</span>
+              <strong>Pantry</strong>
+              <span>track what you have</span>
             </div>
             <div>
-              <strong>Tailored</strong>
-              <span>recipe suggestions</span>
+              <strong>Recipes</strong>
+              <span>cook from your ingredients</span>
             </div>
             <div>
-              <strong>Simple</strong>
-              <span>daily planning</span>
+              <strong>Plans</strong>
+              <span>save meals and workouts</span>
             </div>
           </div>
         </aside>
@@ -466,10 +466,10 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
             </h1>
             <p className="authModalSubtitle">
               {mode === "login"
-                ? "Access your pantry, recipes, and saved progress."
+                ? "Open your saved recipes, pantry, and plans."
                 : phase === "verify"
-                ? "We sent a verification email so you can activate your profile."
-                : "Set up your profile and save your kitchen data across devices."}
+                ? "We sent you an email. Use the link inside to finish setting up your account."
+                : "Create a profile so your recipes, pantry, and plans stay saved."}
             </p>
           </header>
 
@@ -619,7 +619,7 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
               {registerInfo ? <p className="infoAlert">{registerInfo}</p> : null}
 
               <p className="verifyCopy">
-                Click the link in the email we just sent. Once verified, you can continue to onboarding.
+                Click the link in the email we just sent. After that, come back here and continue.
               </p>
 
               <div className="verifyActions">
@@ -649,7 +649,7 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
           )}
 
           <p className="legalCopy">
-            By continuing, you agree to use Clean Kitchen on this device.
+            You can browse without an account.
             {" "}
             <Link href="/recipes">Browse recipes first</Link>
           </p>
@@ -660,7 +660,7 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
         .authModalBackdrop {
           position: fixed;
           inset: 0;
-          z-index: 200;
+          z-index: 2100;
           display: grid;
           place-items: center;
           padding: 20px;
@@ -879,22 +879,67 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
         @media (max-width: 900px) {
           .authModalPanel {
             grid-template-columns: minmax(0, 1fr);
+            width: min(520px, 100%);
           }
           .authModalBrand {
-            gap: 18px;
+            display: none;
           }
         }
         @media (max-width: 640px) {
           .authModalBackdrop {
-            padding: 12px;
+            align-items: start;
+            padding: 10px;
+            overflow-y: auto;
           }
           .authModalPanel {
-            max-height: calc(100dvh - 24px);
-            border-radius: 24px;
+            max-height: none;
+            min-height: calc(100dvh - 20px);
+            border-radius: 22px;
+            overflow: visible;
+          }
+          .authModalClose {
+            top: 14px;
+            right: 14px;
+            width: 38px;
+            height: 38px;
+          }
+          .authModalForm {
+            padding: 28px 18px max(28px, calc(env(safe-area-inset-bottom) + 28px));
+            gap: 18px;
+          }
+          .authModalHeader {
+            padding-right: 42px;
+          }
+          .authModalHeader h1 {
+            font-size: 2rem;
+            line-height: 1.12;
+            letter-spacing: 0;
+          }
+          .authModalSubtitle {
+            font-size: 0.95rem;
+            line-height: 1.55;
+          }
+          .authFormStack {
+            gap: 14px;
           }
           .nameRow,
           .verifyActions {
             grid-template-columns: minmax(0, 1fr);
+          }
+          .legalCopy,
+          .switchCopy {
+            text-align: center;
+          }
+        }
+        @media (max-width: 380px) {
+          .authModalBackdrop {
+            padding: 0;
+          }
+          .authModalPanel {
+            min-height: 100dvh;
+            border-radius: 0;
+            border-left: 0;
+            border-right: 0;
           }
         }
       `}</style>

@@ -462,6 +462,14 @@ export default function PostThreadPage() {
         {post.text ? <p className="caption">{post.text}</p> : null}
 
         <section className="compose">
+          <div className="composeHead">
+            <span>Add a comment</span>
+            <small>
+              {me
+                ? "Share a quick thought, tip, or question."
+                : "Sign in when you want to join the conversation."}
+            </small>
+          </div>
           <div className="row">
             <textarea
               rows={3}
@@ -483,7 +491,9 @@ export default function PostThreadPage() {
         </section>
 
         <section className="toolbar">
-          <h2 className="h2">Comments</h2>
+          <h2 className="h2">
+            Comments <span>{sortedComments.length}</span>
+          </h2>
           <div className="tabs">
             <button
               className={`tab ${sort === "top" ? "on" : ""}`}
@@ -502,7 +512,7 @@ export default function PostThreadPage() {
 
         <section className="comments">
           {sortedComments.length === 0 ? (
-            <p className="muted">No comments yet.</p>
+            <p className="muted empty">No comments yet. Be the first to write one.</p>
           ) : (
             <ul className="clist">
               {sortedComments.map((comment) => (
@@ -524,18 +534,19 @@ export default function PostThreadPage() {
 
       <style jsx>{`
         .wrap {
-          max-width: 860px;
+          width: min(980px, 100%);
+          max-width: 980px;
           margin: 0 auto;
-          padding: 16px;
+          padding: 24px;
           color: var(--text);
         }
         .thread {
           display: grid;
-          gap: 18px;
-          background: var(--card);
+          gap: 22px;
+          background: color-mix(in oklab, var(--card) 94%, var(--primary) 6%);
           border: 1px solid var(--border);
-          border-radius: 16px;
-          padding: 18px;
+          border-radius: 20px;
+          padding: 26px;
           box-shadow: 0 12px 32px rgba(15, 23, 42, 0.2);
         }
         .head {
@@ -612,39 +623,80 @@ export default function PostThreadPage() {
         }
         .compose {
           display: grid;
-          gap: 10px;
+          gap: 12px;
+          padding: 16px;
+          border: 1px solid color-mix(in oklab, var(--border) 78%, transparent);
+          border-radius: 18px;
+          background: color-mix(in oklab, var(--bg-raised) 82%, var(--primary) 6%);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
+        .composeHead {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .composeHead span {
+          font-size: 16px;
+          font-weight: 900;
+        }
+        .composeHead small {
+          color: var(--muted);
+          font-size: 13px;
+          line-height: 1.4;
         }
         .row {
           display: grid;
           grid-template-columns: 1fr auto;
           gap: 10px;
-          align-items: end;
+          align-items: stretch;
         }
         textarea {
           border: 1px solid var(--border);
-          border-radius: 12px;
-          padding: 10px 12px;
+          border-radius: 16px;
+          padding: 14px 16px;
           resize: vertical;
-          min-height: 48px;
-          background: transparent;
+          min-height: 132px;
+          background: color-mix(in oklab, var(--bg) 88%, transparent);
           color: var(--text);
+          font: inherit;
+          font-size: 15px;
+          line-height: 1.5;
+        }
+        textarea:focus {
+          outline: none;
+          border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
+          box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 18%, transparent);
+        }
+        textarea:disabled {
+          opacity: 0.68;
+          cursor: not-allowed;
         }
         .ctrls {
           display: flex;
           gap: 10px;
+          align-items: flex-end;
         }
         .btn-primary {
           border: 1px solid var(--primary);
           background: var(--primary);
           color: var(--primary-contrast);
-          border-radius: 12px;
-          padding: 10px 14px;
+          border-radius: 14px;
+          padding: 0 18px;
+          min-height: 46px;
           font-weight: 800;
           cursor: pointer;
+          box-shadow: 0 12px 26px color-mix(in oklab, var(--primary) 24%, transparent);
+          transition: transform 0.12s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+        }
+        .btn-primary:active {
+          transform: translateY(1px);
         }
         .btn-primary:disabled {
           opacity: 0.6;
           cursor: not-allowed;
+          box-shadow: none;
         }
         .toolbar {
           display: flex;
@@ -676,8 +728,24 @@ export default function PostThreadPage() {
         }
         .h2 {
           margin: 0;
-          font-size: 18px;
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          font-size: 20px;
           font-weight: 900;
+        }
+        .h2 span {
+          display: inline-flex;
+          min-width: 28px;
+          height: 28px;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          border: 1px solid color-mix(in oklab, var(--primary) 25%, var(--border));
+          background: color-mix(in oklab, var(--primary) 13%, transparent);
+          color: var(--primary);
+          font-size: 13px;
+          padding: 0 8px;
         }
         .clist {
           list-style: none;
@@ -690,9 +758,68 @@ export default function PostThreadPage() {
           color: var(--muted);
           font-size: 14px;
         }
+        .empty {
+          margin: 0;
+          padding: 18px;
+          border: 1px dashed color-mix(in oklab, var(--border) 85%, transparent);
+          border-radius: 16px;
+          background: color-mix(in oklab, var(--bg-raised) 78%, transparent);
+          text-align: center;
+        }
+        @media (min-width: 900px) {
+          .thread {
+            padding: 30px;
+          }
+          .comments {
+            gap: 16px;
+          }
+          .clist {
+            gap: 16px;
+          }
+        }
         @media (max-width: 640px) {
+          .wrap {
+            padding: 12px;
+          }
+          .thread {
+            gap: 16px;
+            border-radius: 18px;
+            padding: 14px;
+          }
+          .compose {
+            padding: 12px;
+            border-radius: 16px;
+          }
+          .composeHead {
+            gap: 4px;
+          }
+          .composeHead span {
+            font-size: 15px;
+          }
+          .composeHead small {
+            font-size: 12px;
+          }
           .row {
             grid-template-columns: 1fr;
+          }
+          textarea {
+            min-height: 82px;
+            border-radius: 14px;
+            padding: 11px 12px;
+            font-size: 14px;
+          }
+          .ctrls {
+            justify-content: stretch;
+          }
+          .btn-primary {
+            width: 100%;
+            min-height: 42px;
+          }
+          .toolbar {
+            align-items: flex-start;
+          }
+          .h2 {
+            font-size: 18px;
           }
           .cell {
             height: 220px;
@@ -865,7 +992,7 @@ function CommentRow({
               type="text"
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder={meUid ? "Reply to this comment…" : "Sign in to reply"}
+              placeholder={meUid ? "Reply to this comment..." : "Sign in to reply"}
               disabled={!meUid}
             />
             <button
@@ -880,17 +1007,20 @@ function CommentRow({
 
       <style jsx>{`
         .citem {
-          border: 1px solid var(--border);
-          border-radius: 14px;
-          padding: 12px;
-          background: var(--card-bg);
+          border: 1px solid color-mix(in oklab, var(--border) 82%, transparent);
+          border-radius: 18px;
+          padding: 16px;
+          background: color-mix(in oklab, var(--card-bg) 92%, var(--primary) 4%);
           display: grid;
-          gap: 10px;
+          gap: 12px;
+          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
         }
         .ctop {
           display: flex;
-          flex-direction: column;
+          justify-content: space-between;
+          align-items: flex-start;
           gap: 8px;
+          flex-wrap: wrap;
         }
         .crow {
           display: flex;
@@ -903,6 +1033,7 @@ function CommentRow({
         .cname {
           font-weight: 800;
           color: var(--text);
+          font-size: 14px;
         }
         .cdot {
           opacity: 0.6;
@@ -915,11 +1046,19 @@ function CommentRow({
         .chip {
           border: 1px solid var(--border);
           border-radius: 999px;
-          padding: 4px 10px;
+          padding: 6px 11px;
           font-weight: 700;
-          background: transparent;
+          background: color-mix(in oklab, var(--bg-raised) 84%, transparent);
           color: var(--text);
           cursor: pointer;
+          transition: background 0.16s ease, border-color 0.16s ease, transform 0.12s ease;
+        }
+        .chip:hover {
+          background: color-mix(in oklab, var(--primary) 10%, var(--bg-raised));
+          border-color: color-mix(in oklab, var(--primary) 24%, var(--border));
+        }
+        .chip:active {
+          transform: translateY(1px);
         }
         .chip.on {
           background: color-mix(in oklab, var(--primary) 15%, transparent);
@@ -938,12 +1077,15 @@ function CommentRow({
         .ctext {
           margin: 0;
           white-space: pre-wrap;
+          word-break: break-word;
+          font-size: 15px;
+          line-height: 1.65;
         }
         .replyPanel {
-          border-top: 1px dashed var(--border);
-          padding-top: 10px;
+          border-top: 1px dashed color-mix(in oklab, var(--border) 86%, transparent);
+          padding-top: 12px;
           display: grid;
-          gap: 10px;
+          gap: 12px;
         }
         .rlist {
           list-style: none;
@@ -953,10 +1095,10 @@ function CommentRow({
           gap: 8px;
         }
         .ritem {
-          border: 1px solid var(--border);
-          border-radius: 10px;
-          padding: 8px 10px;
-          background: color-mix(in oklab, var(--card-bg) 85%, transparent);
+          border: 1px solid color-mix(in oklab, var(--border) 78%, transparent);
+          border-radius: 14px;
+          padding: 10px 12px;
+          background: color-mix(in oklab, var(--bg-raised) 86%, transparent);
         }
         .rhead {
           display: flex;
@@ -974,6 +1116,8 @@ function CommentRow({
         .rbubble {
           margin-top: 4px;
           white-space: pre-wrap;
+          word-break: break-word;
+          line-height: 1.55;
         }
         .rform {
           display: grid;
@@ -982,16 +1126,22 @@ function CommentRow({
         }
         .rform input {
           border: 1px solid var(--border);
-          border-radius: 10px;
-          padding: 8px;
-          background: transparent;
+          border-radius: 12px;
+          padding: 10px 12px;
+          background: color-mix(in oklab, var(--bg) 88%, transparent);
           color: var(--text);
+          font: inherit;
+        }
+        .rform input:focus {
+          outline: none;
+          border-color: color-mix(in oklab, var(--primary) 42%, var(--border));
+          box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 16%, transparent);
         }
         .btn-secondary {
           border: 1px solid var(--border);
-          border-radius: 10px;
-          padding: 8px 12px;
-          background: transparent;
+          border-radius: 12px;
+          padding: 10px 14px;
+          background: color-mix(in oklab, var(--bg-raised) 84%, transparent);
           color: var(--text);
           font-weight: 700;
           cursor: pointer;
@@ -1001,14 +1151,38 @@ function CommentRow({
           cursor: not-allowed;
         }
         @media (max-width: 540px) {
+          .citem {
+            border-radius: 16px;
+            padding: 12px;
+            gap: 10px;
+          }
+          .ctop {
+            flex-direction: column;
+          }
           .cactions {
             justify-content: flex-start;
+            gap: 6px;
           }
           .chip {
             font-size: 12px;
+            padding: 5px 9px;
+          }
+          .ctext {
+            font-size: 14px;
+            line-height: 1.55;
+          }
+          .replyPanel {
+            padding-top: 10px;
+          }
+          .ritem {
+            border-radius: 12px;
+            padding: 9px 10px;
           }
           .rform {
             grid-template-columns: 1fr;
+          }
+          .btn-secondary {
+            width: 100%;
           }
         }
       `}</style>

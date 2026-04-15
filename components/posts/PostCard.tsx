@@ -36,6 +36,15 @@ type Props = {
   onToggleLike?: (post: Post, liked: boolean) => Promise<void>|void;
 };
 
+function profileSlug(value?: string | null) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const withoutOrigin = raw.replace(/^https?:\/\/[^/]+/i, "");
+  const parts = withoutOrigin.split("/").filter(Boolean);
+  const last = parts[0] === "u" && parts[1] ? parts[1] : parts[parts.length - 1] || withoutOrigin;
+  return last.replace(/^@+/, "").trim();
+}
+
 function timeAgo(ts: Post["createdAt"]) {
   const secondsFromTimestamp = (value: unknown): number => {
     if (typeof value !== "object" || value === null) return 0;
@@ -303,7 +312,7 @@ export default function PostCard({
   }
 
   const displayName = author?.displayName || author?.username || "User";
-  const profileHref = `/u/${author?.username || post.uid || ""}`;
+  const profileHref = `/u/${profileSlug(author?.username) || profileSlug(post.uid)}`;
   const threadHref = `/posts/${post.id}`;
   const displayText = editing ? draft : justSaved ? draft : text || "";
 
@@ -973,5 +982,4 @@ export default function PostCard({
     </>
   );
 }
-
 

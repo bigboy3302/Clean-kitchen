@@ -20,21 +20,20 @@ export default function AuthShell({ title, subtitle, footer, children, errorBann
           <div className="authShell__brandTop">
             <span className="authShell__badge">Clean Kitchen</span>
             <h2 className="authShell__brandTitle">
-              Cook smarter.
+              Plan your kitchen.
               <br />
-              Waste less.
+              Waste less food.
             </h2>
             <p className="authShell__brandCopy">
-              Plan meals, track your pantry, and keep nutrition on target with a single dashboard built
-              for modern home cooks.
+              Keep your pantry, recipes, and meal planning together so it is easier to know what to cook next.
             </p>
           </div>
           <ul className="authShell__brandList">
-            <li>Real-time pantry and expiry tracking</li>
-            <li>Recipes curated from ingredients you already have</li>
-            <li>Personalised fitness and nutrition insights</li>
+            <li>Track what is in your pantry</li>
+            <li>Find recipes from ingredients you already have</li>
+            <li>Save meal and fitness plans in one account</li>
           </ul>
-          <p className="authShell__brandFoot">Join thousands making kitchen routines effortless.</p>
+          <p className="authShell__brandFoot">Your saved kitchen, ready on any device.</p>
         </aside>
 
         <div className="authShell__form">

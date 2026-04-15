@@ -36,6 +36,59 @@ const DARK: Palette = {
   ring: "#2563eb",
 };
 
+const RANDOM_PALETTES: Palette[] = [
+  {
+    primary: "#14b8a6",
+    primaryContrast: "#042f2e",
+    bg: "#08111f",
+    bg2: "#111c2f",
+    text: "#edfdfb",
+    muted: "#9fc7c1",
+    border: "#1f3b45",
+    ring: "#5eead4",
+  },
+  {
+    primary: "#f97316",
+    primaryContrast: "#fff7ed",
+    bg: "#130f1d",
+    bg2: "#201a2f",
+    text: "#fff7ed",
+    muted: "#c9b9a9",
+    border: "#3a2c35",
+    ring: "#fed7aa",
+  },
+  {
+    primary: "#a3e635",
+    primaryContrast: "#17230b",
+    bg: "#0b1510",
+    bg2: "#142319",
+    text: "#f5ffe8",
+    muted: "#b7c9ab",
+    border: "#2b3e2d",
+    ring: "#bef264",
+  },
+  {
+    primary: "#38bdf8",
+    primaryContrast: "#082f49",
+    bg: "#081526",
+    bg2: "#10233a",
+    text: "#eff8ff",
+    muted: "#a9bfd0",
+    border: "#223c55",
+    ring: "#7dd3fc",
+  },
+  {
+    primary: "#fb7185",
+    primaryContrast: "#fff1f2",
+    bg: "#180f19",
+    bg2: "#281728",
+    text: "#fff5f7",
+    muted: "#d0b5bf",
+    border: "#432537",
+    ring: "#fda4af",
+  },
+];
+
 type Ctx = {
   mode: ThemeMode;
   setMode: (m: ThemeMode, options?: { palette?: Palette; persistCustom?: boolean }) => void;
@@ -60,6 +113,8 @@ function applyCssVars(p: Palette, dataTheme: "light" | "dark" | "custom") {
   el.style.setProperty("--muted", p.muted);
   el.style.setProperty("--border", p.border);
   el.style.setProperty("--ring", p.ring);
+  el.style.setProperty("--bg-accent", p.primary);
+  el.style.setProperty("--bg-accent-2", p.ring);
 
   el.style.setProperty("--card-bg", p.bg2);
   el.style.setProperty("--card-border", p.border);
@@ -69,6 +124,10 @@ function applyCssVars(p: Palette, dataTheme: "light" | "dark" | "custom") {
 
   const isDark = dataTheme === "dark" || (dataTheme === "custom" && isPerceivedDark(p));
   el.style.colorScheme = isDark ? "dark" : "light";
+}
+
+function randomPalette() {
+  return RANDOM_PALETTES[Math.floor(Math.random() * RANDOM_PALETTES.length)] ?? DARK;
 }
 
 function isPerceivedDark(p: Palette) {
@@ -131,7 +190,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const mql = window.matchMedia("(prefers-color-scheme: dark)");
     mqlRef.current = mql;
 
-    const savedMode = (localStorage.getItem(LS_MODE) as ThemeMode) || "system";
+    const savedMode = localStorage.getItem(LS_MODE) as ThemeMode | null;
     const savedCustom = localStorage.getItem(LS_CUSTOM);
     if (savedCustom) {
       try {
@@ -145,7 +204,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
     const systemPalette = mql.matches ? DARK : LIGHT;
     const initialPalette =
-      savedMode === "dark"
+      !savedMode
+        ? randomPalette()
+        : savedMode === "dark"
         ? DARK
         : savedMode === "light"
         ? LIGHT
@@ -153,11 +214,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         ? customRef.current
         : systemPalette;
 
-    modeRef.current = savedMode;
-    setModeState(savedMode);
+    const initialMode = savedMode ?? "custom";
+    modeRef.current = initialMode;
+    setModeState(initialMode);
     setPaletteState(initialPalette);
     const attr: "light" | "dark" | "custom" =
-      savedMode === "system"
+      !savedMode
+        ? "custom"
+        : savedMode === "system"
         ? mql.matches
           ? "dark"
           : "light"

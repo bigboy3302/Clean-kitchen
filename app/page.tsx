@@ -6,20 +6,20 @@ import { useAuthModal } from "@/context/AuthModalContext";
 
 const featureCards = [
   {
-    title: "Recipes from what you have",
-    copy: "Browse ideas, save favorites, and turn pantry ingredients into meals without blocking guests out of the app.",
+    title: "Cook with what you already have",
+    copy: "Find recipe ideas from your pantry, then save the ones you want to make again.",
     href: "/recipes",
     cta: "Browse recipes",
   },
   {
-    title: "Fitness that stays attached to food",
-    copy: "Explore workouts, weekly plans, and training ideas before you ever create an account.",
+    title: "Keep food and fitness together",
+    copy: "Check workouts, weekly plans, and simple training ideas in the same place as your meals.",
     href: "/fitness",
     cta: "Open fitness",
   },
   {
-    title: "Pantry-first planning",
-    copy: "Track ingredients, spot expiry risk, and see the system that ties your kitchen together.",
+    title: "Know what is in your kitchen",
+    copy: "Track ingredients, catch food before it expires, and plan meals with less guessing.",
     href: "/pantry",
     cta: "View pantry",
   },
@@ -33,10 +33,10 @@ export default function HomePage() {
       <section className="hero">
         <div className="heroCopy">
           <span className="eyebrow">Clean Kitchen</span>
-          <h1>Explore the app before you sign in.</h1>
+          <h1>Plan meals, use your pantry, and stay on track.</h1>
           <p>
-            Browse recipes, check fitness plans, and look through the product without the modal hijacking the page.
-            Account creation is only required when you want to save, post, or publish.
+            Browse recipes, check fitness plans, and see how Clean Kitchen works before you make an
+            account. Sign in only when you want to save your progress or add your own content.
           </p>
           <div className="heroActions">
             <button type="button" className="primaryCta" onClick={() => openRegister("/")}>
@@ -59,12 +59,12 @@ export default function HomePage() {
             <Image src="/logo.svg" alt="" width={220} height={220} priority />
           </div>
           <div className="artCard">
-            <strong>Public browsing</strong>
-            <span>Users can inspect the product first.</span>
+            <strong>Try it first</strong>
+            <span>Look around before creating an account.</span>
           </div>
           <div className="artCard">
-            <strong>Modal gating</strong>
-            <span>Only restricted actions trigger auth.</span>
+            <strong>Save when ready</strong>
+            <span>Sign in when you want to keep something.</span>
           </div>
         </div>
       </section>
@@ -81,12 +81,12 @@ export default function HomePage() {
 
       <section className="ctaBand">
         <div>
-          <span className="eyebrow">Restricted actions</span>
-          <h2>Saving, posting, and publishing still require auth.</h2>
-          <p>That keeps the app explorable while protecting state-changing actions.</p>
+          <span className="eyebrow">Your account</span>
+          <h2>Create an account when you are ready to save.</h2>
+          <p>Recipes, pantry items, posts, and plans stay connected to your profile.</p>
         </div>
         <button type="button" className="secondaryCta" onClick={() => openLogin("/")}>
-          Open auth modal
+          Sign in
         </button>
       </section>
 
@@ -128,9 +128,10 @@ export default function HomePage() {
         }
         .heroCopy h1 {
           margin: 0;
-          font-size: clamp(36px, 5vw, 62px);
-          line-height: 0.98;
-          letter-spacing: -0.04em;
+          max-width: 12ch;
+          font-size: clamp(36px, 5vw, 58px);
+          line-height: 1.06;
+          letter-spacing: -0.02em;
         }
         .heroCopy p {
           margin: 0;
@@ -247,9 +248,41 @@ export default function HomePage() {
           .featureGrid {
             grid-template-columns: minmax(0, 1fr);
           }
+          .heroArt {
+            display: none;
+          }
           .ctaBand {
             flex-direction: column;
             align-items: flex-start;
+          }
+        }
+        @media (max-width: 560px) {
+          .home {
+            gap: 18px;
+            padding-top: 4px;
+          }
+          .heroCopy,
+          .featureCard,
+          .ctaBand {
+            border-radius: 18px;
+          }
+          .heroCopy {
+            padding: 24px 20px;
+          }
+          .heroCopy h1 {
+            max-width: 100%;
+            font-size: 2.35rem;
+          }
+          .heroActions > * {
+            flex: 1 1 150px;
+          }
+          .quickLinks :global(a) {
+            flex: 1 1 calc(50% - 8px);
+            text-align: center;
+          }
+          .featureCard,
+          .ctaBand {
+            padding: 20px;
           }
         }
       `}</style>

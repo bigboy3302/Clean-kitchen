@@ -191,11 +191,22 @@ const pickRecipeCover = (recipe: PublicRecipe): string | null => {
   return null;
 };
 
+function normalizeProfileSlug(value: string) {
+  const decoded = decodeURIComponent(String(value || '')).trim();
+  if (!decoded) return '';
+  const withoutOrigin = decoded.replace(/^https?:\/\/[^/]+/i, '');
+  const parts = withoutOrigin.split('/').filter(Boolean);
+  if (parts[0] === 'u' && parts[1]) return parts[1].replace(/^@+/, '');
+  return (parts[parts.length - 1] || withoutOrigin).replace(/^@+/, '');
+}
+
 export default function PublicProfilePage() {
   const params = useParams<{ slug: string }>();
-  const slug = params?.slug ?? '';
+  const slug = normalizeProfileSlug(params?.slug ?? '');
 
   const [uid, setUid] = useState<string | null>(null);
+  const [resolving, setResolving] = useState(true);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [posts, setPosts] = useState<PublicPost[]>([]);
   const [recipes, setRecipes] = useState<PublicRecipe[]>([]);
@@ -205,6 +216,11 @@ export default function PublicProfilePage() {
   useEffect(() => {
     let cancelled = false;
     async function resolveUid() {
+      setResolving(true);
+      setErr(null);
+      setUid(null);
+      setProfile(null);
+      setProfileLoaded(false);
       try {
         if (!slug) return;
         const usernameSnap = await getDoc(doc(db, 'usernames', String(slug)));
@@ -219,6 +235,8 @@ export default function PublicProfilePage() {
         if (cancelled) return;
         const message = error instanceof Error ? error.message : 'Failed to resolve profile.';
         setErr(message);
+      } finally {
+        if (!cancelled) setResolving(false);
       }
     }
     resolveUid();
@@ -230,18 +248,27 @@ export default function PublicProfilePage() {
   useEffect(() => {
     if (!uid) return;
     let cancelled = false;
+    setProfileLoaded(false);
     getDoc(doc(db, 'usersPublic', uid))
       .then((snapshot) => {
-        if (cancelled || !snapshot.exists()) return;
+        if (cancelled) return;
+        if (!snapshot.exists()) {
+          setProfileLoaded(true);
+          return;
+        }
         const data = snapshot.data() as DocumentData;
         setProfile({
           displayName: typeof data.displayName === 'string' ? data.displayName : null,
           username: typeof data.username === 'string' ? data.username : null,
           avatarURL: typeof data.avatarURL === 'string' ? data.avatarURL : null,
         });
+        setProfileLoaded(true);
       })
       .catch((error: FirestoreError) => {
         if (!cancelled) setErr(error.message);
+      })
+      .finally(() => {
+        if (!cancelled) setProfileLoaded(true);
       });
     return () => {
       cancelled = true;
@@ -310,11 +337,11 @@ export default function PublicProfilePage() {
     );
   }
 
-  if (!slug) {
+  if (!slug || resolving || (uid && !profileLoaded && posts.length === 0 && recipes.length === 0)) {
     return (
       <main className="wrap">
         <div className="card">
-          <p className="muted">Loading…</p>
+          <p className="muted">Loading profile...</p>
         </div>
       </main>
     );

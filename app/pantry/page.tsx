@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FirebaseError } from "firebase/app";
-import { useRouter } from "next/navigation";
 import {
   addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query,
   serverTimestamp, Timestamp, updateDoc, where, getDocs, limit, increment
 } from "firebase/firestore";
+import type { User } from "firebase/auth";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebas1e";
 
@@ -18,6 +18,7 @@ import { fetchNutritionByBarcode, NutritionInfo } from "@/lib/nutrition";
 import Fridge from "@/components/pantry/Fridge";
 import TrashCan from "@/components/pantry/TrashCan";
 import HealthCoach from "@/components/pantry/HealthCoach";
+import { useAuthModal } from "@/context/AuthModalContext";
 
 type TSLike =
   | Timestamp
@@ -160,7 +161,7 @@ type PantryItemRecord = Omit<PantryItemPage, "id">;
 type ConsumptionLogRecord = Omit<ConsumptionLog, "id">;
 
 export default function PantryPage() {
-  const router = useRouter();
+  const { openLogin } = useAuthModal();
 
   const [name, setName] = useState("");
   const [qty, setQty] = useState<number>(1);
@@ -176,6 +177,8 @@ export default function PantryPage() {
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [me, setMe] = useState<User | null>(auth.currentUser);
+  const [authReady, setAuthReady] = useState(false);
   const [items, setItems] = useState<PantryItemPage[]>([]);
   const stopRef = useRef<null | (() => void)>(null);
 
@@ -191,8 +194,16 @@ export default function PantryPage() {
 
   useEffect(() => {
     const stopAuth = onAuthStateChanged(auth, (u) => {
+      setMe(u);
+      setAuthReady(true);
       if (stopRef.current) { stopRef.current(); stopRef.current = null; }
-      if (!u) { router.replace("/auth/login"); setItems([]); setLogs([]); setLogErr(null); setLogOk(null); return; }
+      if (!u) {
+        setItems([]);
+        setLogs([]);
+        setLogErr(null);
+        setLogOk(null);
+        return;
+      }
 
       const qy = query(
         collection(db, "pantryItems"),
@@ -233,7 +244,7 @@ export default function PantryPage() {
       stopRef.current = () => { stopItems(); stopLogs(); };
     });
     return () => { if (stopRef.current) stopRef.current(); stopAuth(); };
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     const id = setTimeout(async () => {
@@ -267,10 +278,15 @@ export default function PantryPage() {
 
   const isPast = (s: string) => !!s && s < minDate;
 
+  function requireLogin(message = "Sign in to save pantry changes.") {
+    setErr(message);
+    openLogin("/pantry");
+  }
+
   async function addOrMergeItem() {
     setErr(null);
     const u = auth.currentUser;
-    if (!u) { router.replace("/auth/login"); return; }
+    if (!u) { requireLogin("Sign in to add items to your pantry."); return; }
 
     const cleanedName = capFirst(normalizeProductName(name.trim()));
     if (!cleanedName) { setErr("Please enter product name."); return; }
@@ -338,6 +354,10 @@ export default function PantryPage() {
   }
 
   async function saveItem(id: string, patch: { name: string; quantity: number; expiresAt: TSLike | null }) {
+    if (!auth.currentUser) {
+      requireLogin("Sign in to edit pantry items.");
+      return;
+    }
     const cleaned = capFirst(normalizeProductName(patch.name || ""));
     const toWrite: {
       name: string;
@@ -354,6 +374,10 @@ export default function PantryPage() {
   }
 
   async function removeItem(id: string) {
+    if (!auth.currentUser) {
+      requireLogin("Sign in to delete pantry items.");
+      return;
+    }
     try {
       await deleteDoc(doc(db, "pantryItems", id));
     } catch (error) {
@@ -386,7 +410,7 @@ export default function PantryPage() {
 
   async function logConsumptionForItem(it: PantryItemPage, payload: { grams: number; nutrients: { sugars_g: number; satFat_g: number; sodium_g: number; kcal: number }}) {
     const u = auth.currentUser;
-    if (!u) { router.replace("/auth/login"); return; }
+    if (!u) { requireLogin("Sign in to log what you consume."); return; }
     try {
       setLogErr(null);
       setLogOk(null);
@@ -468,6 +492,18 @@ export default function PantryPage() {
         <div className="stat"><div className="sTop"><span className="dot dot-warn" /> Expired</div><div className="sNum">{expired.length}</div></div>
         <div className="stat"><div className="sTop"><span className="dot" /> Total</div><div className="sNum">{items.length}</div></div>
       </section>
+
+      {authReady && !me ? (
+        <section className="guestNotice">
+          <div>
+            <strong>Browsing as a guest</strong>
+            <p>You can look around the pantry page. Sign in when you want to scan, save, edit, or track your own items.</p>
+          </div>
+          <button type="button" className="guestBtn" onClick={() => openLogin("/pantry")}>
+            Sign in
+          </button>
+        </section>
+      ) : null}
 
       <HealthCoach
         week={{ title: "This week", totals: totalsWeek }}
@@ -552,7 +588,18 @@ export default function PantryPage() {
 
           <div className="scannerCol">
             <label className="label">Scan with camera</label>
-            <div className="scanner"><BarcodeScanner key={scannerKey} autoStart={scannerAutoStart} onDetected={handleDetected} /></div>
+            {me ? (
+              <div className="scanner"><BarcodeScanner key={scannerKey} autoStart={scannerAutoStart} onDetected={handleDetected} /></div>
+            ) : (
+              <div className="scanner lockedScanner">
+                <div className="lockIcon" aria-hidden>!</div>
+                <strong>Camera is for signed-in users</strong>
+                <p>Sign in to scan barcodes and save products to your pantry.</p>
+                <button type="button" className="btn ghost" onClick={() => requireLogin("Sign in to use the camera scanner.")}>
+                  Sign in to scan
+                </button>
+              </div>
+            )}
             <div className="rowHint">
               {nutriBusy ? <span className="muted small">Looking up nutrition data</span> : <span className="muted small">Tip: hold steady 20-30cm away</span>}
               {nutriErr ? <span className="error small">{nutriErr}</span> : null}
@@ -684,6 +731,49 @@ export default function PantryPage() {
         .dot-warn { background: #f59e0b; }
         .sNum { font-weight: 900; font-size: 24px; line-height: 1; margin-top: 6px; }
 
+        .guestNotice {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 14px;
+          margin: -4px 0 18px;
+          padding: 14px 16px;
+          border: 1px solid color-mix(in oklab, var(--primary) 34%, var(--border));
+          border-radius: 18px;
+          background:
+            linear-gradient(135deg, color-mix(in oklab, var(--primary) 14%, var(--card-bg)), color-mix(in oklab, var(--bg2) 90%, transparent));
+          box-shadow: 0 14px 34px color-mix(in oklab, var(--primary) 10%, transparent);
+        }
+        .guestNotice strong {
+          color: var(--text);
+          font-weight: 900;
+        }
+        .guestNotice p {
+          margin: 3px 0 0;
+          color: var(--muted);
+          line-height: 1.45;
+          font-size: 0.92rem;
+        }
+        .guestBtn {
+          border: 0;
+          border-radius: 999px;
+          padding: 10px 16px;
+          background: var(--primary);
+          color: var(--primary-contrast);
+          font-weight: 900;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+        @media (max-width: 620px) {
+          .guestNotice {
+            align-items: stretch;
+            flex-direction: column;
+          }
+          .guestBtn {
+            width: 100%;
+          }
+        }
+
         .card { border: 1px solid var(--border); background: linear-gradient(180deg, color-mix(in oklab, var(--card-bg) 92%, transparent), var(--card-bg)); border-radius: 20px; padding: 16px; box-shadow: 0 14px 40px rgba(2,6,23,.06), 0 2px 10px rgba(2,6,23,.04); }
 
         .addCard { margin-bottom: 24px; position: relative; }
@@ -710,6 +800,41 @@ export default function PantryPage() {
 
         .scannerCol { display:grid; gap:8px; }
         .scanner { border:1px dashed var(--border); background: var(--bg); border-radius: 14px; padding: 8px; }
+        .lockedScanner {
+          min-height: 166px;
+          display: grid;
+          place-items: center;
+          align-content: center;
+          gap: 8px;
+          text-align: center;
+          padding: 18px;
+          border-style: solid;
+          background:
+            radial-gradient(circle at 50% 0%, color-mix(in oklab, var(--primary) 18%, transparent), transparent 62%),
+            color-mix(in oklab, var(--bg) 92%, transparent);
+        }
+        .lockedScanner strong {
+          color: var(--text);
+          font-weight: 900;
+        }
+        .lockedScanner p {
+          max-width: 28ch;
+          margin: 0;
+          color: var(--muted);
+          font-size: 0.88rem;
+          line-height: 1.45;
+        }
+        .lockIcon {
+          width: 40px;
+          height: 40px;
+          display: grid;
+          place-items: center;
+          border-radius: 16px;
+          background: color-mix(in oklab, var(--primary) 16%, var(--bg2));
+          color: var(--primary);
+          font-size: 1.35rem;
+          font-weight: 900;
+        }
         .rowHint { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
         .muted { color: var(--muted); }
         .small { font-size:12px; }
