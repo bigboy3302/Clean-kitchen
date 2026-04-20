@@ -517,30 +517,39 @@ export default function WorkoutGrid({ searchTerm, onClearSearch, initialBodyPart
                     </label>
                     <label className="creatorField">
                       <span>Body part</span>
-                      <input
-                        type="text"
+                      <select
                         value={creator.bodyPart}
                         onChange={(event) => updateCreator("bodyPart", event.currentTarget.value)}
-                        placeholder="Full body"
-                      />
+                      >
+                        <option value="">Select body part</option>
+                        {bodyParts.map((option) => (
+                          <option key={option} value={option}>{titleCase(option)}</option>
+                        ))}
+                      </select>
                     </label>
                     <label className="creatorField">
                       <span>Target muscle</span>
-                      <input
-                        type="text"
+                      <select
                         value={creator.target}
                         onChange={(event) => updateCreator("target", event.currentTarget.value)}
-                        placeholder="Chest / core"
-                      />
+                      >
+                        <option value="">Select target muscle</option>
+                        {targets.map((option) => (
+                          <option key={option} value={option}>{titleCase(option)}</option>
+                        ))}
+                      </select>
                     </label>
                     <label className="creatorField">
                       <span>Equipment</span>
-                      <input
-                        type="text"
+                      <select
                         value={creator.equipment}
                         onChange={(event) => updateCreator("equipment", event.currentTarget.value)}
-                        placeholder="Bodyweight"
-                      />
+                      >
+                        <option value="">Select equipment</option>
+                        {equipment.map((option) => (
+                          <option key={option} value={option}>{titleCase(option)}</option>
+                        ))}
+                      </select>
                     </label>
                   </div>
                   <label className="creatorField">
@@ -1043,13 +1052,15 @@ export default function WorkoutGrid({ searchTerm, onClearSearch, initialBodyPart
           color: var(--text);
         }
         .creatorField input,
-        .creatorField textarea {
+        .creatorField textarea,
+        .creatorField select {
           border-radius: 14px;
           border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
           background: var(--bg);
           color: var(--text);
           padding: 10px 12px;
           font: inherit;
+          appearance: none;
         }
         .creatorField textarea {
           min-height: 120px;
@@ -1266,7 +1277,7 @@ function WorkoutCard({ workout, saved, busyId, onOpen, onSave }: CardProps) {
               alt={workout.title}
               fill
               sizes="(max-width: 640px) 50vw, 33vw"
-              unoptimized={imageSrc.includes("ytimg.com")}
+              unoptimized={imageSrc.includes("ytimg.com") || imageSrc.startsWith("/api/")}
               onError={(event) => {
                 if (event.currentTarget instanceof HTMLImageElement) {
                   event.currentTarget.src = "/placeholder.png";
@@ -1501,7 +1512,7 @@ function DetailDialog({ item, onClose, onSave, onDelete, onAddToToday, busyId }:
                   alt={workout.title}
                   fill
                   sizes="(max-width: 768px) 100vw, 60vw"
-                  unoptimized={imageSrc.includes("ytimg.com")}
+                  unoptimized={imageSrc.includes("ytimg.com") || imageSrc.startsWith("/api/")}
                   onError={(event) => {
                     if (event.currentTarget instanceof HTMLImageElement) {
                       event.currentTarget.src = "/placeholder.png";
