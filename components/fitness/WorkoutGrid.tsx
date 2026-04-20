@@ -12,6 +12,7 @@ import type {
   WorkoutContent,
   WorkoutSearchFilters,
 } from "@/lib/workouts/types";
+import { getDirectWorkoutVideoUrl, getYouTubeEmbedUrl } from "@/lib/workouts/media";
 import { addExerciseToToday } from "@/lib/fitness/store";
 import { auth } from "@/lib/firebas1e";
 import { uploadWorkoutMedia } from "@/lib/uploads";
@@ -1236,6 +1237,7 @@ type CardProps = {
 
 function WorkoutCard({ workout, saved, busyId, onOpen, onSave }: CardProps) {
   const busy = busyId === workout.id + "public" || busyId === workout.id + "private" || busyId === saved?.id;
+  const imageSrc = workout.mediaUrl || workout.thumbnailUrl;
 
   const tags = [
     workout.bodyPart,
@@ -1255,15 +1257,16 @@ function WorkoutCard({ workout, saved, busyId, onOpen, onSave }: CardProps) {
         onKeyDown={(event) => event.key === "Enter" && onOpen()}
         aria-label={`View ${workout.title}`}
       >
-        {workout.mediaUrl ? (
-          workout.mediaType === "mp4" ? (
+        {imageSrc ? (
+          workout.mediaUrl && workout.mediaType === "mp4" ? (
             <video src={workout.mediaUrl} muted loop playsInline autoPlay poster={workout.previewUrl || undefined} />
           ) : (
             <Image
-              src={workout.mediaUrl}
+              src={imageSrc}
               alt={workout.title}
               fill
               sizes="(max-width: 640px) 50vw, 33vw"
+              unoptimized={imageSrc.includes("ytimg.com")}
               onError={(event) => {
                 if (event.currentTarget instanceof HTMLImageElement) {
                   event.currentTarget.src = "/placeholder.png";
@@ -1441,6 +1444,9 @@ function DetailDialog({ item, onClose, onSave, onDelete, onAddToToday, busyId }:
   const panelRef = useRef<HTMLDivElement | null>(null);
   const { workout, saved, community } = item;
   const busy = busyId === workout.id + "public" || busyId === workout.id + "private" || busyId === saved?.id;
+  const tutorialUrl = getDirectWorkoutVideoUrl(workout.title, workout.externalUrl);
+  const ytEmbedUrl = getYouTubeEmbedUrl(tutorialUrl);
+  const imageSrc = workout.mediaUrl || workout.thumbnailUrl;
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -1458,9 +1464,6 @@ function DetailDialog({ item, onClose, onSave, onDelete, onAddToToday, busyId }:
       document.body.style.overflow = previous;
     };
   }, []);
-
-  const ytEmbedUrl = getYouTubeEmbedUrl(workout.externalUrl);
-  const ytSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(workout.title + " exercise tutorial")}`;
 
   const tags = [
     workout.bodyPart,
@@ -1489,15 +1492,16 @@ function DetailDialog({ item, onClose, onSave, onDelete, onAddToToday, busyId }:
         <div className="panelScroll">
           {/* Media */}
           <div className="media">
-            {workout.mediaUrl ? (
-              workout.mediaType === "mp4" ? (
+            {imageSrc ? (
+              workout.mediaUrl && workout.mediaType === "mp4" ? (
                 <video src={workout.mediaUrl} muted loop playsInline autoPlay poster={workout.previewUrl || undefined} />
               ) : (
                 <Image
-                  src={workout.mediaUrl}
+                  src={imageSrc}
                   alt={workout.title}
                   fill
                   sizes="(max-width: 768px) 100vw, 60vw"
+                  unoptimized={imageSrc.includes("ytimg.com")}
                   onError={(event) => {
                     if (event.currentTarget instanceof HTMLImageElement) {
                       event.currentTarget.src = "/placeholder.png";
@@ -1550,9 +1554,9 @@ function DetailDialog({ item, onClose, onSave, onDelete, onAddToToday, busyId }:
                     allowFullScreen
                   />
                 </div>
-              ) : (
+              ) : tutorialUrl ? (
                 <a
-                  href={ytSearchUrl}
+                  href={tutorialUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="ytSearch"
@@ -1562,8 +1566,10 @@ function DetailDialog({ item, onClose, onSave, onDelete, onAddToToday, busyId }:
                     <polygon fill="#ff0000" points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" />
                   </svg>
                   Watch on YouTube
-                  <span className="ytQuery">&ldquo;{workout.title} tutorial&rdquo;</span>
+                  <span className="ytQuery">Open the full tutorial video</span>
                 </a>
+              ) : (
+                <p className="ytUnavailable">Tutorial video unavailable for this workout.</p>
               )}
             </div>
           </div>
@@ -1780,6 +1786,11 @@ function DetailDialog({ item, onClose, onSave, onDelete, onAddToToday, busyId }:
           font-weight: 400;
           opacity: 0.85;
         }
+        .ytUnavailable {
+          margin: 0;
+          color: var(--muted);
+          font-size: 0.92rem;
+        }
         .foot {
           display: flex;
           justify-content: space-between;
@@ -1920,13 +1931,6 @@ function SkeletonCards() {
       ))}
     </>
   );
-}
-
-function getYouTubeEmbedUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([A-Za-z0-9_-]{11})/);
-  if (!match) return null;
-  return `https://www.youtube.com/embed/${match[1]}?rel=0`;
 }
 
 function snippet(text: string, limit = 160) {

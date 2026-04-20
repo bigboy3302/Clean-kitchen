@@ -16,11 +16,12 @@ export async function GET(req: NextRequest) {
     const snapshot = await db
       .collection(COLLECTION)
       .where("visibility", "==", "public")
-      .orderBy("updatedAt", "desc")
       .limit(60)
       .get();
 
-    const items = snapshot.docs.map((doc) => toRecord(doc.id, doc.data()));
+    const items = snapshot.docs
+      .map((doc) => toRecord(doc.id, doc.data()))
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
     return NextResponse.json({ items });
   } catch (error) {
     console.error("GET /api/saved-workouts/public failed", error);

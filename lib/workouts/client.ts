@@ -6,7 +6,6 @@ import {
   getDoc,
   getDocs,
   limit as limitQuery,
-  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -144,19 +143,19 @@ async function fetchOwnerProfile(uid: string): Promise<SavedWorkoutOwner> {
 
 async function fetchSavedWorkoutsDirect(kind: "me" | "public"): Promise<SavedWorkoutRecord[]> {
   const base = collection(db, SAVED_COLLECTION);
-  const constraints = [orderBy("updatedAt", "desc"), limitQuery(MAX_RESULTS)];
 
   let composed;
   if (kind === "me") {
     const current = auth.currentUser;
     if (!current) throw new Error("AUTH_REQUIRED");
-    composed = query(base, where("uid", "==", current.uid), ...constraints);
+    composed = query(base, where("uid", "==", current.uid), limitQuery(MAX_RESULTS));
   } else {
-    composed = query(base, where("visibility", "==", "public"), ...constraints);
+    composed = query(base, where("visibility", "==", "public"), limitQuery(MAX_RESULTS));
   }
 
   const snap = await getDocs(composed);
-  return snap.docs.map((docSnap) => mapClientRecord(docSnap.id, docSnap.data()));
+  const records = snap.docs.map((docSnap) => mapClientRecord(docSnap.id, docSnap.data()));
+  return records.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 
 async function fetchSavedWorkoutsApi(kind: "me" | "public") {

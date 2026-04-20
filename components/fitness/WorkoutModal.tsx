@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import type { Goal } from "@/lib/fitness/calc";
+import { getDirectWorkoutVideoUrl, getYouTubeEmbedUrl, getYouTubeThumbnailUrl } from "@/lib/workouts/media";
 
 type Exercise = {
   id: string | number;
@@ -30,21 +31,16 @@ export default function WorkoutModal({ exercise, goal, onClose }: Props) {
     return value.length ? value.charAt(0).toUpperCase() + value.slice(1) : value;
   }
 
-  const mediaSrc = (ex: Exercise) =>
-    ex.gifUrl
-      ? `/api/workouts/gif?src=${encodeURIComponent(ex.gifUrl)}`
-      : ex.imageThumbnailUrl
-      ? `/api/workouts/gif?src=${encodeURIComponent(ex.imageThumbnailUrl)}`
-      : ex.imageUrl
-      ? `/api/workouts/gif?src=${encodeURIComponent(ex.imageUrl)}`
-      : ex.id
-      ? `/api/workouts/gif?id=${encodeURIComponent(ex.id)}`
-      : "/placeholder.png";
-
-  const heroSrc = mediaSrc(exercise);
-
-  const ytEmbedUrl = exercise.videoUrl ? getYouTubeEmbedUrl(exercise.videoUrl) : null;
-  const ytSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(exercise.name + " exercise tutorial")}`;
+  const tutorialUrl = getDirectWorkoutVideoUrl(exercise.name, exercise.videoUrl);
+  const ytEmbedUrl = getYouTubeEmbedUrl(tutorialUrl);
+  const heroSrc =
+    exercise.gifUrl
+      ? `/api/workouts/gif?src=${encodeURIComponent(exercise.gifUrl)}`
+      : exercise.imageThumbnailUrl
+      ? `/api/workouts/gif?src=${encodeURIComponent(exercise.imageThumbnailUrl)}`
+      : exercise.imageUrl
+      ? `/api/workouts/gif?src=${encodeURIComponent(exercise.imageUrl)}`
+      : getYouTubeThumbnailUrl(tutorialUrl) || "/placeholder.png";
 
   const tags = [
     exercise.bodyPart,
@@ -108,15 +104,17 @@ export default function WorkoutModal({ exercise, goal, onClose }: Props) {
                   allowFullScreen
                 />
               </div>
-            ) : (
-              <a href={ytSearchUrl} target="_blank" rel="noopener noreferrer" className="ytSearch">
+            ) : tutorialUrl ? (
+              <a href={tutorialUrl} target="_blank" rel="noopener noreferrer" className="ytSearch">
                 <svg aria-hidden="true" viewBox="0 0 24 24" className="ytIcon">
                   <path fill="#fff" d="M22.54 6.42a2.78 2.78 0 0 0-1.94-1.96C18.88 4 12 4 12 4s-6.88 0-8.6.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.94 1.97C5.12 20 12 20 12 20s6.88 0 8.6-.45a2.78 2.78 0 0 0 1.94-1.97A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z" />
                   <polygon fill="#ff0000" points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" />
                 </svg>
                 Watch on YouTube
-                <span className="ytQuery">&ldquo;{cap(exercise.name)} tutorial&rdquo;</span>
+                <span className="ytQuery">Open the full tutorial video</span>
               </a>
+            ) : (
+              <p className="muted">Tutorial video unavailable.</p>
             )}
           </div>
         </div>
@@ -324,10 +322,4 @@ export default function WorkoutModal({ exercise, goal, onClose }: Props) {
       `}</style>
     </div>
   );
-}
-
-function getYouTubeEmbedUrl(url: string): string | null {
-  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([A-Za-z0-9_-]{11})/);
-  if (!match) return null;
-  return `https://www.youtube.com/embed/${match[1]}?rel=0`;
 }

@@ -40,24 +40,15 @@ export function sanitizeWorkoutContent(workout?: WorkoutContent | null): Workout
     target: clamp(workout.target),
     equipment: clamp(workout.equipment),
     source: clamp(workout.source) || "exerciseDB",
-    primaryMuscles: Array.isArray(workout.primaryMuscles)
-      ? workout.primaryMuscles
-          .filter((item) => typeof item === "string" && item.trim())
-          .map((item) => item.trim())
-          .slice(0, 8)
-      : undefined,
-    secondaryMuscles: Array.isArray(workout.secondaryMuscles)
-      ? workout.secondaryMuscles
-          .filter((item) => typeof item === "string" && item.trim())
-          .map((item) => item.trim())
-          .slice(0, 8)
-      : undefined,
-    equipmentList: Array.isArray(workout.equipmentList)
-      ? workout.equipmentList
-          .filter((item) => typeof item === "string" && item.trim())
-          .map((item) => item.trim())
-          .slice(0, 8)
-      : undefined,
+    ...(Array.isArray(workout.primaryMuscles) && workout.primaryMuscles.length > 0
+      ? { primaryMuscles: workout.primaryMuscles.filter((i) => typeof i === "string" && i.trim()).map((i) => i.trim()).slice(0, 8) }
+      : {}),
+    ...(Array.isArray(workout.secondaryMuscles) && workout.secondaryMuscles.length > 0
+      ? { secondaryMuscles: workout.secondaryMuscles.filter((i) => typeof i === "string" && i.trim()).map((i) => i.trim()).slice(0, 8) }
+      : {}),
+    ...(Array.isArray(workout.equipmentList) && workout.equipmentList.length > 0
+      ? { equipmentList: workout.equipmentList.filter((i) => typeof i === "string" && i.trim()).map((i) => i.trim()).slice(0, 8) }
+      : {}),
     externalUrl: clamp(workout.externalUrl),
   };
 }
