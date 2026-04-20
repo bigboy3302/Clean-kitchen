@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { useWorkoutFilters } from "@/hooks/useWorkoutFilters";
@@ -415,11 +414,8 @@ export default function WorkoutGrid({ searchTerm, onClearSearch, initialBodyPart
           </div>
           <div className="ctaRow">
             <button type="button" className="createBtn" onClick={() => setShowCreator(true)}>
-              + Create
+              + Create workout
             </button>
-            <Link href="/fitness/day" className="tab action linkBtn">
-              Today&apos;s planner
-            </Link>
           </div>
         </div>
 
@@ -825,12 +821,16 @@ export default function WorkoutGrid({ searchTerm, onClearSearch, initialBodyPart
         }
         .reset {
           border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
-          background: transparent;
+          background: color-mix(in oklab, var(--bg) 85%, transparent);
           color: var(--text);
           border-radius: 12px;
           padding: 10px 14px;
           font-weight: 600;
           cursor: pointer;
+          transition: background 0.15s ease;
+        }
+        .reset:hover {
+          background: color-mix(in oklab, var(--border) 30%, var(--bg));
         }
         .grid {
           display: grid;
@@ -1557,11 +1557,12 @@ function DetailDialog({ item, onClose, onSave, onDelete, onAddToToday, busyId }:
                   rel="noopener noreferrer"
                   className="ytSearch"
                 >
-                  <svg aria-hidden="true" viewBox="0 0 24 24">
-                    <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-1.96C18.88 4 12 4 12 4s-6.88 0-8.6.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.94 1.97C5.12 20 12 20 12 20s6.88 0 8.6-.45a2.78 2.78 0 0 0 1.94-1.97A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z" />
-                    <polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="var(--bg2)" />
+                  <svg aria-hidden="true" viewBox="0 0 24 24" className="ytIcon">
+                    <path fill="#fff" d="M22.54 6.42a2.78 2.78 0 0 0-1.94-1.96C18.88 4 12 4 12 4s-6.88 0-8.6.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.94 1.97C5.12 20 12 20 12 20s6.88 0 8.6-.45a2.78 2.78 0 0 0 1.94-1.97A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z" />
+                    <polygon fill="#ff0000" points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" />
                   </svg>
-                  Watch &ldquo;{workout.title}&rdquo; tutorial on YouTube
+                  Watch on YouTube
+                  <span className="ytQuery">&ldquo;{workout.title} tutorial&rdquo;</span>
                 </a>
               )}
             </div>
@@ -1751,25 +1752,33 @@ function DetailDialog({ item, onClose, onSave, onDelete, onAddToToday, busyId }:
         .ytSearch {
           display: inline-flex;
           align-items: center;
+          justify-content: center;
           gap: 10px;
-          padding: 12px 16px;
+          padding: 13px 20px;
           border-radius: 14px;
-          border: 1px solid color-mix(in oklab, #ef4444 30%, var(--border));
-          background: color-mix(in oklab, #ef4444 6%, transparent);
-          color: var(--text);
+          border: 0;
+          background: #ff0000;
+          color: #fff;
           text-decoration: none;
-          font-weight: 600;
-          font-size: 0.9rem;
-          transition: background 0.15s ease;
+          font-weight: 700;
+          font-size: 0.95rem;
+          box-shadow: 0 8px 24px rgba(255, 0, 0, 0.28);
+          transition: filter 0.15s ease, box-shadow 0.15s ease;
+          width: 100%;
         }
         .ytSearch:hover {
-          background: color-mix(in oklab, #ef4444 12%, transparent);
+          filter: brightness(1.1);
+          box-shadow: 0 12px 32px rgba(255, 0, 0, 0.36);
         }
-        .ytSearch svg {
-          width: 22px;
-          height: 22px;
-          fill: #ef4444;
+        .ytIcon {
+          width: 26px;
+          height: 26px;
           flex-shrink: 0;
+        }
+        .ytQuery {
+          font-size: 0.82rem;
+          font-weight: 400;
+          opacity: 0.85;
         }
         .foot {
           display: flex;

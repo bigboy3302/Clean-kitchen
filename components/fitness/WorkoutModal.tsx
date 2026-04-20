@@ -110,11 +110,12 @@ export default function WorkoutModal({ exercise, goal, onClose }: Props) {
               </div>
             ) : (
               <a href={ytSearchUrl} target="_blank" rel="noopener noreferrer" className="ytSearch">
-                <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-1.96C18.88 4 12 4 12 4s-6.88 0-8.6.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.94 1.97C5.12 20 12 20 12 20s6.88 0 8.6-.45a2.78 2.78 0 0 0 1.94-1.97A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z" />
-                  <polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="var(--bg2)" />
+                <svg aria-hidden="true" viewBox="0 0 24 24" className="ytIcon">
+                  <path fill="#fff" d="M22.54 6.42a2.78 2.78 0 0 0-1.94-1.96C18.88 4 12 4 12 4s-6.88 0-8.6.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.94 1.97C5.12 20 12 20 12 20s6.88 0 8.6-.45a2.78 2.78 0 0 0 1.94-1.97A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z" />
+                  <polygon fill="#ff0000" points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" />
                 </svg>
-                Watch &ldquo;{cap(exercise.name)}&rdquo; tutorial on YouTube
+                Watch on YouTube
+                <span className="ytQuery">&ldquo;{cap(exercise.name)} tutorial&rdquo;</span>
               </a>
             )}
           </div>
@@ -278,25 +279,33 @@ export default function WorkoutModal({ exercise, goal, onClose }: Props) {
         .ytSearch {
           display: inline-flex;
           align-items: center;
+          justify-content: center;
           gap: 10px;
-          padding: 12px 16px;
+          padding: 13px 20px;
           border-radius: 14px;
-          border: 1px solid color-mix(in oklab, #ef4444 30%, var(--border));
-          background: color-mix(in oklab, #ef4444 6%, transparent);
-          color: var(--text);
+          border: 0;
+          background: #ff0000;
+          color: #fff;
           text-decoration: none;
-          font-weight: 600;
-          font-size: 0.88rem;
-          transition: background 0.15s ease;
+          font-weight: 700;
+          font-size: 0.95rem;
+          box-shadow: 0 8px 24px rgba(255, 0, 0, 0.28);
+          transition: filter 0.15s ease, box-shadow 0.15s ease;
+          width: 100%;
         }
         .ytSearch:hover {
-          background: color-mix(in oklab, #ef4444 12%, transparent);
+          filter: brightness(1.1);
+          box-shadow: 0 12px 32px rgba(255, 0, 0, 0.36);
         }
-        .ytSearch svg {
-          width: 20px;
-          height: 20px;
-          fill: #ef4444;
+        .ytIcon {
+          width: 26px;
+          height: 26px;
           flex-shrink: 0;
+        }
+        .ytQuery {
+          font-size: 0.82rem;
+          font-weight: 400;
+          opacity: 0.85;
         }
         @media (max-width: 560px) {
           .sheet {
