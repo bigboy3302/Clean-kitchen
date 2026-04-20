@@ -289,6 +289,11 @@ export default function ProfilePage() {
       setFile(null);
       if (fileRef.current) fileRef.current.value = "";
       setMsg("Profile photo updated!");
+      propagateUserProfile(me.uid, {
+        displayName: fullName(firstName, lastName),
+        username: username || null,
+        photoURL: url,
+      }).catch(() => {});
     } catch (error: unknown) {
       setErr(getErrorMessage(error, "Failed to update avatar."));
     } finally {

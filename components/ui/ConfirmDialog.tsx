@@ -36,13 +36,15 @@ export default function ConfirmDialog({
       </div>
 
       <style jsx>{`
-        .ov{position:fixed;inset:0;background:rgba(2,6,23,.55);display:grid;place-items:center;padding:16px}
-        .box{width:100%;max-width:420px;background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:16px}
-        .t{margin:0 0 8px;font-size:18px;font-weight:800;color:#0f172a}
-        .m{margin:0 0 14px;color:#475569}
+        .ov{position:fixed;inset:0;background:rgba(2,6,23,.6);display:grid;place-items:center;padding:16px}
+        .box{width:100%;max-width:420px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)}
+        .t{margin:0 0 8px;font-size:18px;font-weight:800;color:var(--text)}
+        .m{margin:0 0 16px;color:var(--muted);font-size:14px}
         .row{display:flex;gap:10px;justify-content:flex-end}
-        .cancel{border:1px solid #e5e7eb;background:#fff;border-radius:10px;padding:8px 12px;cursor:pointer}
-        .danger{border:1px solid #fecaca;background:#fee2e2;color:#991b1b;border-radius:10px;padding:8px 12px;cursor:pointer}
+        .cancel{border:1px solid var(--border);background:transparent;color:var(--text);border-radius:var(--radius-sm);padding:8px 14px;cursor:pointer;font-size:14px}
+        .cancel:hover{background:var(--border)}
+        .danger{border:1px solid #ef444440;background:#ef444420;color:#ef4444;border-radius:var(--radius-sm);padding:8px 14px;cursor:pointer;font-size:14px;font-weight:600}
+        .danger:hover{background:#ef444430}
       `}</style>
     </div>
   );
