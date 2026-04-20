@@ -2,14 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import Container from "@/components/Container";
 import FitnessHeader from "@/components/fitness/FitnessHeader";
 import WorkoutGrid from "@/components/fitness/WorkoutGrid";
-import Meter from "@/components/ui/Meter";
 import Button from "@/components/ui/Button";
 import { useDebounce } from "@/hooks/useDebounce";
-import { useTodayPlanner } from "@/hooks/useTodayPlanner";
 import {
   Goal,
   Activity,
@@ -17,7 +14,6 @@ import {
   tdee,
   targetCalories,
   macroTargets,
-  goalSuitability,
 } from "@/lib/fitness/calc";
 import { getMetrics, saveMetrics, type Metrics } from "@/lib/fitness/store";
 
@@ -55,8 +51,6 @@ export default function FitnessPage() {
   });
   const ageRef = useRef<HTMLInputElement | null>(null);
 
-  const planner = useTodayPlanner(form.goal);
-
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -88,20 +82,16 @@ export default function FitnessPage() {
     if (!editing) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-
     const focusTimer = window.setTimeout(() => {
       ageRef.current?.focus();
     }, 60);
-
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
         setEditing(false);
       }
     };
-
     document.addEventListener("keydown", handleKey);
-
     return () => {
       document.body.style.overflow = previous;
       window.clearTimeout(focusTimer);
@@ -125,7 +115,6 @@ export default function FitnessPage() {
         : { calories: 0, proteinG: 0, fatG: 0, carbsG: 0 },
     [calTarget, form.goal, form.weightKg]
   );
-  const suitability = useMemo(() => goalSuitability(Number(form.age || 0), form.goal), [form.age, form.goal]);
 
   function update<K extends keyof Form>(key: K, value: Form[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -161,179 +150,27 @@ export default function FitnessPage() {
         </div>
       ) : (
         <>
-          <section className="metrics">
-            <article className="card hero">
-              <div className="heroHead">
-                <div>
-                  <p className="eyebrow">Personal plan</p>
-                  <h2>Your daily targets</h2>
+          <div className="metricsBar">
+            <div className="metricsLeft">
+              <p className="eyebrow">Your plan · {titleCase(form.goal)}</p>
+              {numbersReady ? (
+                <div className="statsRow">
+                  <StatPill label="Target" value={macros.calories ? `${macros.calories} kcal` : "—"} />
+                  <StatPill label="Protein" value={macros.proteinG ? `${macros.proteinG} g` : "—"} />
+                  <StatPill label="Fat" value={macros.fatG ? `${macros.fatG} g` : "—"} />
+                  <StatPill label="Carbs" value={macros.carbsG ? `${macros.carbsG} g` : "—"} />
                 </div>
-                <div className="heroActions">
-                  <Link href="/fitness/day" className="heroPlanner">
-                    Today&apos;s planner
-                  </Link>
-                  <Button
-                    type="button"
-                    variant={editing ? "secondary" : "primary"}
-                    onClick={() => setEditing((prev) => !prev)}
-                  >
-                    {editing ? "Close" : "Edit metrics"}
-                  </Button>
-                </div>
-              </div>
-              <div className="heroContent">
-                <div className="heroSummary">
-                  <div className="row">
-                    <div>
-                      <span className="label">Goal</span>
-                      <strong>{titleCase(form.goal)}</strong>
-                    </div>
-                    <div>
-                      <span className="label">Activity</span>
-                      <strong>{activityLabels[form.activity]}</strong>
-                    </div>
-                    <div>
-                      <span className="label">Weight</span>
-                      <strong>{numbersReady ? `${form.weightKg} kg` : "—"}</strong>
-                    </div>
-                    <div>
-                      <span className="label">Height</span>
-                      <strong>{numbersReady ? `${form.heightCm} cm` : "—"}</strong>
-                    </div>
-                  </div>
-                </div>
-                <div className="heroMeter">
-                  <Meter status={suitability.status} label="Goal suitability" message={suitability.message} />
-                </div>
-              </div>
-            </article>
-
-            <div className="metricsGrid">
-              <article className="card stat">
-                <h3>Energy budget</h3>
-                <div className="statGrid">
-                  <Metric label="BMR" value={bmr ? `${bmr} kcal` : "—"} />
-                  <Metric label="TDEE" value={tdeeVal ? `${tdeeVal} kcal` : "—"} />
-                  <Metric label="Target calories" value={macros.calories ? `${macros.calories} kcal` : "—"} />
-                </div>
-              </article>
-              <article className="card stat">
-                <h3>Macro guide</h3>
-                <div className="macroGrid">
-                  <Macro label="Protein" grams={macros.proteinG} />
-                  <Macro label="Fat" grams={macros.fatG} />
-                  <Macro label="Carbs" grams={macros.carbsG} />
-                </div>
-              </article>
-            </div>
-
-          </section>
-
-          <section className="todaySection">
-            <article className="card todayCard">
-              <div className="todayHead">
-                <div>
-                  <p className="eyebrow">Today&apos;s planner</p>
-                  <h3>Workouts for {planner.goal}</h3>
-                </div>
-                <Link href="/fitness/day" className="manageLink">
-                  Open planner
-                </Link>
-              </div>
-              {planner.error ? <div className="alertInline">{planner.error}</div> : null}
-              <div className="todayBody">
-                {planner.loading ? (
-                  <p className="muted">Loading today&apos;s plan…</p>
-                ) : planner.items.length ? (
-                  <ul className="todayList">
-                    {planner.items.map((item) => (
-                      <li key={item.id} className={item.done ? "done" : ""}>
-                        <div className="itemRow">
-                          <span className="dot" aria-hidden="true" />
-                          <span className="name">{item.name}</span>
-                        </div>
-                        {item.tags.length ? (
-                          <div className="tagRow">
-                            {item.tags.map((tag) => (
-                              <span key={tag} className="tag">
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="muted">We&apos;ll keep this updated with goal-based movements.</p>
-                )}
-              </div>
-              {planner.populating ? <p className="muted small">Personalizing your plan…</p> : null}
-              {planner.suggestions.length ? (
-                <div className="suggestions">
-                  <div className="suggestHead">
-                    <h4>Suggested add-ons</h4>
-                    <span className="muted small">Tap to schedule</span>
-                  </div>
-                  <div className="suggestGrid">
-                    {planner.suggestions.slice(0, 6).map((workout) => (
-                      <button
-                        key={workout.id}
-                        type="button"
-                        className="suggestBtn"
-                        disabled={planner.adding}
-                        onClick={() => planner.addToPlanner(workout)}
-                      >
-                        <span className="title">{workout.title}</span>
-                        <span className="meta">
-                          {[workout.bodyPart, workout.target, workout.equipment]
-                            .filter(Boolean)
-                            .slice(0, 2)
-                            .join(" • ")}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </article>
-
-            <article className="card recipesCard">
-              <div className="todayHead">
-                <div>
-                  <p className="eyebrow">Daily fuel</p>
-                  <h3>Today&apos;s recipes</h3>
-                </div>
-                <Link href="/fitness/day#meals" className="manageLink">
-                  View meals
-                </Link>
-              </div>
-              {planner.loading ? (
-                <p className="muted">Loading recipes…</p>
               ) : (
-                <div className="recipeTiles">
-                  {planner.recipes.map((recipe) => (
-                    <article key={recipe.id} className="recipeTile">
-                      <div className="recipeThumb">
-                        {recipe.image ? (
-                          <Image src={recipe.image} alt={recipe.title} fill sizes="120px" />
-                        ) : (
-                          <span aria-hidden="true">🍽️</span>
-                        )}
-                      </div>
-                      <div className="recipeMeta">
-                        <p className="recipeTitle">{recipe.title}</p>
-                        <p className="recipeHint">Fuel idea #{planner.recipes.indexOf(recipe) + 1}</p>
-                      </div>
-                    </article>
-                  ))}
-                  {planner.recipes.length === 0 ? (
-                    <p className="muted noMeals">No recipes saved for today yet.</p>
-                  ) : null}
-                </div>
+                <p className="setupHint">Add your stats to unlock personalized targets.</p>
               )}
-            </article>
-          </section>
+            </div>
+            <div className="metricsRight">
+              <Link href="/fitness/day" className="plannerBtn">Today&apos;s planner</Link>
+              <button type="button" className="editMetricsBtn" onClick={() => setEditing(true)}>
+                {numbersReady ? "Edit" : "Set up"}
+              </button>
+            </div>
+          </div>
 
           <WorkoutGrid searchTerm={debouncedSearch} onClearSearch={() => setSearch("")} />
         </>
@@ -445,7 +282,7 @@ export default function FitnessPage() {
       <style jsx>{`
         .fitnessPage {
           display: grid;
-          gap: 28px;
+          gap: 24px;
           padding-bottom: 96px;
         }
         .loading {
@@ -468,133 +305,68 @@ export default function FitnessPage() {
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
-        .metrics {
-          display: grid;
-          gap: 24px;
-        }
-        .card {
-          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
-          border-radius: 24px;
-          background: color-mix(in oklab, var(--bg2) 96%, transparent);
-          box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
-          padding: 24px;
-        }
-        .hero {
-          display: grid;
-          gap: 20px;
-        }
-        .heroHead {
+        .metricsBar {
           display: flex;
           justify-content: space-between;
           align-items: center;
           gap: 16px;
           flex-wrap: wrap;
-        }
-        .heroActions {
-          display: flex;
-          gap: 12px;
-          flex-wrap: wrap;
-        }
-        .heroPlanner {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 999px;
+          background: color-mix(in oklab, var(--bg2) 96%, transparent);
           border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
-          padding: 8px 16px;
-          font-weight: 600;
-          color: var(--text);
-          background: color-mix(in oklab, var(--bg) 94%, transparent);
-          text-decoration: none;
-          transition: transform .12s ease, box-shadow .18s ease;
-        }
-        .heroPlanner:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
-        }
-        .heroHead h2 {
-          margin: 4px 0 0;
-          font-size: 1.7rem;
-          color: var(--text);
-          letter-spacing: -0.01em;
+          border-radius: 20px;
+          padding: 16px 20px;
         }
         .eyebrow {
-          margin: 0;
-          font-size: 0.75rem;
+          margin: 0 0 10px;
+          font-size: 0.72rem;
           letter-spacing: 0.16em;
           text-transform: uppercase;
           color: var(--muted);
           font-weight: 700;
         }
-        .heroContent {
-          display: grid;
-          gap: 20px;
-          grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        }
-        .heroSummary {
-          display: grid;
-          gap: 12px;
-        }
-        .row {
-          display: grid;
-          gap: 16px;
-          grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-        }
-        .label {
-          display: block;
-          font-size: 0.75rem;
-          letter-spacing: 0.1em;
-          text-transform: uppercase;
-          color: var(--muted);
-          margin-bottom: 4px;
-          font-weight: 700;
-        }
-        strong {
-          font-size: 1.05rem;
-          color: var(--text);
-        }
-        .heroMeter {
-          min-height: 120px;
-        }
-        .metricsGrid {
-          display: grid;
-          gap: 20px;
-          grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        }
-        .stat h3 {
-          margin: 0 0 16px;
-          font-size: 1.1rem;
-          color: var(--text);
-        }
-        .statGrid {
-          display: grid;
-          gap: 12px;
-          grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-        }
-        .macroGrid {
-          display: grid;
-          gap: 12px;
-          grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-        }
-        .chips {
+        .statsRow {
           display: flex;
+          gap: 8px;
           flex-wrap: wrap;
-          gap: 10px;
         }
-        .chip {
+        .metricsRight {
+          display: flex;
+          gap: 8px;
+          flex-shrink: 0;
+          align-items: center;
+        }
+        .plannerBtn {
+          display: inline-flex;
+          align-items: center;
+          border-radius: 999px;
+          padding: 9px 18px;
+          font-weight: 700;
+          color: var(--primary-contrast);
+          background: var(--primary);
+          text-decoration: none;
+          font-size: 0.9rem;
+          box-shadow: 0 10px 28px color-mix(in oklab, var(--primary) 28%, transparent);
+          transition: filter 0.15s ease;
+        }
+        .plannerBtn:hover { filter: brightness(1.07); }
+        .editMetricsBtn {
           border-radius: 999px;
           border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
           background: transparent;
           color: var(--text);
-          padding: 8px 14px;
+          padding: 9px 18px;
           font-weight: 600;
           cursor: pointer;
+          font-size: 0.9rem;
+          transition: background 0.15s ease;
         }
-        .chip.on {
-          background: var(--primary);
-          border-color: var(--primary);
-          color: var(--primary-contrast);
-          box-shadow: 0 16px 40px color-mix(in oklab, var(--primary) 35%, transparent);
+        .editMetricsBtn:hover {
+          background: color-mix(in oklab, var(--bg) 80%, transparent);
+        }
+        .setupHint {
+          margin: 0;
+          color: var(--muted);
+          font-size: 0.9rem;
         }
         .metricsOverlay {
           position: fixed;
@@ -670,6 +442,26 @@ export default function FitnessPage() {
           padding: 10px 12px;
           font: inherit;
         }
+        .chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+        .chip {
+          border-radius: 999px;
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          background: transparent;
+          color: var(--text);
+          padding: 8px 14px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .chip.on {
+          background: var(--primary);
+          border-color: var(--primary);
+          color: var(--primary-contrast);
+          box-shadow: 0 16px 40px color-mix(in oklab, var(--primary) 35%, transparent);
+        }
         .modalActions {
           grid-column: 1 / -1;
           display: flex;
@@ -677,197 +469,14 @@ export default function FitnessPage() {
           gap: 12px;
           flex-wrap: wrap;
         }
-        .todaySection {
-          display: grid;
-          gap: 20px;
-          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        }
-        .todayCard,
-        .recipesCard {
-          display: grid;
-          gap: 18px;
-        }
-        .todayHead {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          gap: 12px;
-        }
-        .todayHead h3 {
-          margin: 4px 0 0;
-          font-size: 1.18rem;
-          color: var(--text);
-        }
-        .manageLink {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-          border: 0;
-          border-radius: 999px;
-          padding: 10px 18px;
-          font-size: 0.9rem;
-          font-weight: 700;
-          text-decoration: none;
-          color: var(--primary-contrast);
-          background: var(--primary);
-          box-shadow: 0 14px 32px color-mix(in oklab, var(--primary) 25%, transparent);
-          transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
-        }
-        .manageLink:hover {
-          transform: translateY(-1px);
-          filter: brightness(1.05);
-        }
-        .manageLink:active {
-          transform: translateY(0);
-          box-shadow: 0 8px 18px color-mix(in oklab, var(--primary) 30%, transparent);
-        }
-        .todayBody {
-          display: grid;
-          gap: 12px;
-        }
-        .todayList {
-          list-style: none;
-          margin: 0;
-          padding: 0;
-          display: grid;
-          gap: 12px;
-        }
-        .todayList li {
-          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
-          border-radius: 16px;
-          padding: 12px 14px;
-          background: color-mix(in oklab, var(--bg2) 92%, transparent);
-          display: grid;
-          gap: 6px;
-        }
-        .todayList li.done {
-          opacity: 0.7;
-        }
-        .itemRow {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-        .dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 999px;
-          background: var(--primary);
-          flex-shrink: 0;
-        }
-        .name {
-          font-weight: 700;
-          color: var(--text);
-        }
-        .tagRow {
-          display: flex;
-          gap: 6px;
-          flex-wrap: wrap;
-        }
-        .tag {
-          font-size: 0.72rem;
-          border-radius: 999px;
-          padding: 3px 8px;
-          background: color-mix(in oklab, var(--primary) 12%, transparent);
-          border: 1px solid color-mix(in oklab, var(--primary) 30%, var(--border));
-        }
-        .suggestions {
-          display: grid;
-          gap: 10px;
-          margin-top: 8px;
-        }
-        .suggestHead {
-          display: flex;
-          justify-content: space-between;
-          align-items: baseline;
-        }
-        .suggestGrid {
-          display: grid;
-          gap: 10px;
-        }
-        .suggestBtn {
-          border-radius: 16px;
-          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
-          background: linear-gradient(180deg, color-mix(in oklab, var(--bg) 94%, transparent), var(--bg2));
-          padding: 12px 14px;
-          text-align: left;
-          display: grid;
-          gap: 4px;
-          cursor: pointer;
-        }
-        .suggestBtn:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12);
-        }
-        .suggestBtn .title {
-          font-weight: 700;
-          color: var(--text);
-        }
-        .suggestBtn .meta {
-          font-size: 0.78rem;
-          color: var(--muted);
-        }
-        .recipeTiles {
-          display: grid;
-          gap: 14px;
-          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        }
-        .recipeTile {
-          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
-          border-radius: 18px;
-          padding: 14px;
-          background: linear-gradient(135deg, color-mix(in oklab, var(--bg2) 95%, transparent), color-mix(in oklab, var(--bg) 88%, transparent));
-          display: flex;
-          gap: 12px;
-          align-items: center;
-          box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
-        }
-        .recipeThumb {
-          position: relative;
-          width: 80px;
-          height: 80px;
-          border-radius: 20px;
-          border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
-          overflow: hidden;
-          display: grid;
-          place-items: center;
-          background: color-mix(in oklab, var(--bg2) 92%, transparent);
-          font-size: 30px;
-        }
-        .recipeThumb :global(img) {
-          object-fit: cover;
-        }
-        .recipeMeta {
-          display: grid;
-          gap: 6px;
-        }
-        .recipeTitle {
-          margin: 0;
-          font-weight: 700;
-          color: var(--text);
-        }
-        .recipeHint {
-          margin: 0;
-          font-size: 0.85rem;
-          color: var(--muted);
-        }
-        .noMeals {
-          grid-column: 1 / -1;
-          text-align: center;
-        }
-        .alertInline {
-          border-radius: 14px;
-          border: 1px solid color-mix(in oklab, #ef4444 35%, transparent);
-          background: color-mix(in oklab, #fee2e2 45%, transparent);
-          color: #991b1b;
-          padding: 10px 12px;
-          font-size: 0.85rem;
-        }
-        .muted.small {
-          font-size: 0.8rem;
-        }
         @media (max-width: 720px) {
+          .metricsBar {
+            gap: 12px;
+          }
+          .metricsRight {
+            width: 100%;
+            justify-content: flex-end;
+          }
           .metricsModal {
             max-height: 100vh;
           }
@@ -877,74 +486,40 @@ export default function FitnessPage() {
           .modalActions :global(button) {
             flex: 1 1 auto;
           }
-          .todaySection {
-            grid-template-columns: 1fr;
-          }
-          .suggestBtn {
-            padding: 12px;
-          }
         }
       `}</style>
     </Container>
   );
 }
 
-type MetricProps = { label: string; value: string };
+type StatPillProps = { label: string; value: string };
 
-function Metric({ label, value }: MetricProps) {
+function StatPill({ label, value }: StatPillProps) {
   return (
-    <div className="metric">
-      <span>{label}</span>
+    <div className="pill">
+      <span className="label">{label}</span>
       <strong>{value}</strong>
       <style jsx>{`
-        .metric {
-          border-radius: 16px;
-          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
-          background: color-mix(in oklab, var(--bg2) 94%, transparent);
-          padding: 16px;
-          display: grid;
+        .pill {
+          display: inline-flex;
+          align-items: center;
           gap: 6px;
+          background: color-mix(in oklab, var(--bg) 90%, transparent);
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          border-radius: 999px;
+          padding: 6px 12px;
         }
-        span {
-          font-size: 0.75rem;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
+        .label {
+          font-size: 0.7rem;
           color: var(--muted);
-          font-weight: 700;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
         }
         strong {
-          font-size: 1.3rem;
-        }
-      `}</style>
-    </div>
-  );
-}
-
-type MacroProps = { label: string; grams: number };
-
-function Macro({ label, grams }: MacroProps) {
-  return (
-    <div className="macro">
-      <span>{label}</span>
-      <strong>{grams ? `${grams} g` : "—"}</strong>
-      <style jsx>{`
-        .macro {
-          border-radius: 16px;
-          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
-          background: color-mix(in oklab, var(--bg2) 92%, transparent);
-          padding: 16px;
-          display: grid;
-          gap: 6px;
-        }
-        span {
-          font-size: 0.75rem;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          color: var(--muted);
+          font-size: 0.88rem;
           font-weight: 700;
-        }
-        strong {
-          font-size: 1.3rem;
+          color: var(--text);
         }
       `}</style>
     </div>

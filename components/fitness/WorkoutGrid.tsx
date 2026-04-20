@@ -189,7 +189,7 @@ export default function WorkoutGrid({ searchTerm, onClearSearch, initialBodyPart
           ? { id: existing.id, visibility, workout }
           : { visibility, workout };
         const saved = await savedMine.save(payload);
-        setToast(`Saved “${workout.title}” (${saved.visibility})`);
+        setToast(`Saved "${workout.title}" (${saved.visibility})`);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to save workout";
         setToast(message === "AUTH_REQUIRED" ? "Sign in to save workouts." : message);
@@ -205,7 +205,7 @@ export default function WorkoutGrid({ searchTerm, onClearSearch, initialBodyPart
       try {
         setBusyId(record.id);
         await savedMine.destroy(record.id);
-        setToast(`Removed “${record.workout.title}” from saved`);
+        setToast(`Removed "${record.workout.title}" from saved`);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to delete";
         setToast(message === "AUTH_REQUIRED" ? "Sign in to manage saved workouts." : message);
@@ -363,7 +363,7 @@ export default function WorkoutGrid({ searchTerm, onClearSearch, initialBodyPart
         gifUrl: workout.mediaUrl || undefined,
         descriptionHtml: workout.instructionsHtml ?? undefined,
       });
-      setToast(`Added “${workout.title}” to Today`);
+      setToast(`Added "${workout.title}" to Today`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to add to planner";
       setToast(message);
@@ -373,7 +373,7 @@ export default function WorkoutGrid({ searchTerm, onClearSearch, initialBodyPart
   const emptyStateMessage = useMemo(() => {
     if (view === "saved") {
       if (savedMine.loading) return "Loading saved workouts…";
-      if (savedMine.items.length === 0) return "You haven’t saved any workouts yet.";
+      if (savedMine.items.length === 0) return "You haven't saved any workouts yet.";
     }
     if (view === "community") {
       if (savedCommunity.loading) return "Loading community workouts…";
@@ -414,8 +414,8 @@ export default function WorkoutGrid({ searchTerm, onClearSearch, initialBodyPart
             ))}
           </div>
           <div className="ctaRow">
-            <button type="button" className="heroBtn" onClick={() => setShowCreator(true)}>
-              + Create workout
+            <button type="button" className="createBtn" onClick={() => setShowCreator(true)}>
+              + Create
             </button>
             <Link href="/fitness/day" className="tab action linkBtn">
               Today&apos;s planner
@@ -450,18 +450,15 @@ export default function WorkoutGrid({ searchTerm, onClearSearch, initialBodyPart
         ) : null}
       </header>
 
-      <div className={clsx("grid", view)}>
+      <div className="grid">
         {activeList.map(({ workout, saved, community }) => (
           <WorkoutCard
             key={`${view}-${workout.id}-${saved?.id ?? community?.id ?? "base"}`}
             workout={workout}
             saved={saved}
-            community={community}
-            view={view}
             busyId={busyId}
             onOpen={() => setDetail({ workout, saved, community })}
-            onSave={(visibility) => handleSave(workout, visibility, saved)}
-            onDelete={saved ? () => handleDelete(saved) : undefined}
+            onSave={() => handleSave(workout, "private", saved)}
           />
         ))}
 
@@ -475,19 +472,19 @@ export default function WorkoutGrid({ searchTerm, onClearSearch, initialBodyPart
       ) : null}
 
       {view === "explore" && hasMore ? (
-      <div className="loadMore">
-        <button type="button" onClick={loadMore} disabled={loading}>
-          {loading ? "Loading…" : "Load more"}
-        </button>
-      </div>
-    ) : null}
+        <div className="loadMore">
+          <button type="button" onClick={loadMore} disabled={loading}>
+            {loading ? "Loading…" : "Load more"}
+          </button>
+        </div>
+      ) : null}
 
       {showCreator ? (
         <div className="creatorOverlay" role="dialog" aria-modal="true" aria-label="Create workout" onClick={closeCreator}>
           <div className="creatorPanel" onClick={(event) => event.stopPropagation()}>
             <header className="creatorHead">
               <div>
-                <p className="creatorEyebrow">Create & share</p>
+                <p className="creatorEyebrow">Create &amp; share</p>
                 <h3>New workout</h3>
               </div>
               <button type="button" className="ghostBtn creatorClose" onClick={closeCreator}>
@@ -670,6 +667,7 @@ export default function WorkoutGrid({ searchTerm, onClearSearch, initialBodyPart
           </div>
         </div>
       ) : null}
+
       {showSearchOverlay ? (
         <div
           className="searchOverlay"
@@ -684,7 +682,7 @@ export default function WorkoutGrid({ searchTerm, onClearSearch, initialBodyPart
             <div className="searchHead">
               <h3>
                 Results for
-                <span>“{searchTerm.trim()}”</span>
+                <span>&ldquo;{searchTerm.trim()}&rdquo;</span>
               </h3>
               <button type="button" className="close" onClick={() => onClearSearch?.()}>
                 Close
@@ -700,12 +698,9 @@ export default function WorkoutGrid({ searchTerm, onClearSearch, initialBodyPart
                       key={`overlay-${workout.id}-${saved?.id ?? community?.id ?? "base"}`}
                       workout={workout}
                       saved={saved}
-                      community={community}
-                      view="explore"
                       busyId={busyId}
                       onOpen={() => setDetail({ workout, saved, community })}
-                      onSave={(visibility) => handleSave(workout, visibility, saved)}
-                      onDelete={saved ? () => handleDelete(saved) : undefined}
+                      onSave={() => handleSave(workout, "private", saved)}
                     />
                   ))}
                 </div>
@@ -762,14 +757,14 @@ export default function WorkoutGrid({ searchTerm, onClearSearch, initialBodyPart
           justify-content: space-between;
           align-items: center;
           flex-wrap: wrap;
-          gap: 16px;
+          gap: 12px;
         }
         .tabs {
           display: inline-flex;
-          gap: 10px;
+          gap: 6px;
           background: color-mix(in oklab, var(--bg2) 90%, transparent);
           border: 1px solid color-mix(in oklab, var(--border) 82%, transparent);
-          padding: 6px;
+          padding: 5px;
           border-radius: 999px;
           width: fit-content;
         }
@@ -778,77 +773,54 @@ export default function WorkoutGrid({ searchTerm, onClearSearch, initialBodyPart
           background: transparent;
           color: var(--muted);
           font-weight: 600;
-          padding: 8px 16px;
+          padding: 7px 14px;
           border-radius: 999px;
           cursor: pointer;
           transition: background .15s ease, color .15s ease;
           display: inline-flex;
           align-items: center;
-          gap: 8px;
+          gap: 6px;
+          font-size: 0.9rem;
+          text-decoration: none;
         }
         .tab.on {
           background: var(--primary);
           color: var(--primary-contrast);
-          box-shadow: 0 16px 40px color-mix(in oklab, var(--primary) 40%, transparent);
+          box-shadow: 0 8px 24px color-mix(in oklab, var(--primary) 35%, transparent);
         }
         .ctaRow {
           display: flex;
-          gap: 10px;
+          gap: 8px;
           flex-wrap: wrap;
         }
-        .heroBtn {
+        .createBtn {
           display: inline-flex;
           align-items: center;
-          gap: 10px;
-          border: 0;
-          border-radius: 16px;
-          padding: 12px 20px;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          color: #fff;
-          background: linear-gradient(120deg, var(--primary) 0%, color-mix(in oklab, var(--primary) 85%, #f472b6) 100%);
-          box-shadow:
-            0 0 0 2px color-mix(in oklab, var(--primary) 20%, transparent),
-            0 20px 40px color-mix(in oklab, var(--primary) 40%, transparent);
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          border-radius: 999px;
+          padding: 8px 16px;
+          font-weight: 600;
+          font-size: 0.9rem;
+          color: var(--text);
+          background: transparent;
           cursor: pointer;
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
-          text-decoration: none;
+          transition: background 0.15s ease;
         }
-        .heroBtn:hover {
-          transform: translateY(-2px);
-          box-shadow:
-            0 0 0 2px color-mix(in oklab, var(--primary) 35%, transparent),
-            0 26px 50px color-mix(in oklab, var(--primary) 45%, transparent);
-        }
-        .heroBtn:active {
-          transform: translateY(0);
-          box-shadow:
-            0 0 0 2px color-mix(in oklab, var(--primary) 30%, transparent),
-            0 14px 24px color-mix(in oklab, var(--primary) 50%, transparent);
-        }
-        .heroBtn svg {
-          width: 18px;
-          height: 18px;
-          stroke: currentColor;
-          stroke-width: 2;
-          fill: none;
-        }
-        .heroBtn.withIcon {
-          background: linear-gradient(120deg, var(--primary) 0%, color-mix(in oklab, var(--primary) 85%, #8b5cf6) 100%);
+        .createBtn:hover {
+          background: color-mix(in oklab, var(--bg) 80%, transparent);
         }
         .badge {
           background: color-mix(in oklab, var(--primary-contrast) 15%, transparent);
           color: inherit;
           border-radius: 999px;
-          padding: 2px 8px;
-          font-size: 12px;
+          padding: 2px 7px;
+          font-size: 11px;
           font-weight: 600;
         }
         .filters {
           display: grid;
-          gap: 12px;
-          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+          gap: 10px;
+          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
           align-items: end;
         }
         .reset {
@@ -862,10 +834,16 @@ export default function WorkoutGrid({ searchTerm, onClearSearch, initialBodyPart
         }
         .grid {
           display: grid;
-          gap: 18px;
-          grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+          gap: 16px;
+          grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
         }
         @media (max-width: 640px) {
+          .grid {
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+          }
+        }
+        @media (max-width: 420px) {
           .grid {
             grid-template-columns: 1fr;
           }
@@ -944,6 +922,7 @@ export default function WorkoutGrid({ searchTerm, onClearSearch, initialBodyPart
         .searchGrid {
           display: grid;
           gap: 14px;
+          grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
         }
         .toast {
           position: fixed;
@@ -953,10 +932,12 @@ export default function WorkoutGrid({ searchTerm, onClearSearch, initialBodyPart
           background: var(--bg2);
           border: 1px solid var(--border);
           border-radius: 14px;
-          padding: 12px 18px;
+          padding: 12px 20px;
           box-shadow: 0 20px 60px rgba(15, 23, 42, 0.28);
           z-index: 1200;
           color: var(--text);
+          font-weight: 500;
+          white-space: nowrap;
         }
         .creatorOverlay {
           position: fixed;
@@ -1145,6 +1126,7 @@ export default function WorkoutGrid({ searchTerm, onClearSearch, initialBodyPart
           font-weight: 700;
           overflow: hidden;
           background: color-mix(in oklab, var(--bg2) 96%, transparent);
+          cursor: pointer;
         }
         .ghostBtn.creatorClose::after,
         .ghostBtn.creatorGhost::after {
@@ -1247,42 +1229,32 @@ function FilterSelect({ label, options, value, onChange }: FilterSelectProps) {
 type CardProps = {
   workout: WorkoutContent;
   saved?: SavedWorkoutRecord | null;
-  community?: SavedWorkoutRecord | null;
-  view: ViewKey;
   busyId: string | null;
   onOpen: () => void;
-  onSave: (visibility: SavedWorkoutVisibility) => Promise<void> | void;
-  onDelete?: () => Promise<void> | void;
+  onSave: () => Promise<void> | void;
 };
 
-function WorkoutCard({ workout, saved, community, view, busyId, onOpen, onSave, onDelete }: CardProps) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    function onClick(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, [menuOpen]);
-
+function WorkoutCard({ workout, saved, busyId, onOpen, onSave }: CardProps) {
   const busy = busyId === workout.id + "public" || busyId === workout.id + "private" || busyId === saved?.id;
 
-  const label = saved
-    ? saved.visibility === "public"
-      ? "Public"
-      : "Private"
-    : "Save";
-
-  const ownerRecord = view === "community" ? community ?? saved : saved ?? community;
+  const tags = [
+    workout.bodyPart,
+    workout.target && workout.target !== workout.bodyPart ? workout.target : null,
+    workout.equipment,
+  ]
+    .filter(Boolean)
+    .slice(0, 3) as string[];
 
   return (
     <article className="card">
-      <div className="media" onClick={onOpen} role="button" tabIndex={0} onKeyDown={(event) => event.key === "Enter" && onOpen()}>
+      <div
+        className="media"
+        onClick={onOpen}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(event) => event.key === "Enter" && onOpen()}
+        aria-label={`View ${workout.title}`}
+      >
         {workout.mediaUrl ? (
           workout.mediaType === "mp4" ? (
             <video src={workout.mediaUrl} muted loop playsInline autoPlay poster={workout.previewUrl || undefined} />
@@ -1291,7 +1263,7 @@ function WorkoutCard({ workout, saved, community, view, busyId, onOpen, onSave, 
               src={workout.mediaUrl}
               alt={workout.title}
               fill
-              sizes="(max-width: 768px) 100vw, 33vw"
+              sizes="(max-width: 640px) 50vw, 33vw"
               onError={(event) => {
                 if (event.currentTarget instanceof HTMLImageElement) {
                   event.currentTarget.src = "/placeholder.png";
@@ -1304,65 +1276,52 @@ function WorkoutCard({ workout, saved, community, view, busyId, onOpen, onSave, 
             <span>{workout.title.charAt(0)}</span>
           </div>
         )}
-        <button type="button" className="view" aria-label={`View ${workout.title}`}>
-          View
-        </button>
       </div>
 
-      <div className="meta">
-        <div className="top">
-          <h3>{workout.title}</h3>
-            <SaveButton
-              label={label}
-              open={menuOpen}
-              busy={busy}
-              visibility={saved?.visibility}
-              onToggle={() => setMenuOpen((prev) => !prev)}
-              onSelect={async (next) => {
-                setMenuOpen(false);
-                await onSave(next);
-              }}
-              onDelete={saved && onDelete ? async () => {
-                setMenuOpen(false);
-                await onDelete();
-              } : undefined}
-            allowDelete={Boolean(saved)}
-            allowPrivate={true}
-            allowPublic={true}
-            ref={menuRef}
-          />
-        </div>
-        <p className="desc">{snippet(workout.description)}</p>
-        <div className="tags">
-          {workout.bodyPart ? <span>{titleCase(workout.bodyPart)}</span> : null}
-          {workout.target && workout.target !== workout.bodyPart ? <span>{titleCase(workout.target)}</span> : null}
-          {workout.equipment ? <span>{titleCase(workout.equipment)}</span> : null}
-        </div>
-        {ownerRecord && ownerRecord.owner ? (
-          <div className="owner">
-            <span>
-              by {ownerRecord.owner.username || ownerRecord.owner.displayName || "Anonymous"}
-            </span>
-            {saved ? <span className={clsx("vis", saved.visibility)}>{saved.visibility}</span> : null}
+      <div className="body">
+        <h3>{workout.title}</h3>
+        {tags.length ? (
+          <div className="tags">
+            {tags.map((tag) => (
+              <span key={tag}>{titleCase(tag)}</span>
+            ))}
           </div>
         ) : null}
+        <div className="foot">
+          <button type="button" className="detailBtn" onClick={onOpen}>
+            View details
+          </button>
+          <button
+            type="button"
+            className={clsx("saveBtn", saved && "saved")}
+            disabled={busy}
+            onClick={onSave}
+            aria-label={saved ? "Saved" : "Save workout"}
+          >
+            {busy ? "…" : saved ? "Saved" : "Save"}
+          </button>
+        </div>
       </div>
 
       <style jsx>{`
         .card {
-          display: grid;
-          gap: 14px;
           border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
-          border-radius: 20px;
+          border-radius: 18px;
           background: var(--bg2);
-          box-shadow: var(--shadow);
           overflow: hidden;
+          display: grid;
+          transition: box-shadow 0.2s ease, transform 0.2s ease;
+        }
+        .card:hover {
+          box-shadow: 0 16px 48px rgba(15, 23, 42, 0.12);
+          transform: translateY(-2px);
         }
         .media {
           position: relative;
           aspect-ratio: 4 / 3;
           overflow: hidden;
           cursor: pointer;
+          background: color-mix(in oklab, var(--bg) 80%, transparent);
         }
         .media :global(video),
         .media :global(img) {
@@ -1371,6 +1330,11 @@ function WorkoutCard({ workout, saved, community, view, busyId, onOpen, onSave, 
           width: 100%;
           height: 100%;
           object-fit: cover;
+          transition: transform 0.3s ease;
+        }
+        .card:hover .media :global(img),
+        .card:hover .media :global(video) {
+          transform: scale(1.03);
         }
         .fallback {
           position: absolute;
@@ -1378,182 +1342,91 @@ function WorkoutCard({ workout, saved, community, view, busyId, onOpen, onSave, 
           display: grid;
           place-items: center;
           background: linear-gradient(135deg, color-mix(in oklab, var(--primary) 30%, transparent), color-mix(in oklab, var(--bg) 20%, transparent));
-          font-size: 2rem;
+          font-size: 2.5rem;
           font-weight: 800;
           color: var(--primary-contrast);
         }
-        .view {
-          position: absolute;
-          bottom: 12px;
-          right: 12px;
-          border: 0;
-          background: rgba(15, 23, 42, 0.72);
-          color: #fff;
-          border-radius: 999px;
-          padding: 8px 14px;
-          font-weight: 600;
-          cursor: pointer;
-        }
-        .meta {
-          padding: 0 18px 18px;
+        .body {
+          padding: 14px 16px 16px;
           display: grid;
           gap: 10px;
         }
-        .top {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-        }
         h3 {
-          font-size: 1.05rem;
+          font-size: 0.97rem;
           margin: 0;
           color: var(--text);
           font-weight: 700;
-        }
-        .desc {
-          margin: 0;
-          color: var(--muted);
-          font-size: 0.95rem;
-          min-height: 40px;
+          line-height: 1.3;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
         }
         .tags {
           display: flex;
-          gap: 8px;
+          gap: 6px;
           flex-wrap: wrap;
         }
         .tags span {
-          background: color-mix(in oklab, var(--primary) 12%, transparent);
-          border: 1px solid color-mix(in oklab, var(--primary) 30%, var(--border));
-          border-radius: 999px;
-          padding: 4px 10px;
-          font-size: 0.75rem;
+          font-size: 0.7rem;
           font-weight: 600;
-          color: color-mix(in oklab, var(--primary) 40%, var(--text));
+          color: var(--muted);
+          background: color-mix(in oklab, var(--bg) 85%, transparent);
+          border: 1px solid color-mix(in oklab, var(--border) 75%, transparent);
+          border-radius: 999px;
+          padding: 3px 8px;
         }
-        .owner {
+        .foot {
           display: flex;
-          justify-content: space-between;
+          gap: 8px;
           align-items: center;
-          font-size: 0.8rem;
-          color: var(--muted);
+          margin-top: 2px;
         }
-        .vis {
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
+        .detailBtn {
+          flex: 1;
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          background: transparent;
+          color: var(--text);
+          border-radius: 10px;
+          padding: 8px 12px;
+          font-size: 0.82rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: background 0.15s ease;
         }
-        .vis.public {
-          color: color-mix(in oklab, var(--primary) 50%, var(--text));
+        .detailBtn:hover {
+          background: color-mix(in oklab, var(--bg) 80%, transparent);
         }
-        .vis.private {
-          color: var(--muted);
+        .saveBtn {
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          background: transparent;
+          color: var(--text);
+          border-radius: 10px;
+          padding: 8px 12px;
+          font-size: 0.82rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+          white-space: nowrap;
+        }
+        .saveBtn:hover {
+          background: color-mix(in oklab, var(--primary) 10%, transparent);
+          border-color: color-mix(in oklab, var(--primary) 40%, var(--border));
+          color: color-mix(in oklab, var(--primary) 60%, var(--text));
+        }
+        .saveBtn.saved {
+          background: color-mix(in oklab, var(--primary) 14%, transparent);
+          border-color: color-mix(in oklab, var(--primary) 40%, var(--border));
+          color: color-mix(in oklab, var(--primary) 55%, var(--text));
+        }
+        .saveBtn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
       `}</style>
     </article>
   );
 }
-
-type SaveButtonProps = {
-  label: string;
-  open: boolean;
-  busy: boolean;
-  visibility?: SavedWorkoutVisibility;
-  onToggle: () => void;
-  onSelect: (visibility: SavedWorkoutVisibility) => void | Promise<void>;
-  onDelete?: () => void | Promise<void>;
-  allowDelete: boolean;
-  allowPrivate: boolean;
-  allowPublic: boolean;
-};
-
-const SaveButton = React.forwardRef<HTMLDivElement, SaveButtonProps>(function SaveButton(
-  { label, open, busy, visibility, onToggle, onSelect, onDelete, allowDelete, allowPrivate, allowPublic },
-  ref
-) {
-  return (
-    <div className={clsx("saveMenu", open && "open")} ref={ref as React.RefObject<HTMLDivElement>}>
-      <button type="button" className="trigger" onClick={onToggle} disabled={busy} aria-expanded={open}>
-        {busy ? "Saving…" : label}
-        <svg aria-hidden="true" viewBox="0 0 24 24">
-          <path d="m7 10 5 5 5-5" />
-        </svg>
-      </button>
-      {open ? (
-        <div className="menu" role="menu">
-          {allowPrivate ? (
-            <button type="button" role="menuitem" onClick={() => onSelect("private")} className={visibility === "private" ? "active" : ""}>
-              Save as private
-            </button>
-          ) : null}
-          {allowPublic ? (
-            <button type="button" role="menuitem" onClick={() => onSelect("public")} className={visibility === "public" ? "active" : ""}>
-              Save as public
-            </button>
-          ) : null}
-          {allowDelete && onDelete ? (
-            <button type="button" role="menuitem" className="danger" onClick={() => onDelete()}>
-              Remove from saved
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-      <style jsx>{`
-        .saveMenu {
-          position: relative;
-        }
-        .trigger {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          border-radius: 999px;
-          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
-          padding: 8px 14px;
-          background: color-mix(in oklab, var(--bg) 94%, transparent);
-          color: var(--text);
-          font-weight: 600;
-          cursor: pointer;
-        }
-        .trigger svg {
-          width: 16px;
-          height: 16px;
-          stroke: currentColor;
-          fill: none;
-        }
-        .menu {
-          position: absolute;
-          top: calc(100% + 8px);
-          right: 0;
-          background: var(--bg2);
-          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
-          border-radius: 14px;
-          box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18);
-          display: grid;
-          min-width: 190px;
-          overflow: hidden;
-          z-index: 20;
-        }
-        .menu button {
-          border: 0;
-          background: transparent;
-          text-align: left;
-          padding: 10px 14px;
-          font-size: 0.92rem;
-          color: var(--text);
-          cursor: pointer;
-        }
-        .menu button:hover {
-          background: color-mix(in oklab, var(--primary) 10%, transparent);
-        }
-        .menu button.active {
-          font-weight: 700;
-        }
-        .menu button.danger {
-          color: #b91c1c;
-        }
-      `}</style>
-    </div>
-  );
-});
 
 type DetailDialogProps = {
   item: DisplayWorkout;
@@ -1566,12 +1439,12 @@ type DetailDialogProps = {
 
 function DetailDialog({ item, onClose, onSave, onDelete, onAddToToday, busyId }: DetailDialogProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const { workout, saved, community } = item;
+  const busy = busyId === workout.id + "public" || busyId === workout.id + "private" || busyId === saved?.id;
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
+      if (event.key === "Escape") onClose();
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
@@ -1586,27 +1459,35 @@ function DetailDialog({ item, onClose, onSave, onDelete, onAddToToday, busyId }:
     };
   }, []);
 
-  const { workout, saved, community } = item;
-  const busy = busyId === workout.id + "public" || busyId === workout.id + "private" || busyId === saved?.id;
+  const ytEmbedUrl = getYouTubeEmbedUrl(workout.externalUrl);
+  const ytSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(workout.title + " exercise tutorial")}`;
+
+  const tags = [
+    workout.bodyPart,
+    workout.target && workout.target !== workout.bodyPart ? workout.target : null,
+    workout.equipment,
+  ].filter(Boolean) as string[];
 
   return (
-    <div className="overlay" role="dialog" aria-modal="true" aria-label={`${workout.title} details`}>
-      <div className="panel" ref={panelRef} tabIndex={-1}>
-        <header className="panelTop">
-          <div>
-            <h2>{workout.title}</h2>
-            <p>{workout.description}</p>
-            {community?.owner ? (
-              <span className="sharedBy">
-                Shared by {community.owner.username || community.owner.displayName || "Anonymous"}
-              </span>
-            ) : null}
-          </div>
-          <button type="button" onClick={onClose}>
-            Close
-          </button>
-        </header>
-        <div className="panelBody">
+    <div
+      className="overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${workout.title} details`}
+      onClick={onClose}
+    >
+      <div
+        className="panel"
+        ref={panelRef}
+        tabIndex={-1}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button type="button" className="closeBtn" onClick={onClose} aria-label="Close">
+          ✕
+        </button>
+
+        <div className="panelScroll">
+          {/* Media */}
           <div className="media">
             {workout.mediaUrl ? (
               workout.mediaType === "mp4" ? (
@@ -1616,7 +1497,7 @@ function DetailDialog({ item, onClose, onSave, onDelete, onAddToToday, busyId }:
                   src={workout.mediaUrl}
                   alt={workout.title}
                   fill
-                  sizes="(max-width: 768px) 100vw, 50vw"
+                  sizes="(max-width: 768px) 100vw, 60vw"
                   onError={(event) => {
                     if (event.currentTarget instanceof HTMLImageElement) {
                       event.currentTarget.src = "/placeholder.png";
@@ -1624,114 +1505,144 @@ function DetailDialog({ item, onClose, onSave, onDelete, onAddToToday, busyId }:
                   }}
                 />
               )
-            ) : null}
-          </div>
-          <div className="info">
-            <div className="chips">
-              {workout.bodyPart ? <span>{titleCase(workout.bodyPart)}</span> : null}
-              {workout.target && workout.target !== workout.bodyPart ? <span>{titleCase(workout.target)}</span> : null}
-              {workout.equipment ? <span>{titleCase(workout.equipment)}</span> : null}
-            </div>
-            {workout.instructionsHtml ? (
-              <div className="instructions" dangerouslySetInnerHTML={{ __html: workout.instructionsHtml }} />
             ) : (
-              <p>{workout.description}</p>
+              <div className="mediaFallback" aria-hidden="true">
+                <span>{workout.title.charAt(0)}</span>
+              </div>
             )}
           </div>
+
+          {/* Body */}
+          <div className="body">
+            <div className="titleRow">
+              <h2>{workout.title}</h2>
+              {community?.owner ? (
+                <p className="sharedBy">by {community.owner.username || community.owner.displayName || "Anonymous"}</p>
+              ) : null}
+            </div>
+
+            {tags.length ? (
+              <div className="tags">
+                {tags.map((tag) => (
+                  <span key={tag}>{titleCase(tag)}</span>
+                ))}
+              </div>
+            ) : null}
+
+            {workout.instructionsHtml ? (
+              <div
+                className="instructions"
+                dangerouslySetInnerHTML={{ __html: workout.instructionsHtml }}
+              />
+            ) : workout.description ? (
+              <p className="desc">{workout.description}</p>
+            ) : null}
+
+            {/* YouTube tutorial */}
+            <div className="ytSection">
+              <p className="ytLabel">Tutorial</p>
+              {ytEmbedUrl ? (
+                <div className="ytEmbed">
+                  <iframe
+                    src={ytEmbedUrl}
+                    title={`${workout.title} tutorial`}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+              ) : (
+                <a
+                  href={ytSearchUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ytSearch"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-1.96C18.88 4 12 4 12 4s-6.88 0-8.6.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.94 1.97C5.12 20 12 20 12 20s6.88 0 8.6-.45a2.78 2.78 0 0 0 1.94-1.97A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z" />
+                    <polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="var(--bg2)" />
+                  </svg>
+                  Watch &ldquo;{workout.title}&rdquo; tutorial on YouTube
+                </a>
+              )}
+            </div>
+          </div>
         </div>
-        <footer className="panelBottom">
-          <button type="button" className="secondary" onClick={() => onAddToToday(workout)}>
-            Add to planner
+
+        {/* Footer */}
+        <footer className="foot">
+          <button type="button" className="todayBtn" onClick={() => onAddToToday(workout)}>
+            Add to today
           </button>
-          <div className="actions">
-            <button type="button" className="ghost" onClick={onClose}>
-              Close
-            </button>
-            <button
-              type="button"
-              className="primary"
-              disabled={busy}
-              onClick={() => onSave(workout, saved?.visibility ?? "private", saved ?? null)}
-            >
-              {busy ? "Saving…" : saved ? `Save (${saved.visibility})` : "Save (private)"}
-            </button>
+          <div className="footActions">
             {saved ? (
-              <button type="button" className="danger" disabled={busy} onClick={() => onDelete(saved)}>
+              <button type="button" className="removeBtn" disabled={busy} onClick={() => onDelete(saved)}>
                 Remove
               </button>
             ) : null}
+            <button
+              type="button"
+              className={clsx("saveActionBtn", saved && "isSaved")}
+              disabled={busy}
+              onClick={() => onSave(workout, saved?.visibility ?? "private", saved ?? null)}
+            >
+              {busy ? "Saving…" : saved ? `Saved (${saved.visibility})` : "Save"}
+            </button>
           </div>
         </footer>
       </div>
+
       <style jsx>{`
         .overlay {
           position: fixed;
           inset: 0;
-          background: rgba(2, 6, 23, 0.65);
+          background: rgba(2, 6, 23, 0.7);
           display: grid;
           place-items: center;
-          padding: 20px;
+          padding: 16px;
           z-index: 1400;
         }
         .panel {
           background: var(--bg2);
           border-radius: 24px;
           border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
-          width: min(900px, 100%);
-          max-height: 90vh;
+          width: min(680px, 100%);
+          max-height: 92vh;
           overflow: hidden;
           display: grid;
-          grid-template-rows: auto 1fr auto;
-          gap: 0;
+          grid-template-rows: 1fr auto;
+          position: relative;
           outline: none;
+          box-shadow: 0 40px 120px rgba(15, 23, 42, 0.4);
         }
-        .panelTop {
-          display: flex;
-          justify-content: space-between;
-          gap: 16px;
-          padding: 20px 24px;
-          border-bottom: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
-        }
-        .panelTop h2 {
-          margin: 0 0 8px;
-          font-size: 1.4rem;
+        .closeBtn {
+          position: absolute;
+          top: 14px;
+          right: 14px;
+          z-index: 10;
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          background: color-mix(in oklab, var(--bg2) 92%, transparent);
           color: var(--text);
-          letter-spacing: -0.01em;
-        }
-        .panelTop p {
-          margin: 0;
-          color: var(--muted);
-        }
-        .sharedBy {
-          display: block;
-          margin-top: 6px;
-          font-size: 0.85rem;
-          color: color-mix(in oklab, var(--primary) 45%, var(--text));
-        }
-        .panelTop button {
-          border: 0;
-          background: transparent;
-          color: var(--text);
-          font-weight: 600;
-          cursor: pointer;
-        }
-        .panelBody {
+          font-size: 1rem;
           display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 24px;
-          padding: 24px;
-          overflow-y: auto;
+          place-items: center;
+          cursor: pointer;
+          backdrop-filter: blur(8px);
+          transition: background 0.15s ease;
         }
-        @media (max-width: 768px) {
-          .panelBody {
-            grid-template-columns: 1fr;
-          }
+        .closeBtn:hover {
+          background: color-mix(in oklab, var(--bg) 80%, transparent);
+        }
+        .panelScroll {
+          overflow-y: auto;
         }
         .media {
           position: relative;
+          width: 100%;
+          aspect-ratio: 16 / 9;
           overflow: hidden;
-          border-radius: 18px;
-          aspect-ratio: 4 / 3;
           background: color-mix(in oklab, var(--bg) 80%, transparent);
         }
         .media :global(video),
@@ -1742,72 +1653,209 @@ function DetailDialog({ item, onClose, onSave, onDelete, onAddToToday, busyId }:
           height: 100%;
           object-fit: cover;
         }
-        .info {
+        .mediaFallback {
+          position: absolute;
+          inset: 0;
+          display: grid;
+          place-items: center;
+          background: linear-gradient(135deg, color-mix(in oklab, var(--primary) 25%, transparent), color-mix(in oklab, var(--bg) 15%, transparent));
+          font-size: 4rem;
+          font-weight: 800;
+          color: var(--primary-contrast);
+        }
+        .body {
+          padding: 20px 24px 24px;
           display: grid;
           gap: 16px;
         }
-        .chips {
+        .titleRow {
+          display: grid;
+          gap: 4px;
+        }
+        h2 {
+          margin: 0;
+          font-size: 1.4rem;
+          color: var(--text);
+          letter-spacing: -0.01em;
+          line-height: 1.25;
+        }
+        .sharedBy {
+          margin: 0;
+          font-size: 0.82rem;
+          color: color-mix(in oklab, var(--primary) 50%, var(--muted));
+        }
+        .tags {
           display: flex;
           gap: 8px;
           flex-wrap: wrap;
         }
-        .chips span {
-          background: color-mix(in oklab, var(--primary) 12%, transparent);
-          border: 1px solid color-mix(in oklab, var(--primary) 35%, var(--border));
+        .tags span {
+          background: color-mix(in oklab, var(--primary) 10%, transparent);
+          border: 1px solid color-mix(in oklab, var(--primary) 28%, var(--border));
           border-radius: 999px;
           padding: 4px 12px;
-          font-size: 0.8rem;
+          font-size: 0.78rem;
+          font-weight: 600;
+          color: color-mix(in oklab, var(--primary) 45%, var(--text));
         }
         .instructions {
-          display: grid;
-          gap: 10px;
           color: var(--text);
+          line-height: 1.65;
+          font-size: 0.95rem;
         }
         .instructions :global(p) {
-          margin: 0;
-          line-height: 1.6;
+          margin: 0 0 10px;
         }
-        .instructions :global(ul), .instructions :global(ol) {
+        .instructions :global(p:last-child) {
+          margin-bottom: 0;
+        }
+        .instructions :global(ul),
+        .instructions :global(ol) {
           margin: 0;
           padding-left: 20px;
         }
-        .panelBottom {
+        .desc {
+          margin: 0;
+          color: var(--muted);
+          line-height: 1.6;
+          font-size: 0.95rem;
+        }
+        .ytSection {
+          border-top: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          padding-top: 16px;
+          display: grid;
+          gap: 10px;
+        }
+        .ytLabel {
+          margin: 0;
+          font-size: 0.72rem;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--muted);
+          font-weight: 700;
+        }
+        .ytEmbed {
+          position: relative;
+          width: 100%;
+          padding-bottom: 56.25%;
+          border-radius: 14px;
+          overflow: hidden;
+        }
+        .ytEmbed iframe {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          border: 0;
+        }
+        .ytSearch {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          padding: 12px 16px;
+          border-radius: 14px;
+          border: 1px solid color-mix(in oklab, #ef4444 30%, var(--border));
+          background: color-mix(in oklab, #ef4444 6%, transparent);
+          color: var(--text);
+          text-decoration: none;
+          font-weight: 600;
+          font-size: 0.9rem;
+          transition: background 0.15s ease;
+        }
+        .ytSearch:hover {
+          background: color-mix(in oklab, #ef4444 12%, transparent);
+        }
+        .ytSearch svg {
+          width: 22px;
+          height: 22px;
+          fill: #ef4444;
+          flex-shrink: 0;
+        }
+        .foot {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          gap: 16px;
-          padding: 20px 24px;
+          gap: 12px;
+          padding: 16px 24px;
           border-top: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
           flex-wrap: wrap;
+          background: color-mix(in oklab, var(--bg2) 98%, transparent);
         }
-        .panelBottom button {
-          border: 0;
+        .footActions {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .todayBtn {
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          background: transparent;
+          color: var(--text);
           border-radius: 999px;
           padding: 10px 18px;
           font-weight: 600;
           cursor: pointer;
+          font-size: 0.9rem;
+          transition: background 0.15s ease;
         }
-        .actions {
-          display: flex;
-          gap: 10px;
-          flex-wrap: wrap;
+        .todayBtn:hover {
+          background: color-mix(in oklab, var(--bg) 80%, transparent);
         }
-        .primary {
+        .removeBtn {
+          border: 1px solid color-mix(in oklab, #ef4444 40%, var(--border));
+          background: transparent;
+          color: #b91c1c;
+          border-radius: 999px;
+          padding: 10px 18px;
+          font-weight: 600;
+          cursor: pointer;
+          font-size: 0.9rem;
+          transition: background 0.15s ease;
+        }
+        .removeBtn:hover {
+          background: color-mix(in oklab, #ef4444 8%, transparent);
+        }
+        .removeBtn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .saveActionBtn {
+          border: 0;
           background: var(--primary);
           color: var(--primary-contrast);
+          border-radius: 999px;
+          padding: 10px 22px;
+          font-weight: 700;
+          cursor: pointer;
+          font-size: 0.9rem;
+          box-shadow: 0 8px 24px color-mix(in oklab, var(--primary) 30%, transparent);
+          transition: filter 0.15s ease;
         }
-        .secondary {
-          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
-          background: var(--bg);
-          color: var(--text);
+        .saveActionBtn:hover {
+          filter: brightness(1.07);
         }
-        .ghost {
-          background: transparent;
-          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+        .saveActionBtn.isSaved {
+          background: color-mix(in oklab, var(--primary) 18%, transparent);
+          color: color-mix(in oklab, var(--primary) 60%, var(--text));
+          box-shadow: none;
+          border: 1px solid color-mix(in oklab, var(--primary) 35%, var(--border));
         }
-        .danger {
-          background: #b91c1c;
-          color: #fff;
+        .saveActionBtn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        @media (max-width: 520px) {
+          .panel {
+            border-radius: 20px;
+          }
+          .body {
+            padding: 16px 18px 20px;
+          }
+          .foot {
+            padding: 14px 18px;
+          }
+          h2 {
+            font-size: 1.2rem;
+          }
         }
       `}</style>
     </div>
@@ -1823,21 +1871,18 @@ function SkeletonCards() {
           <div className="lines">
             <div />
             <div />
-            <div />
           </div>
           <style jsx>{`
             .skeleton {
               display: grid;
               gap: 12px;
-              border-radius: 20px;
+              border-radius: 18px;
               border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
               background: color-mix(in oklab, var(--bg2) 94%, transparent);
               overflow: hidden;
-              padding: 18px;
             }
             .block {
-              height: 180px;
-              border-radius: 16px;
+              aspect-ratio: 4 / 3;
               background: linear-gradient(90deg, color-mix(in oklab, var(--bg) 88%, transparent), color-mix(in oklab, var(--bg2) 70%, transparent), color-mix(in oklab, var(--bg) 88%, transparent));
               background-size: 200% 100%;
               animation: shimmer 1.4s infinite;
@@ -1845,6 +1890,7 @@ function SkeletonCards() {
             .lines {
               display: grid;
               gap: 8px;
+              padding: 0 16px 16px;
             }
             .lines div {
               height: 12px;
@@ -1852,6 +1898,9 @@ function SkeletonCards() {
               background: linear-gradient(90deg, color-mix(in oklab, var(--bg) 88%, transparent), color-mix(in oklab, var(--bg2) 70%, transparent), color-mix(in oklab, var(--bg) 88%, transparent));
               background-size: 200% 100%;
               animation: shimmer 1.4s infinite;
+            }
+            .lines div:last-child {
+              width: 60%;
             }
             @keyframes shimmer {
               0% { background-position: 0% 50%; }
@@ -1864,10 +1913,20 @@ function SkeletonCards() {
   );
 }
 
+function getYouTubeEmbedUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([A-Za-z0-9_-]{11})/);
+  if (!match) return null;
+  return `https://www.youtube.com/embed/${match[1]}?rel=0`;
+}
+
 function snippet(text: string, limit = 160) {
   if (!text) return "";
   return text.length > limit ? `${text.slice(0, limit)}…` : text;
 }
+
+// snippet is kept but not rendered in cards — used for aria / search descriptions if needed
+void snippet;
 
 function titleCase(value: string) {
   return value
