@@ -11,6 +11,7 @@ export default function Button({ variant = "primary", size = "md", className = "
   return (
     <>
       <button
+        type={rest.type ?? "button"}
         className={`btn ${variant} ${size} ${className}`}
         {...rest}
       />

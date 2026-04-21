@@ -916,10 +916,12 @@ export default function ProfilePage() {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 18px;
+          align-items: start;
         }
         .profileCard {
           display: grid;
           gap: 16px;
+          align-self: start;
         }
         .span2 {
           grid-column: span 2;
@@ -1022,7 +1024,7 @@ export default function ProfilePage() {
           flex-wrap: wrap;
         }
         .themeBlock {
-          padding: 12px 0;
+          padding: 8px 0;
           border-bottom: 1px dashed var(--border);
         }
         .providerRow {

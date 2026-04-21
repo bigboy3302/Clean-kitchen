@@ -212,6 +212,18 @@ p  { color: var(--muted); margin: 0 0 10px }
   border-color: transparent;
 }
 .recipesPage .recipeBtn:hover { filter: brightness(.98); }
+.recipesPage .recipeBtnShare { flex: none; padding: 10px 14px; color: var(--muted); }
+.recipesPage .recipeBtnShareDone {
+  background: #dcfce7;
+  border-color: #bbf7d0;
+  color: #15803d;
+  font-weight: 800;
+}
+[data-theme="dark"] .recipesPage .recipeBtnShareDone {
+  background: rgba(22,163,74,0.18);
+  border-color: rgba(22,163,74,0.32);
+  color: #4ade80;
+}
 
 .recipesPage .recipeSearchBar {
   background: var(--bg-raised);

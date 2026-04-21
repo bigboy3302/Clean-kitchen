@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db, storage } from "@/lib/firebas1e";
-import { doc, updateDoc, serverTimestamp, deleteDoc } from "firebase/firestore";
+import { doc, updateDoc, serverTimestamp, deleteDoc, getDoc } from "firebase/firestore";
 import { getDownloadURL, ref as sref, uploadBytes } from "firebase/storage";
 import BookWritingLoader from "./BookWritingLoader";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -48,7 +48,7 @@ function splitIngredientLine(line: string) {
   return { name: trimmed, measure: "" };
 }
 
-export default function EditorClient({ initial }: { initial: RecipeDoc }) {
+export default function EditorClient({ initial }: { initial: RecipeDoc | null }) {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const id = params.id;
@@ -63,17 +63,16 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
     return () => stop();
   }, []);
 
-  const [ownerUid] = useState<string | null>(initial?.uid || null);
-  const [title, setTitle] = useState(initial?.title || "");
-  const [category, setCategory] = useState(initial?.category || "");
-  const [area, setArea] = useState(initial?.area || "");
-  const [cover, setCover] = useState<string | null>(initial?.image || initial?.imageURL || null);
-  const [minutes, setMinutes] = useState(
-    String(initial?.timeMinutes ?? (initial as { minutes?: number | null }).minutes ?? "")
-  );
-  const [servings, setServings] = useState(String(initial?.servings ?? ""));
-  const [ingredientsText, setIngredientsText] = useState(ingredientsToText(initial?.ingredients));
-  const [stepsText, setStepsText] = useState((initial?.instructions || "").trim());
+  const [recipe, setRecipe] = useState<RecipeDoc | null>(initial);
+  const [loadingRecipe, setLoadingRecipe] = useState(!initial);
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState("");
+  const [area, setArea] = useState("");
+  const [cover, setCover] = useState<string | null>(null);
+  const [minutes, setMinutes] = useState("");
+  const [servings, setServings] = useState("");
+  const [ingredientsText, setIngredientsText] = useState("");
+  const [stepsText, setStepsText] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -82,9 +81,57 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
   const [deleting, setDeleting] = useState(false);
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
 
+  const ownerUid = recipe?.uid || null;
   const isOwner = useMemo(() => !!me && !!ownerUid && me.uid === ownerUid, [me, ownerUid]);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadRecipe() {
+      if (!id) return;
+      setLoadingRecipe(true);
+      try {
+        const snap = await getDoc(doc(db, "recipes", String(id)));
+        if (!snap.exists()) {
+          if (!cancelled) {
+            setRecipe(null);
+            setErr("Recipe not found.");
+          }
+          return;
+        }
+        if (!cancelled) {
+          setRecipe({ id: snap.id, ...(snap.data() as Omit<RecipeDoc, "id">) });
+          setErr(null);
+        }
+      } catch (error: unknown) {
+        if (!cancelled) {
+          const message = error instanceof Error ? error.message : "Failed to load recipe.";
+          setErr(message);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingRecipe(false);
+        }
+      }
+    }
+    void loadRecipe();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  useEffect(() => {
+    if (!recipe) return;
+    setTitle(recipe.title || "");
+    setCategory(recipe.category || "");
+    setArea(recipe.area || "");
+    setCover(recipe.image || recipe.imageURL || null);
+    setMinutes(String(recipe.timeMinutes ?? (recipe as { minutes?: number | null }).minutes ?? ""));
+    setServings(String(recipe.servings ?? ""));
+    setIngredientsText(ingredientsToText(recipe.ingredients));
+    setStepsText((recipe.instructions || "").trim());
+  }, [recipe]);
 
   async function onPickCover(e: React.ChangeEvent<HTMLInputElement>) {
     const inputEl = fileInputRef.current;
@@ -192,8 +239,21 @@ export default function EditorClient({ initial }: { initial: RecipeDoc }) {
     }
   }
 
-  if (!authReady) {
+  if (!authReady || loadingRecipe) {
     return <BookWritingLoader variant="flip" />;
+  }
+
+  if (!recipe) {
+    return (
+      <main className="container section">
+        <div className="card">
+          <p>{err || "Recipe not found."}</p>
+          <Link className="btn-base btn--secondary btn--md" href="/recipes">
+            Back to recipes
+          </Link>
+        </div>
+      </main>
+    );
   }
 
   if (!isOwner) {

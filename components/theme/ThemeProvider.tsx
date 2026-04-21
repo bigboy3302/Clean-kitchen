@@ -184,6 +184,63 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }, [readSystemPrefersDark]);
 
+  const setMode = useCallback((nextMode: ThemeMode, options?: { palette?: Palette; persistCustom?: boolean }) => {
+    modeRef.current = nextMode;
+    setModeState(nextMode);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(LS_MODE, nextMode);
+    }
+
+    let customPalette = customRef.current;
+    if (options?.palette) {
+      customPalette = { ...LIGHT, ...options.palette };
+      customRef.current = customPalette;
+      const shouldPersist = options.persistCustom ?? true;
+      if (shouldPersist && typeof window !== "undefined") {
+        localStorage.setItem(LS_CUSTOM, JSON.stringify(customPalette));
+      }
+    }
+
+    applyForMode(nextMode, customPalette);
+  }, [applyForMode]);
+
+  const setPalette = useCallback((p: Palette, options?: { persist?: boolean }) => {
+    const nextPalette: Palette = { ...p };
+    const persist = options?.persist ?? modeRef.current === "custom";
+    if (modeRef.current === "custom" || persist) {
+      customRef.current = nextPalette;
+    }
+    if (persist && typeof window !== "undefined") {
+      localStorage.setItem(LS_CUSTOM, JSON.stringify(customRef.current));
+    }
+
+    setPaletteState(nextPalette);
+
+    if (typeof window !== "undefined") {
+      const systemIsDark = readSystemPrefersDark();
+      const activeMode = modeRef.current;
+      const attr: "light" | "dark" | "custom" =
+        activeMode === "system"
+          ? systemIsDark
+            ? "dark"
+            : "light"
+          : activeMode === "custom"
+          ? "custom"
+          : activeMode;
+      const paletteToApply =
+        activeMode === "custom"
+          ? nextPalette
+          : activeMode === "dark"
+          ? DARK
+          : activeMode === "light"
+          ? LIGHT
+          : systemIsDark
+          ? DARK
+          : LIGHT;
+      applyCssVars(paletteToApply, attr);
+    }
+  }, [readSystemPrefersDark]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -243,63 +300,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<Ctx>(() => ({
     mode,
-    setMode: (nextMode, options) => {
-      modeRef.current = nextMode;
-      setModeState(nextMode);
-      if (typeof window !== "undefined") {
-        localStorage.setItem(LS_MODE, nextMode);
-      }
-
-      let customPalette = customRef.current;
-      if (options?.palette) {
-        customPalette = { ...LIGHT, ...options.palette };
-        customRef.current = customPalette;
-        const shouldPersist = options.persistCustom ?? true;
-        if (shouldPersist && typeof window !== "undefined") {
-          localStorage.setItem(LS_CUSTOM, JSON.stringify(customPalette));
-        }
-      }
-
-      applyForMode(nextMode, customPalette);
-    },
+    setMode,
     palette,
-    setPalette: (p, options) => {
-      const nextPalette: Palette = { ...p };
-      const persist = options?.persist ?? modeRef.current === "custom";
-      if (modeRef.current === "custom" || persist) {
-        customRef.current = nextPalette;
-      }
-      if (persist && typeof window !== "undefined") {
-        localStorage.setItem(LS_CUSTOM, JSON.stringify(customRef.current));
-      }
-
-      setPaletteState(nextPalette);
-
-      if (typeof window !== "undefined") {
-        const systemIsDark = readSystemPrefersDark();
-        const activeMode = modeRef.current;
-        const attr: "light" | "dark" | "custom" =
-          activeMode === "system"
-            ? systemIsDark
-              ? "dark"
-              : "light"
-            : activeMode === "custom"
-            ? "custom"
-            : activeMode;
-        const paletteToApply =
-          activeMode === "custom"
-            ? nextPalette
-            : activeMode === "dark"
-            ? DARK
-            : activeMode === "light"
-            ? LIGHT
-            : systemIsDark
-            ? DARK
-            : LIGHT;
-        applyCssVars(paletteToApply, attr);
-      }
-    },
-  }), [mode, palette, applyForMode, readSystemPrefersDark]);
+    setPalette,
+  }), [mode, palette, setMode, setPalette]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

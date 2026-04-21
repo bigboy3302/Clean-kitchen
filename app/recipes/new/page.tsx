@@ -135,30 +135,10 @@ export default function NewRecipePage() {
             <div className="recipeForm">
               <div>
                 <label>Title *</label>
-                  <input value={title} onChange={(e) => setTitle(e.currentTarget.value)} disabled={!user} />
-              </div>
-
-              <div>
-                <label>Description</label>
-                  <textarea
-                    rows={3}
-                    value={description}
-                    onChange={(e) => setDescription(e.currentTarget.value)}
-                    disabled={!user}
-                  />
+                <input value={title} onChange={(e) => setTitle(e.currentTarget.value)} disabled={!user} />
               </div>
 
               <div className="formRow2">
-                <div>
-                  <label>Time (minutes) *</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={timeMinutes}
-                    onChange={(e) => setTimeMinutes(e.currentTarget.value)}
-                    disabled={!user}
-                  />
-                </div>
                 <div>
                   <label>Servings *</label>
                   <input
@@ -166,6 +146,16 @@ export default function NewRecipePage() {
                     min={1}
                     value={servings}
                     onChange={(e) => setServings(e.currentTarget.value)}
+                    disabled={!user}
+                  />
+                </div>
+                <div>
+                  <label>Time (minutes) *</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={timeMinutes}
+                    onChange={(e) => setTimeMinutes(e.currentTarget.value)}
                     disabled={!user}
                   />
                 </div>
@@ -178,6 +168,7 @@ export default function NewRecipePage() {
                     value={category}
                     onChange={(e) => setCategory(e.currentTarget.value)}
                     placeholder="e.g., Dinner"
+                    disabled={!user}
                   />
                 </div>
                 <div>
@@ -186,8 +177,19 @@ export default function NewRecipePage() {
                     value={area}
                     onChange={(e) => setArea(e.currentTarget.value)}
                     placeholder="e.g., Italian"
+                    disabled={!user}
                   />
                 </div>
+              </div>
+
+              <div>
+                <label>Description</label>
+                <textarea
+                  rows={3}
+                  value={description}
+                  onChange={(e) => setDescription(e.currentTarget.value)}
+                  disabled={!user}
+                />
               </div>
 
               <div>
@@ -196,6 +198,7 @@ export default function NewRecipePage() {
                   value={imageURL}
                   onChange={(e) => setImageURL(e.currentTarget.value)}
                   placeholder="https://..."
+                  disabled={!user}
                 />
               </div>
 
