@@ -17,7 +17,6 @@ import { onAuthStateChanged } from "firebase/auth";
 // NOTE: if your file is actually "firebas1e", switch it back.
 import { auth, db } from "@/lib/firebas1e";
 
-import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import type { CommonRecipe, Ingredient } from "@/components/recipes/types";
 import RecipeModal from "@/components/recipes/RecipeModal";

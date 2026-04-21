@@ -75,21 +75,6 @@ function valueToMillis(value) {
   return 0;
 }
 
-function formatRelativeFromMs(ms) {
-  if (!ms) return "";
-  const diffSeconds = Math.max(1, Math.floor((Date.now() - ms) / 1000));
-  const steps = [
-    [60, "s"], [60, "m"], [24, "h"], [7, "d"],
-    [4.345, "w"], [12, "mo"], [Number.MAX_SAFE_INTEGER, "y"],
-  ];
-  let value = diffSeconds;
-  let idx = 0;
-  for (; idx < steps.length - 1 && value >= steps[idx][0]; idx++) {
-    value = Math.floor(value / steps[idx][0]);
-  }
-  return `${value}${steps[idx][1]}`;
-}
-
 function daysUntilExpiry(dateStr) {
   if (!dateStr) return null;
   const expiry = new Date(dateStr);
@@ -257,11 +242,6 @@ export default function DashboardPage() {
       })
       .map(({ post }) => post);
   }, [trending, trendingReposts]);
-
-  const myPosts = useMemo(
-    () => (uid ? recentPosts.filter((p) => p?.uid === uid) : []),
-    [recentPosts, uid]
-  );
 
   const spotlightRecipe = communityRecipes[0] ?? null;
   const trendingRecipe = communityRecipes[1] ?? communityRecipes[0] ?? null;
@@ -609,7 +589,7 @@ export default function DashboardPage() {
             <div className="ov-body">
               <div className="ov-num">{myRecipesCount}</div>
               <div className="ov-label">My Recipes</div>
-              <div className="ov-hint">Recipes you've created</div>
+              <div className="ov-hint">Recipes you&apos;ve created</div>
             </div>
             <Link href="/recipes" className="ov-link">View <IconArrow /></Link>
           </div>
@@ -679,7 +659,7 @@ export default function DashboardPage() {
               <div className="pantry-head">
                 <div>
                   <h2 className="block-title">🥬 Cook with what you have</h2>
-                  <p className="block-sub">
+                  <p className="block-sub pantry-sub">
                     {pantryItems.length === 0
                       ? "Add pantry items to get personalised recipe suggestions."
                       : `${pantryItems.length} items in your pantry${expiringItems.length > 0 ? ` · ${expiringItems.length} expiring within 7 days` : ""}`}
@@ -1007,7 +987,7 @@ export default function DashboardPage() {
             </div>
             <div className="mBody">
               {errPost ? <p className="bad">{errPost}</p> : null}
-              <label className="lab">What's on your mind?</label>
+              <label className="lab">What&apos;s on your mind?</label>
               <textarea
                 rows={4}
                 value={postText}
@@ -1016,6 +996,12 @@ export default function DashboardPage() {
               />
               <label className="lab">Add photos or videos (up to 4)</label>
               <input ref={fileRef} type="file" accept="image/*,video/*" multiple onChange={onPick} />
+              {previews.some((m) => m.type === "video") && (
+                <div className="videoWarn">
+                  <span className="videoWarnIcon">⚠</span>
+                  Videos can take a few minutes to upload — please keep this window open until posting is done.
+                </div>
+              )}
               {previews.length > 0 && (
                 <div className={`preview grid-${Math.min(previews.length, 2)}`}>
                   {previews.map((m, i) => (
@@ -1441,6 +1427,12 @@ export default function DashboardPage() {
           font-size: 18px;
           font-weight: 800;
           color: var(--text);
+        }
+        .pantry-sub {
+          color: #475569;
+        }
+        [data-theme="dark"] .pantry-sub {
+          color: #94a3b8;
         }
         .pantry-ctas {
           display: flex;
@@ -1929,6 +1921,8 @@ export default function DashboardPage() {
           box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 18%, transparent);
         }
         textarea { min-height: 120px; resize: vertical; }
+        .videoWarn { display: flex; align-items: flex-start; gap: 8px; background: #fef2f2; border: 1.5px solid #fca5a5; border-radius: 10px; padding: 10px 12px; font-size: 13px; color: #991b1b; line-height: 1.45; }
+        .videoWarnIcon { flex-shrink: 0; font-size: 15px; margin-top: 1px; }
         .preview { display: grid; gap: 12px; }
         .preview.grid-1 { grid-template-columns: 1fr; }
         .preview.grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
