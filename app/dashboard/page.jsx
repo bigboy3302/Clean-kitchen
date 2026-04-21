@@ -341,10 +341,10 @@ export default function DashboardPage() {
     return () => stop();
   }, [uid]);
 
-  // Saved recipes count
+  // Saved recipes count — stored at users/{uid}/savedFoods
   useEffect(() => {
     if (!uid) { setSavedCount(0); return; }
-    const q = query(collection(db, "savedRecipes"), where("uid", "==", uid));
+    const q = collection(db, "users", uid, "savedFoods");
     const stop = onSnapshot(q, (snap) => setSavedCount(snap.size), () => setSavedCount(0));
     return () => stop();
   }, [uid]);
@@ -555,21 +555,6 @@ export default function DashboardPage() {
                   Browse in read-only mode. Sign in to create recipes, like posts, and connect.
                 </p>
               )}
-              <div className="hero-btns">
-                <button
-                  type="button"
-                  className="hero-btn-primary"
-                  onClick={() => uid ? setShowWizard(true) : openRegister("/dashboard")}
-                >
-                  <IconChef /> Create Recipe
-                </button>
-                <Link href="/recipes" className="hero-btn-secondary">
-                  <IconSearch /> Explore Recipes
-                </Link>
-              </div>
-              <Link href="/dashboard/pantry" className="hero-pantry-link">
-                Manage your pantry →
-              </Link>
             </div>
             <div className="hero-right">
               <div className="hero-badge">
@@ -996,10 +981,12 @@ export default function DashboardPage() {
               />
               <label className="lab">Add photos or videos (up to 4)</label>
               <input ref={fileRef} type="file" accept="image/*,video/*" multiple onChange={onPick} />
-              {previews.some((m) => m.type === "video") && (
+              {previews.length > 0 && (
                 <div className="videoWarn">
                   <span className="videoWarnIcon">⚠</span>
-                  Videos can take a few minutes to upload — please keep this window open until posting is done.
+                  {previews.some((m) => m.type === "video")
+                    ? "Videos can take a few minutes to upload — please keep this window open until posting is done."
+                    : "Photos may take a few seconds to upload — please keep this window open until posting is done."}
                 </div>
               )}
               {previews.length > 0 && (

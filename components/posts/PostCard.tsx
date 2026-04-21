@@ -85,6 +85,7 @@ export default function PostCard({
   const [liked, setLiked] = useState<boolean>(false);
   const [hasReposted, setHasReposted] = useState<boolean>(false);
 
+  const [lightbox, setLightbox] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(text || "");
@@ -129,7 +130,7 @@ export default function PostCard({
       }
     }
     function handleKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setMenuOpen(false);
+      if (event.key === "Escape") { setMenuOpen(false); setLightbox(null); }
     }
     document.addEventListener("mousedown", handleClick);
     document.addEventListener("keydown", handleKey);
@@ -395,13 +396,15 @@ export default function PostCard({
                   {m.type === "video" ? (
                     <video src={m.url} controls playsInline preload="metadata" />
                   ) : (
-                    <Image
-                      src={m.url}
-                      alt=""
-                      fill
-                      sizes="(max-width: 768px) 80vw, 420px"
-                      className="mediaImg"
-                    />
+                    <button type="button" className="imgBtn" onClick={() => setLightbox(m.url)} aria-label="View full image">
+                      <Image
+                        src={m.url}
+                        alt=""
+                        fill
+                        sizes="(max-width: 768px) 80vw, 420px"
+                        className="mediaImg"
+                      />
+                    </button>
                   )}
                 </div>
               ))}
@@ -525,6 +528,16 @@ export default function PostCard({
           </div>
         </div>
       </article>
+
+      {lightbox && (
+        <div className="lbBackdrop" role="dialog" aria-modal onClick={() => setLightbox(null)}>
+          <button type="button" className="lbClose" onClick={() => setLightbox(null)} aria-label="Close">✕</button>
+          <div className="lbImgWrap" onClick={(e) => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={lightbox} alt="" className="lbImg" />
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         .pc {
@@ -977,6 +990,74 @@ export default function PostCard({
         }
         .reportPrimary:disabled {
           box-shadow: none;
+        }
+        .imgBtn {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          border: 0;
+          background: transparent;
+          padding: 0;
+          cursor: zoom-in;
+          display: block;
+        }
+        .imgBtn:hover::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: rgba(0,0,0,0.08);
+          pointer-events: none;
+        }
+        .lbBackdrop {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.88);
+          display: grid;
+          place-items: center;
+          padding: 16px;
+          z-index: 2000;
+          cursor: zoom-out;
+          animation: lbIn 0.18s ease;
+        }
+        @keyframes lbIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .lbClose {
+          position: fixed;
+          top: 16px;
+          right: 20px;
+          width: 40px;
+          height: 40px;
+          border-radius: 999px;
+          border: 1px solid rgba(255,255,255,0.25);
+          background: rgba(255,255,255,0.12);
+          color: #fff;
+          font-size: 18px;
+          display: grid;
+          place-items: center;
+          cursor: pointer;
+          z-index: 2001;
+          transition: background 0.15s;
+        }
+        .lbClose:hover {
+          background: rgba(255,255,255,0.22);
+        }
+        .lbImgWrap {
+          max-width: min(90vw, 1100px);
+          max-height: 90vh;
+          cursor: default;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .lbImg {
+          max-width: 100%;
+          max-height: 90vh;
+          border-radius: 12px;
+          object-fit: contain;
+          box-shadow: 0 24px 80px rgba(0,0,0,0.6);
         }
       `}</style>
     </>
