@@ -1,10 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import ExpiryBell from "@/components/nav/ExpiryBell";
-import BottomNav from "@/components/nav/BottomNav";
-import PrimaryNavbar from "@/components/nav/PrimaryNavbar";
+import Sidebar from "@/components/nav/Sidebar";
+import TopBar from "@/components/nav/TopBar";
 
 const HIDE_CHROME_PATHS = new Set([
   "/auth/forgot",
@@ -21,13 +20,29 @@ function shouldHideChrome(pathname: string): boolean {
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "/";
   const hideChrome = shouldHideChrome(pathname);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileNavOpen]);
 
   if (hideChrome) {
     return (
-      <main className="app-shell-main bare" data-shell="bare">
+      <main className="shell-bare" data-shell="bare">
         {children}
         <style jsx>{`
-          .app-shell-main.bare {
+          .shell-bare {
             min-height: 100dvh;
             display: flex;
             flex-direction: column;
@@ -39,55 +54,54 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <PrimaryNavbar />
-
-      <main className="app-shell-main container section">
-        <div className="mobileNavBell">
-          <ExpiryBell />
-        </div>
-        {children}
-      </main>
-
-      <footer className="section">
-        <div className="container muted" style={{ fontSize: 12 }} />
-      </footer>
-
-      <BottomNav />
+      <Sidebar mobileOpen={mobileNavOpen} onRequestClose={() => setMobileNavOpen(false)} />
+      <div className="shell-body">
+        <TopBar mobileNavOpen={mobileNavOpen} onOpenMobileNav={() => setMobileNavOpen((open) => !open)} />
+        <main className="shell-main">
+          {children}
+        </main>
+        <footer className="shell-footer">
+          <span>© 2024 Clean Kitchen. All rights reserved.</span>
+          <a href="/privacy">Privacy Policy</a>
+          <a href="/terms">Terms of Service</a>
+        </footer>
+      </div>
 
       <style jsx>{`
-        .app-shell-main {
-          display: grid;
-          gap: 24px;
-          padding-top: 32px;
-          padding-bottom: max(96px, var(--bottomnav-h) + 24px);
-        }
-        .mobileNavBell {
-          display: none;
-        }
-        footer.section {
-          padding-top: 12px;
-          padding-bottom: 48px;
-        }
-        footer .container {
+        .shell-body {
+          margin-left: 240px;
+          min-height: 100dvh;
           display: flex;
-          justify-content: flex-end;
+          flex-direction: column;
         }
+        .shell-main {
+          flex: 1;
+          padding: 0;
+        }
+        .shell-footer {
+          padding: 20px 24px;
+          display: flex;
+          align-items: center;
+          gap: 20px;
+          font-size: 12px;
+          color: var(--muted);
+          border-top: 1px solid var(--border);
+        }
+        .shell-footer a {
+          color: var(--muted);
+          text-decoration: none;
+          transition: color 0.14s;
+        }
+        .shell-footer a:hover { color: var(--text); }
         @media (max-width: 768px) {
-          .app-shell-main {
-            padding-top: 20px;
-            padding-bottom: calc(var(--bottomnav-h) + 48px);
+          .shell-body {
+            margin-left: 0;
+            min-width: 0;
           }
-          .mobileNavBell {
-            display: flex;
-            justify-content: center;
-            position: sticky;
-            top: calc(env(safe-area-inset-top) + 8px);
-            z-index: 25;
-            padding-bottom: 12px;
+          .shell-main {
+            padding-bottom: 20px;
           }
-          .mobileNavBell > :global(*) {
-            margin: 0 auto;
-          }
+          .shell-footer { display: none; }
         }
       `}</style>
     </>

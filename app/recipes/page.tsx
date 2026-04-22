@@ -18,6 +18,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebas1e";
 
 import Button from "@/components/ui/Button";
+import { useAuthModal } from "@/context/AuthModalContext";
 import type { CommonRecipe, Ingredient } from "@/components/recipes/types";
 import RecipeModal from "@/components/recipes/RecipeModal";
 import { getRecipePlaceholder } from "@/components/recipes/RecipeCard";
@@ -343,6 +344,7 @@ function RecipeSkeletons() {
 export default function RecipesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { openRegister } = useAuthModal();
   const [me, setMe] = useState<string | null>(null);
 
   const [apiRecipes, setApiRecipes] = useState<RecipeListItem[]>([]);
@@ -423,6 +425,23 @@ export default function RecipesPage() {
     if (areaParam) setAreaFilter(areaParam);
     setUrlReady(true);
   }, [searchParams]);
+
+  useEffect(() => {
+    const createParam = searchParams.get("create");
+    if (!createParam) return;
+
+    if (!me) {
+      openRegister("/recipes?create=1");
+      return;
+    }
+
+    setShowWizard(true);
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("create");
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `/recipes?${nextQuery}` : "/recipes", { scroll: false });
+  }, [me, openRegister, router, searchParams]);
 
   useEffect(() => {
     let stopUserSub: (() => void) | null = null;
@@ -737,7 +756,11 @@ export default function RecipesPage() {
   return (
     <main className="container recipesPage">
       <div className="topbar">
-        <h1 className="title">Recipes</h1>
+        <div className="titleBlock">
+          <span className="eyebrow">Recipe Library</span>
+          <h1 className="title">Recipes</h1>
+          <p className="intro">Search ideas, filter faster, and create recipes from the same place.</p>
+        </div>
         <div className="right">
           {!isSignedIn && (
             <div className="signinHint">
@@ -1156,31 +1179,63 @@ export default function RecipesPage() {
         .container {
           max-width: 1100px;
           margin: 0 auto;
-          padding: 20px;
+          padding: 24px 20px 28px;
         }
         .topbar {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 12px;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 18px;
+          align-items: end;
+          margin-bottom: 18px;
+          padding: 20px 22px;
+          border-radius: 24px;
+          border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
+          background:
+            radial-gradient(circle at top right, color-mix(in oklab, var(--primary) 14%, transparent), transparent 28%),
+            linear-gradient(135deg, color-mix(in oklab, var(--bg2) 94%, transparent), color-mix(in oklab, var(--bg) 88%, var(--bg2) 12%));
+          box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+        }
+        .titleBlock {
+          display: grid;
+          gap: 6px;
+          min-width: 0;
+        }
+        .eyebrow {
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: var(--muted);
         }
         .title {
-          font-size: 28px;
+          font-size: clamp(30px, 3vw, 36px);
           font-weight: 800;
           margin: 0;
+          letter-spacing: -0.03em;
+          color: var(--text);
+        }
+        .intro {
+          margin: 0;
+          max-width: 60ch;
+          font-size: 14px;
+          color: var(--muted);
         }
         .right {
           display: flex;
           gap: 10px;
+          align-items: center;
         }
         .signinHint {
           font-size: 13px;
-          color: var(--muted);
-          background: var(--bg2);
-          border: 1px dashed var(--border);
-          padding: 6px 10px;
-          border-radius: 10px;
+          line-height: 1.45;
+          color: var(--text);
+          background: color-mix(in oklab, var(--bg2) 92%, transparent);
+          border: 1px dashed color-mix(in oklab, var(--primary) 24%, var(--border));
+          padding: 10px 12px;
+          border-radius: 14px;
+          max-width: 320px;
         }
+        .signinHint strong { color: var(--primary); }
 
         .controlsTop {
           display: grid;
@@ -1189,6 +1244,13 @@ export default function RecipesPage() {
           gap: 14px;
         }
         @media (max-width: 980px) {
+          .topbar {
+            grid-template-columns: 1fr;
+            align-items: start;
+          }
+          .right {
+            justify-content: flex-start;
+          }
           .controlsTop {
             grid-template-columns: 1fr;
           }
@@ -1228,6 +1290,20 @@ export default function RecipesPage() {
           display: none;
         }
         @media (max-width: 720px) {
+          .container {
+            padding: 18px 16px 24px;
+          }
+          .topbar {
+            padding: 18px;
+            margin-bottom: 14px;
+            border-radius: 20px;
+          }
+          .title {
+            font-size: 28px;
+          }
+          .intro {
+            font-size: 13px;
+          }
           .filtersDesktop {
             display: none;
           }

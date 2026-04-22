@@ -100,11 +100,6 @@ const IconPantry = () => (
     <path d="M3 2h18v5H3zM3 7h18v15H3zM12 7v15"/><line x1="7" y1="12" x2="10" y2="12"/><line x1="7" y1="16" x2="10" y2="16"/>
   </svg>
 );
-const IconActivity = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-  </svg>
-);
 const IconPlus = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
     <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -545,29 +540,39 @@ export default function DashboardPage() {
           <div className="hero-glow" aria-hidden />
           <div className="hero-inner">
             <div className="hero-left">
-              <p className="hero-eyebrow">🍽️ Clean Kitchen</p>
-              <h1 className="hero-title">{greeting}</h1>
-              <p className="hero-sub">
-                What are you cooking today? Your recipes, pantry, and community are ready.
-              </p>
+              <h1 className="hero-title">{greeting}! 👋</h1>
+              <p className="hero-sub">What are you cooking today?</p>
+              <div className="hero-btns">
+                <button
+                  className="hero-btn-primary"
+                  type="button"
+                  onClick={() => uid ? setShowWizard(true) : openRegister("/dashboard")}
+                >
+                  <IconPlus /> Create Recipe
+                </button>
+                <Link href="/recipes" className="hero-btn-secondary">
+                  Explore Recipes →
+                </Link>
+              </div>
               {!uid && (
                 <p className="hero-notice">
                   Browse in read-only mode. Sign in to create recipes, like posts, and connect.
                 </p>
               )}
             </div>
-            <div className="hero-right">
-              <div className="hero-badge">
-                <span className="hb-icon">🥗</span>
-                <span className="hb-label">Cook something<br />amazing today</span>
-              </div>
+            <div className="hero-right" aria-hidden>
+              <span className="hero-deco">🌿</span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── OVERVIEW CARDS ───────────────────────────────────── */}
+      {/* ── CONTINUE WHERE YOU LEFT OFF ──────────────────────── */}
       <section className="container">
+        <div className="section-header">
+          <h2 className="section-title">Continue where you left off</h2>
+          <Link href="/recipes" className="view-all-link">View all</Link>
+        </div>
         <div className="overview-grid">
           <div className="ov-card ov-green">
             <div className="ov-icon"><IconRecipe /></div>
@@ -595,44 +600,14 @@ export default function DashboardPage() {
               <div className="ov-hint">
                 {expiringItems.length > 0
                   ? <span className="ov-warn"><IconAlert /> {expiringItems.length} expiring soon</span>
-                  : "All items fresh"}
+                  : "All items in stock"}
               </div>
             </div>
             <Link href="/dashboard/pantry" className="ov-link">View <IconArrow /></Link>
           </div>
-          <div className="ov-card ov-purple">
-            <div className="ov-icon"><IconActivity /></div>
-            <div className="ov-body">
-              <div className="ov-num">{recentPosts.length}</div>
-              <div className="ov-label">Community Activity</div>
-              <div className="ov-hint">Recent posts from everyone</div>
-            </div>
-            <Link href="/posts" className="ov-link">View <IconArrow /></Link>
-          </div>
         </div>
       </section>
 
-      {/* ── QUICK ACTIONS ────────────────────────────────────── */}
-      <section className="container">
-        <h2 className="section-title">Quick Actions</h2>
-        <div className="qa-grid">
-          <QuickActionCard
-            tone="green"
-            icon={<IconChef />}
-            label="Create Recipe"
-            onClick={() => uid ? setShowWizard(true) : openRegister("/dashboard")}
-          />
-          <QuickActionCard href="/pantry" tone="amber" icon={<IconPlus />} label="Add Pantry Item" />
-          <QuickActionCard href="/recipes" tone="blue" icon={<IconSearch />} label="Browse Recipes" />
-          <QuickActionCard
-            tone="violet"
-            icon={<IconPencilSquare />}
-            label="Create Post"
-            onClick={() => uid ? setOpenComposer(true) : openRegister("/dashboard")}
-          />
-          <QuickActionCard href="/saved" tone="rose" icon={<IconBookmark />} label="Saved Recipes" />
-        </div>
-      </section>
 
       {/* ── MAIN LAYOUT ──────────────────────────────────────── */}
       <div className="container layout">
@@ -804,16 +779,16 @@ export default function DashboardPage() {
           {/* COMMUNITY FEED */}
           <section className="feed-section">
             <div className="feed-head">
-              <div>
-                <h2 className="section-title" style={{ marginBottom: 2 }}>Community Feed</h2>
-                <p className="block-sub">Fresh updates from your kitchen community</p>
+              <h2 className="section-title" style={{ marginBottom: 0 }}>Community Feed</h2>
+              <div className="feed-head-right">
+                <span className="feed-sort-label">Latest ▾</span>
+                <button
+                  className="feed-new-btn"
+                  onClick={() => uid ? setOpenComposer(true) : openRegister("/dashboard")}
+                >
+                  <IconShare /> Create Post
+                </button>
               </div>
-              <button
-                className="feed-new-btn"
-                onClick={() => uid ? setOpenComposer(true) : openRegister("/dashboard")}
-              >
-                <IconShare /> Create Post
-              </button>
             </div>
             <div className="feed">
               {recentPosts.map((p) => (
@@ -890,6 +865,31 @@ export default function DashboardPage() {
               </Link>
             </div>
           )}
+
+          {/* Quick Actions */}
+          <div className="sb-card">
+            <h3 className="sb-title">Quick Actions</h3>
+            <div className="qa-list">
+              <QuickActionCard
+                tone="green"
+                icon={<IconChef />}
+                label="Create Recipe"
+                onClick={() => uid ? setShowWizard(true) : openRegister("/dashboard")}
+                className="qa-list-item"
+              />
+              <QuickActionCard href="/pantry" tone="amber" icon={<IconPlus />} label="Add Pantry Item" className="qa-list-item" />
+              <QuickActionCard href="/recipes" tone="blue" icon={<IconSearch />} label="Browse Recipes" className="qa-list-item" />
+              <QuickActionCard
+                tone="violet"
+                icon={<IconPencilSquare />}
+                label="Create Post"
+                onClick={() => uid ? setOpenComposer(true) : openRegister("/dashboard")}
+                className="qa-list-item"
+              />
+              <QuickActionCard href="/saved" tone="rose" icon={<IconBookmark />} label="Saved Recipes" className="qa-list-item" />
+            </div>
+            <Link href="/recipes" className="sb-cta">View all →</Link>
+          </div>
 
           {/* Trending Posts */}
           <div className="sb-card sb-trend-card">
@@ -1018,13 +1018,14 @@ export default function DashboardPage() {
         .page {
           display: flex;
           flex-direction: column;
-          gap: 36px;
-          padding-bottom: 96px;
+          gap: 32px;
+          padding-top: 28px;
+          padding-bottom: 64px;
         }
         .container {
           width: min(1180px, 100%);
           margin: 0 auto;
-          padding: 0 20px;
+          padding: 0 24px;
         }
         .section-title {
           margin: 0 0 16px;
@@ -1169,44 +1170,49 @@ export default function DashboardPage() {
         }
         .hero-right {
           flex-shrink: 0;
-        }
-        .hero-badge {
           display: flex;
-          flex-direction: column;
           align-items: center;
-          gap: 10px;
-          padding: 24px 28px;
-          border-radius: 20px;
-          background: rgba(255,255,255,0.12);
-          border: 1px solid rgba(255,255,255,0.2);
-          backdrop-filter: blur(12px);
-          text-align: center;
+          justify-content: center;
         }
-        .hb-icon {
-          font-size: 40px;
+        .hero-deco {
+          font-size: 80px;
           line-height: 1;
-        }
-        .hb-label {
-          font-size: 13px;
-          font-weight: 600;
-          color: rgba(255,255,255,0.82);
-          line-height: 1.4;
+          opacity: 0.6;
+          filter: drop-shadow(0 8px 20px rgba(0,0,0,0.18));
+          user-select: none;
         }
         @media (max-width: 680px) {
           .hero-right { display: none; }
           .hero-card { padding: 24px 20px; }
         }
 
+        /* ── SECTION HEADER ── */
+        .section-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 16px;
+        }
+        .section-header .section-title { margin-bottom: 0; }
+        .view-all-link {
+          font-size: 13px;
+          font-weight: 700;
+          color: var(--primary);
+          text-decoration: none;
+          flex-shrink: 0;
+        }
+        .view-all-link:hover { opacity: 0.75; text-decoration: none; }
+
         /* ── OVERVIEW CARDS ── */
         .overview-grid {
           display: grid;
-          grid-template-columns: repeat(4, 1fr);
+          grid-template-columns: repeat(3, 1fr);
           gap: 16px;
         }
         @media (max-width: 900px) {
-          .overview-grid { grid-template-columns: repeat(2, 1fr); }
+          .overview-grid { grid-template-columns: repeat(3, 1fr); }
         }
-        @media (max-width: 500px) {
+        @media (max-width: 600px) {
           .overview-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
         }
         .ov-card {
@@ -1674,9 +1680,21 @@ export default function DashboardPage() {
         .feed-section { display: grid; gap: 20px; }
         .feed-head {
           display: flex;
-          align-items: flex-end;
+          align-items: center;
           justify-content: space-between;
           gap: 12px;
+        }
+        .feed-head-right {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .feed-sort-label {
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--muted);
+          cursor: pointer;
+          user-select: none;
         }
         .feed-new-btn {
           display: inline-flex;
@@ -1710,6 +1728,28 @@ export default function DashboardPage() {
           color: var(--muted);
         }
         .feed-empty p { margin: 0; }
+
+        /* ── QUICK ACTIONS LIST (sidebar) ── */
+        .qa-list {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        :global(.qa-list-item) {
+          min-height: auto !important;
+          flex-direction: row !important;
+          align-items: center !important;
+          padding: 10px 14px !important;
+          gap: 10px !important;
+        }
+        :global(.qa-list-item .qa-icon) {
+          width: 32px !important;
+          height: 32px !important;
+          border-radius: 8px !important;
+        }
+        :global(.qa-list-item .qa-label) {
+          font-size: 13px !important;
+        }
 
         /* ── SIDEBAR ── */
         .sb-card {
