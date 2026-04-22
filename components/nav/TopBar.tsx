@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
-import { ChevronDown, LogOut, Menu, X } from "lucide-react";
+import { ChevronDown, LogOut, Menu, Search, X } from "lucide-react";
 import clsx from "clsx";
 import Avatar from "@/components/ui/Avatar";
 import ExpiryBell from "@/components/nav/ExpiryBell";
@@ -16,10 +16,14 @@ const MOBILE_TITLES: Array<{ prefix: string; label: string }> = [
   { prefix: "/pantry", label: "Pantry" },
   { prefix: "/recipes", label: "Recipes" },
   { prefix: "/saved", label: "Saved" },
-  { prefix: "/fitness", label: "Fitness" },
+  { prefix: "/meal-plan", label: "Meal Plan" },
+  { prefix: "/fitness", label: "Training" },
   { prefix: "/posts", label: "Community" },
   { prefix: "/profile", label: "Profile" },
   { prefix: "/settings", label: "Settings" },
+  { prefix: "/privacy", label: "Privacy Policy" },
+  { prefix: "/terms", label: "Terms of Service" },
+  { prefix: "/support", label: "Help & Support" },
 ];
 
 function getPageTitle(pathname: string | null) {
@@ -38,6 +42,7 @@ export default function TopBar({
   const pathname = usePathname();
   const router = useRouter();
   const { openLogin } = useAuthModal();
+
   const [user, setUser] = useState<User | null>(auth.currentUser);
   const [menuOpen, setMenuOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -49,7 +54,9 @@ export default function TopBar({
     if (!menuOpen) return;
 
     function handleClick(event: MouseEvent) {
-      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
     }
 
     window.addEventListener("mousedown", handleClick);
@@ -58,8 +65,9 @@ export default function TopBar({
 
   function handleSearch(event: React.FormEvent) {
     event.preventDefault();
-    if (!search.trim()) return;
-    router.push(`/recipes?q=${encodeURIComponent(search.trim())}`);
+    const value = search.trim();
+    if (!value) return;
+    router.push(`/recipes?q=${encodeURIComponent(value)}`);
     setSearch("");
   }
 
@@ -69,7 +77,7 @@ export default function TopBar({
       setMenuOpen(false);
       openLogin(pathname ?? "/");
     } catch {
-      // no-op
+      // ignore
     }
   }
 
@@ -89,23 +97,21 @@ export default function TopBar({
           >
             {mobileNavOpen ? <X size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
           </button>
+
           <strong className="mobileTitle">{pageTitle}</strong>
         </div>
 
         <form className="search" onSubmit={handleSearch} role="search">
           <span className="searchIcon" aria-hidden>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
+            <Search size={15} />
           </span>
           <input
             type="search"
             className="searchInput"
-            placeholder="Search recipes, ingredients, or people..."
+            placeholder="Search recipes..."
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            aria-label="Search recipes, ingredients, or people"
+            aria-label="Search recipes"
           />
         </form>
 
@@ -135,6 +141,9 @@ export default function TopBar({
                   <Link href="/settings" role="menuitem" onClick={() => setMenuOpen(false)}>
                     Settings
                   </Link>
+                  <Link href="/support" role="menuitem" onClick={() => setMenuOpen(false)}>
+                    Help &amp; Support
+                  </Link>
                   <button type="button" role="menuitem" onClick={handleSignOut}>
                     <LogOut size={13} aria-hidden /> Sign out
                   </button>
@@ -153,29 +162,38 @@ export default function TopBar({
         .topbar {
           position: sticky;
           top: 0;
-          z-index: 40;
-          border-bottom: 1px solid var(--border);
-          background: var(--bg);
+          z-index: 80;
+          width: 100%;
+          padding: 10px 16px 0;
+          background: transparent;
         }
+
         .inner {
-          width: min(1100px, 100%);
-          min-height: 60px;
+          width: min(1120px, 100%);
+          min-height: 58px;
           margin: 0 auto;
-          padding: 0 24px;
+          padding: 0 4px;
           display: flex;
           align-items: center;
           gap: 14px;
+          border: 0;
+          border-radius: 0;
+          background: transparent;
+          box-shadow: none;
         }
+
         .mobileLead {
           display: none;
           align-items: center;
           gap: 12px;
           min-width: 0;
+          flex: 1;
         }
+
         .menuButton {
-          width: 38px;
-          height: 38px;
-          border-radius: 10px;
+          width: 40px;
+          height: 40px;
+          border-radius: 12px;
           border: 1px solid var(--border);
           background: var(--bg-raised);
           color: var(--text);
@@ -184,6 +202,7 @@ export default function TopBar({
           cursor: pointer;
           flex-shrink: 0;
         }
+
         .mobileTitle {
           font-size: 15px;
           line-height: 1.1;
@@ -193,11 +212,13 @@ export default function TopBar({
           overflow: hidden;
           text-overflow: ellipsis;
         }
+
         .search {
           position: relative;
           flex: 1;
-          max-width: 420px;
+          max-width: 430px;
         }
+
         .searchIcon {
           position: absolute;
           left: 12px;
@@ -206,25 +227,31 @@ export default function TopBar({
           color: var(--muted);
           pointer-events: none;
         }
+
         .searchInput {
           width: 100%;
-          height: 38px;
-          padding: 0 14px 0 36px;
-          border-radius: 10px;
-          border: 1px solid var(--border);
-          background: var(--bg-raised);
+          height: 42px;
+          padding: 0 14px 0 38px;
+          border-radius: 12px;
+          border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
+          background: color-mix(in oklab, var(--bg) 76%, transparent);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
           color: var(--text);
           font: inherit;
           font-size: 13px;
           outline: none;
         }
+
         .searchInput::placeholder {
           color: var(--muted);
         }
+
         .searchInput:focus {
           border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
-          box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 12%, transparent);
+          box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 14%, transparent);
         }
+
         .actions {
           margin-left: auto;
           display: flex;
@@ -232,37 +259,43 @@ export default function TopBar({
           gap: 10px;
           flex-shrink: 0;
         }
+
         .profileWrap {
           position: relative;
         }
+
         .profileButton {
-          min-height: 38px;
+          min-height: 40px;
           display: flex;
           align-items: center;
           gap: 8px;
           padding: 4px 10px 4px 4px;
           border-radius: 999px;
-          border: 1px solid var(--border);
-          background: var(--bg-raised);
+          border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
+          background: color-mix(in oklab, var(--bg) 78%, transparent);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
           color: var(--text);
           font: inherit;
           font-size: 13px;
           font-weight: 600;
           cursor: pointer;
         }
+
         .profileName {
           max-width: 130px;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
+
         .profileMenu {
           position: absolute;
           right: 0;
           top: calc(100% + 8px);
-          min-width: 180px;
+          min-width: 200px;
           padding: 8px;
-          border-radius: 14px;
+          border-radius: 16px;
           border: 1px solid var(--border);
           background: var(--bg-raised);
           box-shadow: 0 20px 40px rgba(0, 0, 0, 0.22);
@@ -273,20 +306,22 @@ export default function TopBar({
           transform: translateY(-6px);
           transition: opacity 0.16s ease, transform 0.16s ease;
         }
+
         .profileMenu.open {
           opacity: 1;
           pointer-events: auto;
           transform: translateY(0);
         }
+
         .profileMenu :global(a),
         .profileMenu button {
           width: 100%;
           display: flex;
           align-items: center;
           gap: 8px;
-          padding: 8px 10px;
+          padding: 10px 12px;
           border: 0;
-          border-radius: 9px;
+          border-radius: 10px;
           background: transparent;
           color: var(--text);
           text-decoration: none;
@@ -296,36 +331,48 @@ export default function TopBar({
           text-align: left;
           cursor: pointer;
         }
+
         .profileMenu :global(a):hover,
         .profileMenu button:hover {
           background: color-mix(in oklab, var(--primary) 8%, transparent);
         }
 
         @media (max-width: 768px) {
+          .topbar {
+            top: 0;
+            padding: 8px 12px 0;
+          }
+
           .inner {
             min-height: auto;
-            padding: 10px 16px;
+            padding: 0;
             flex-wrap: wrap;
             gap: 10px;
           }
+
           .mobileLead {
             display: flex;
             flex: 1;
+            min-width: 0;
           }
+
           .search {
             order: 3;
             flex-basis: 100%;
             max-width: none;
           }
+
           .actions {
             margin-left: 0;
             gap: 8px;
           }
+
           .profileName {
             display: none;
           }
+
           .searchInput {
-            height: 40px;
+            height: 42px;
           }
         }
       `}</style>

@@ -344,8 +344,9 @@ function RecipeSkeletons() {
 export default function RecipesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { openRegister } = useAuthModal();
+  const { close: closeAuthModal, openRegister } = useAuthModal();
   const [me, setMe] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
 
   const [apiRecipes, setApiRecipes] = useState<RecipeListItem[]>([]);
   const [userRecipes, setUserRecipes] = useState<RecipeListItem[]>([]);
@@ -396,7 +397,7 @@ export default function RecipesPage() {
     const maxParam = searchParams.get("max");
     const areaParam = searchParams.get("area");
 
-    if (modeParam === "ingredient") setMode("ingredient");
+    if (modeParam === "ingredient") setMode(modeParam);
     if (qParam) setQ(qParam);
     if (ingParam) {
       const chips = ingParam
@@ -430,18 +431,21 @@ export default function RecipesPage() {
     const createParam = searchParams.get("create");
     if (!createParam) return;
 
+    if (!authReady) return;
+
     if (!me) {
       openRegister("/recipes?create=1");
       return;
     }
 
+    closeAuthModal();
     setShowWizard(true);
 
     const nextParams = new URLSearchParams(searchParams.toString());
     nextParams.delete("create");
     const nextQuery = nextParams.toString();
     router.replace(nextQuery ? `/recipes?${nextQuery}` : "/recipes", { scroll: false });
-  }, [me, openRegister, router, searchParams]);
+  }, [authReady, closeAuthModal, me, openRegister, router, searchParams]);
 
   useEffect(() => {
     let stopUserSub: (() => void) | null = null;
@@ -454,10 +458,12 @@ export default function RecipesPage() {
     };
 
     setMe(auth.currentUser?.uid ?? null);
+    setAuthReady(Boolean(auth.currentUser));
 
     const stopAuth = onAuthStateChanged(auth, (u) => {
       cleanupUserSubs();
       setMe(u?.uid ?? null);
+      setAuthReady(true);
 
       if (u) {
         const qMine = query(collection(db, "recipes"), where("uid", "==", u.uid));
@@ -517,7 +523,7 @@ export default function RecipesPage() {
   useEffect(() => {
     if (!urlReady) return;
     const params = new URLSearchParams();
-    if (mode === "ingredient") params.set("mode", "ingredient");
+    if (mode === "ingredient") params.set("mode", mode);
     if (mode === "name" && q.trim()) params.set("q", q.trim());
     if (mode === "ingredient" && ingredientChips.length) {
       params.set("ing", ingredientChips.join(","));
@@ -752,7 +758,6 @@ export default function RecipesPage() {
 
   const isSignedIn = !!me;
   const isLoading = initialLoading || busySearch;
-
   return (
     <main className="container recipesPage">
       <div className="topbar">

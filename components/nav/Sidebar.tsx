@@ -4,8 +4,21 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, Boxes, BookOpen, Bookmark, UtensilsCrossed,
-  Dumbbell, Users, Settings, HelpCircle, Plus, FileText, X,
+  Bookmark,
+  Boxes,
+  Dumbbell,
+  FileText,
+  HelpCircle,
+  LayoutDashboard,
+  Plus,
+  Settings,
+  Shield,
+  UtensilsCrossed,
+  Users,
+  X,
+  ScrollText,
+  Mail,
+  BookOpen,
 } from "lucide-react";
 import clsx from "clsx";
 import { useEffect, useState } from "react";
@@ -15,13 +28,20 @@ import { auth, db } from "@/lib/firebas1e";
 import { useAuthModal } from "@/context/AuthModalContext";
 
 const navLinks = [
-  { href: "/dashboard", label: "Overview", Icon: LayoutDashboard },
-  { href: "/pantry", label: "Pantry", Icon: Boxes },
-  { href: "/recipes", label: "Recipes", Icon: BookOpen },
-  { href: "/saved", label: "Saved", Icon: Bookmark },
-  { href: "/meal-plan", label: "Meal Plan", Icon: UtensilsCrossed },
-  { href: "/fitness", label: "Fitness", Icon: Dumbbell },
-  { href: "/posts", label: "Community", Icon: Users },
+  { href: "/dashboard", label: "Dashboard", hint: "Overview and quick actions", Icon: LayoutDashboard },
+  { href: "/pantry", label: "Pantry", hint: "Stock, expiry, and tracking", Icon: Boxes },
+  { href: "/recipes", label: "Recipes", hint: "Cook, save, and create", Icon: BookOpen },
+  { href: "/saved", label: "Saved", hint: "Shortlisted meals", Icon: Bookmark },
+  { href: "/meal-plan", label: "Meal Plan", hint: "Weekly structure", Icon: UtensilsCrossed },
+  { href: "/fitness", label: "Training", hint: "Workouts and progress", Icon: Dumbbell },
+  { href: "/posts", label: "Community", hint: "Tips and updates", Icon: Users },
+];
+
+const supportLinks = [
+  { href: "/privacy", label: "Privacy Policy", Icon: Shield },
+  { href: "/terms", label: "Terms of Service", Icon: ScrollText },
+  { href: "/support", label: "Help & Support", Icon: HelpCircle },
+  { href: "mailto:adriansraitums95@gmail.com", label: "Contact Support", Icon: Mail, external: true },
 ];
 
 export default function Sidebar({
@@ -34,6 +54,7 @@ export default function Sidebar({
   const pathname = usePathname();
   const router = useRouter();
   const { openRegister } = useAuthModal();
+
   const [uid, setUid] = useState<string | null>(null);
   const [myRecipesCount, setMyRecipesCount] = useState(0);
   const [savedCount, setSavedCount] = useState(0);
@@ -42,19 +63,28 @@ export default function Sidebar({
   useEffect(() => onAuthStateChanged(auth, (u) => setUid(u?.uid ?? null)), []);
 
   useEffect(() => {
-    if (!uid) { setMyRecipesCount(0); return; }
+    if (!uid) {
+      setMyRecipesCount(0);
+      return;
+    }
     const q = query(collection(db, "recipes"), where("uid", "==", uid));
     return onSnapshot(q, (snap) => setMyRecipesCount(snap.size), () => setMyRecipesCount(0));
   }, [uid]);
 
   useEffect(() => {
-    if (!uid) { setSavedCount(0); return; }
+    if (!uid) {
+      setSavedCount(0);
+      return;
+    }
     const q = collection(db, "users", uid, "savedFoods");
     return onSnapshot(q, (snap) => setSavedCount(snap.size), () => setSavedCount(0));
   }, [uid]);
 
   useEffect(() => {
-    if (!uid) { setPantryCount(0); return; }
+    if (!uid) {
+      setPantryCount(0);
+      return;
+    }
     const q = query(collection(db, "pantryItems"), where("uid", "==", uid));
     return onSnapshot(q, (snap) => setPantryCount(snap.size), () => setPantryCount(0));
   }, [uid]);
@@ -71,392 +101,404 @@ export default function Sidebar({
       />
 
       <aside className={clsx("ck-sidebar", mobileOpen && "mobile-open")}>
-      <div className="sidebar-brand">
-        <Link href="/dashboard" className="brand-link" aria-label="Clean Kitchen home">
-          <span className="brand-icon">
-            <Image src="/logo.png" alt="" width={24} height={24} className="brand-logo" />
-          </span>
-          <span className="brand-name">Clean Kitchen</span>
-        </Link>
-        <button type="button" className="mobile-close" onClick={onRequestClose} aria-label="Close navigation drawer">
-          <X size={18} aria-hidden />
-        </button>
-      </div>
+        <div className="sidebar-brand">
+          <Link href="/dashboard" className="brand-link" aria-label="Clean Kitchen home">
+            <span className="brand-icon">
+              <Image src="/logo.png" alt="" width={24} height={24} className="brand-logo" />
+            </span>
+            <span className="brand-copy">
+              <span className="brand-kicker">Nutrition Platform</span>
+              <span className="brand-name">Clean Kitchen</span>
+            </span>
+          </Link>
 
-      <nav className="sidebar-nav" aria-label="Primary">
-        <span className="nav-section-label">Workspace</span>
-        {navLinks.map(({ href, label, Icon }) => {
-          const active = pathname === href || (href !== "/dashboard" && pathname?.startsWith(href));
-          return (
+          <button type="button" className="mobile-close" onClick={onRequestClose} aria-label="Close navigation drawer">
+            <X size={18} aria-hidden />
+          </button>
+        </div>
+
+        <nav className="sidebar-nav" aria-label="Primary">
+          <span className="nav-section-label">Main</span>
+
+          {navLinks.map(({ href, label, hint, Icon }) => {
+            const active = pathname === href || (href !== "/dashboard" && pathname?.startsWith(href));
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={clsx("sidebar-link", active && "active")}
+                aria-current={active ? "page" : undefined}
+                onClick={onRequestClose}
+              >
+                <span className="link-icon">
+                  <Icon size={17} strokeWidth={1.6} aria-hidden />
+                </span>
+                <span className="link-label">{label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="kitchen-section">
+          <span className="kitchen-label">Library</span>
+
+          <Link href="/recipes" className="kitchen-item" onClick={onRequestClose}>
+            <FileText size={14} aria-hidden />
+            <span>My Recipes</span>
+            <span className="kitchen-count">{myRecipesCount}</span>
+          </Link>
+
+          <Link href="/saved" className="kitchen-item" onClick={onRequestClose}>
+            <Bookmark size={14} aria-hidden />
+            <span>Saved Recipes</span>
+            <span className="kitchen-count">{savedCount}</span>
+          </Link>
+
+          <Link href="/pantry" className="kitchen-item" onClick={onRequestClose}>
+            <Boxes size={14} aria-hidden />
+            <span>Pantry Items</span>
+            <span className="kitchen-count">{pantryCount}</span>
+          </Link>
+        </div>
+
+        {!hideCreateRecipeButton ? (
+          <button
+            type="button"
+            className="create-recipe-btn"
+            onClick={() => {
+              if (uid) {
+                router.push("/recipes?create=1");
+                onRequestClose?.();
+                return;
+              }
+              openRegister("/recipes?create=1");
+              onRequestClose?.();
+            }}
+          >
+            <Plus size={15} aria-hidden />
+            Add New Recipe
+          </button>
+        ) : null}
+
+        <div className="sidebar-footer">
+          <span className="nav-section-label footer-title">Support</span>
+
+          <Link href="/settings" className="footer-link" onClick={onRequestClose}>
+            <Settings size={15} aria-hidden />
+            <span>Settings</span>
+          </Link>
+
+          {supportLinks.map(({ href, label, Icon, external }) => (
             <Link
               key={href}
               href={href}
-              className={clsx("sidebar-link", active && "active")}
-              aria-current={active ? "page" : undefined}
+              className="footer-link"
               onClick={onRequestClose}
+              target={external ? "_blank" : undefined}
+              rel={external ? "noopener noreferrer" : undefined}
             >
-              <span className="link-icon"><Icon size={17} strokeWidth={1.8} aria-hidden /></span>
+              <Icon size={15} aria-hidden />
               <span>{label}</span>
             </Link>
-          );
-        })}
-      </nav>
+          ))}
+        </div>
 
-      <div className="kitchen-section">
-        <span className="kitchen-label">Library</span>
-        <Link href="/recipes" className="kitchen-item" onClick={onRequestClose}>
-          <FileText size={14} aria-hidden />
-          <span>My Recipes</span>
-          <span className="kitchen-count">{myRecipesCount}</span>
-        </Link>
-        <Link href="/saved" className="kitchen-item" onClick={onRequestClose}>
-          <Bookmark size={14} aria-hidden />
-          <span>Saved Recipes</span>
-          <span className="kitchen-count">{savedCount}</span>
-        </Link>
-        <Link href="/pantry" className="kitchen-item" onClick={onRequestClose}>
-          <Boxes size={14} aria-hidden />
-          <span>Pantry Items</span>
-          <span className="kitchen-count">{pantryCount}</span>
-        </Link>
-      </div>
-
-      {!hideCreateRecipeButton ? (
-        <button
-          type="button"
-          className="create-recipe-btn"
-          onClick={() => {
-            if (uid) {
-              router.push("/recipes?create=1");
-              onRequestClose?.();
-              return;
-            }
-            openRegister("/recipes?create=1");
-            onRequestClose?.();
-          }}
-        >
-          <Plus size={15} aria-hidden />
-          Create Recipe
-        </button>
-      ) : null}
-
-      <div className="sidebar-footer">
-        <Link href="/settings" className="footer-link" onClick={onRequestClose}>
-          <Settings size={15} aria-hidden />
-          <span>Settings</span>
-        </Link>
-        <Link href="https://github.com/anthropics/claude-code/issues" className="footer-link" target="_blank" rel="noopener">
-          <HelpCircle size={15} aria-hidden />
-          <span>Help &amp; Support</span>
-        </Link>
-      </div>
-
-      <style jsx>{`
-        .ck-sidebar {
-          width: 240px;
-          height: 100dvh;
-          position: fixed;
-          top: 0;
-          left: 0;
-          display: flex;
-          flex-direction: column;
-          padding: 22px 14px 18px;
-          background: var(--bg-raised);
-          border-right: 1px solid var(--border);
-          overflow-y: auto;
-          z-index: 60;
-          scrollbar-width: none;
-        }
-        .ck-sidebar::-webkit-scrollbar { display: none; }
-        .sidebar-backdrop {
-          display: none;
-        }
-
-        /* ── Brand ── */
-        .sidebar-brand {
-          padding: 0 6px;
-          margin-bottom: 28px;
-          flex-shrink: 0;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 10px;
-        }
-        .brand-link {
-          display: flex;
-          align-items: center;
-          gap: 11px;
-          text-decoration: none;
-          color: var(--text);
-        }
-        .brand-link:hover { text-decoration: none; }
-        .brand-icon {
-          width: 34px;
-          height: 34px;
-          border-radius: 10px;
-          background: linear-gradient(135deg, #166534, #15803d);
-          box-shadow: 0 4px 12px rgba(22, 101, 52, 0.45);
-          display: grid;
-          place-items: center;
-          flex-shrink: 0;
-          overflow: hidden;
-        }
-        .brand-logo {
-          width: 24px;
-          height: 24px;
-          object-fit: contain;
-          border-radius: 6px;
-        }
-        .brand-name {
-          font-weight: 800;
-          font-size: 16px;
-          color: var(--text);
-          letter-spacing: -0.03em;
-          line-height: 1;
-        }
-        .mobile-close {
-          display: none;
-          width: 40px;
-          height: 40px;
-          border-radius: 14px;
-          border: 1px solid color-mix(in oklab, var(--border) 82%, transparent);
-          background: color-mix(in oklab, var(--bg2) 92%, transparent);
-          color: var(--text);
-          place-items: center;
-          cursor: pointer;
-          flex-shrink: 0;
-        }
-
-        /* ── Nav ── */
-        .sidebar-nav {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-          margin-bottom: 10px;
-        }
-        .nav-section-label {
-          padding: 0 10px 8px;
-          font-size: 10px;
-          font-weight: 700;
-          letter-spacing: 0.16em;
-          text-transform: uppercase;
-          color: color-mix(in oklab, var(--muted) 88%, var(--text));
-        }
-        .sidebar-link {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 10px 12px;
-          border-radius: 14px;
-          color: var(--muted);
-          text-decoration: none;
-          font-size: 13px;
-          font-weight: 600;
-          letter-spacing: 0.01em;
-          transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.15s;
-          position: relative;
-          border: 1px solid transparent;
-        }
-        .sidebar-link:hover {
-          background: color-mix(in oklab, var(--primary) 8%, transparent);
-          color: var(--text);
-          border-color: color-mix(in oklab, var(--primary) 18%, transparent);
-          transform: translateX(2px);
-          text-decoration: none;
-        }
-        .sidebar-link.active {
-          background: linear-gradient(
-            135deg,
-            color-mix(in oklab, var(--primary) 16%, transparent),
-            color-mix(in oklab, var(--bg-raised) 88%, transparent)
-          );
-          color: var(--text);
-          font-weight: 700;
-          border-color: color-mix(in oklab, var(--primary) 20%, transparent);
-          box-shadow: 0 10px 24px color-mix(in oklab, var(--primary) 10%, transparent);
-        }
-        .link-icon {
-          width: 32px;
-          height: 32px;
-          border-radius: 10px;
-          display: grid;
-          place-items: center;
-          flex-shrink: 0;
-          color: var(--muted);
-          background: color-mix(in oklab, var(--bg) 74%, var(--bg2));
-          border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
-          transition: background 0.15s, color 0.15s, border-color 0.15s;
-        }
-        .sidebar-link:hover .link-icon {
-          color: var(--text);
-          border-color: color-mix(in oklab, var(--primary) 20%, transparent);
-        }
-        .sidebar-link.active .link-icon {
-          background: color-mix(in oklab, var(--primary) 18%, transparent);
-          color: var(--primary);
-          border-color: color-mix(in oklab, var(--primary) 22%, transparent);
-        }
-
-        /* ── Your Kitchen ── */
-        .kitchen-section {
-          margin-top: 14px;
-          padding-top: 16px;
-          border-top: 1px solid var(--border);
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-          margin-bottom: 16px;
-        }
-        .kitchen-label {
-          font-size: 10px;
-          font-weight: 700;
-          letter-spacing: 0.16em;
-          text-transform: uppercase;
-          color: var(--muted);
-          padding: 0 10px 8px;
-          opacity: 0.8;
-        }
-        .kitchen-item {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 9px 12px;
-          border-radius: 14px;
-          color: var(--muted);
-          text-decoration: none;
-          font-size: 12.5px;
-          font-weight: 600;
-          letter-spacing: 0.01em;
-          transition: background 0.15s, color 0.15s, border-color 0.15s;
-          border: 1px solid transparent;
-        }
-        .kitchen-item:hover {
-          background: color-mix(in oklab, var(--primary) 7%, transparent);
-          color: var(--text);
-          border-color: color-mix(in oklab, var(--primary) 14%, transparent);
-          text-decoration: none;
-        }
-        .kitchen-item span:nth-child(2) { flex: 1; }
-        .kitchen-count {
-          font-size: 10px;
-          font-weight: 800;
-          color: var(--muted);
-          background: color-mix(in oklab, var(--border) 120%, transparent);
-          border: 1px solid var(--border);
-          border-radius: 999px;
-          padding: 2px 8px;
-          min-width: 24px;
-          text-align: center;
-          letter-spacing: 0.08em;
-          line-height: 1.6;
-          text-transform: uppercase;
-        }
-
-        /* ── Create button ── */
-        .create-recipe-btn {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 7px;
-          width: 100%;
-          padding: 10px 16px;
-          border-radius: 11px;
-          background: linear-gradient(135deg, #166534 0%, #16a34a 100%);
-          box-shadow: 0 4px 16px rgba(22, 163, 74, 0.3);
-          color: #fff;
-          font-weight: 700;
-          font-size: 13.5px;
-          letter-spacing: -0.01em;
-          border: none;
-          cursor: pointer;
-          font-family: inherit;
-          transition: box-shadow 0.18s, transform 0.14s, filter 0.18s;
-          margin-bottom: 16px;
-          flex-shrink: 0;
-        }
-        .create-recipe-btn:hover {
-          box-shadow: 0 6px 22px rgba(22, 163, 74, 0.44);
-          transform: translateY(-1px);
-          filter: brightness(1.06);
-        }
-        .create-recipe-btn:active {
-          transform: translateY(0);
-          filter: brightness(0.97);
-        }
-
-        /* ── Footer ── */
-        .sidebar-footer {
-          margin-top: auto;
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-          border-top: 1px solid var(--border);
-          padding-top: 12px;
-          flex-shrink: 0;
-        }
-        .footer-link {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 9px 12px;
-          border-radius: 14px;
-          color: var(--muted);
-          text-decoration: none;
-          font-size: 12.5px;
-          font-weight: 600;
-          letter-spacing: 0.01em;
-          opacity: 0.8;
-          transition: background 0.15s, color 0.15s, opacity 0.15s;
-        }
-        .footer-link:hover {
-          background: color-mix(in oklab, var(--primary) 7%, transparent);
-          color: var(--text);
-          opacity: 1;
-          text-decoration: none;
-        }
-
-        @media (max-width: 768px) {
-          .sidebar-backdrop {
-            display: block;
-            position: fixed;
-            inset: 0;
-            border: 0;
-            padding: 0;
-            background: rgba(2, 6, 23, 0.36);
-            backdrop-filter: blur(6px);
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.22s ease;
-            z-index: 69;
-          }
-          .sidebar-backdrop.open {
-            opacity: 1;
-            pointer-events: auto;
-          }
+        <style jsx>{`
           .ck-sidebar {
-            width: min(84vw, 320px);
-            padding: 18px 14px 18px;
-            box-shadow: 0 28px 80px rgba(2, 6, 23, 0.26);
-            transform: translateX(calc(-100% - 18px));
-            transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+            width: 264px;
+            height: 100dvh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 16px 12px;
+            background: var(--bg-raised);
+            border-right: 1px solid var(--border);
+            overflow-y: auto;
             z-index: 70;
-            border-right: 1px solid color-mix(in oklab, var(--border) 86%, transparent);
-            background:
-              radial-gradient(circle at top left, color-mix(in oklab, var(--primary) 12%, transparent), transparent 34%),
-              linear-gradient(180deg, color-mix(in oklab, var(--bg2) 96%, transparent), var(--bg));
+            scrollbar-width: none;
+            color: var(--text);
           }
-          .ck-sidebar.mobile-open {
-            transform: translateX(0);
+
+          .ck-sidebar::-webkit-scrollbar {
+            display: none;
           }
-          .mobile-close {
+
+          .sidebar-backdrop {
+            display: none;
+          }
+
+          .sidebar-brand {
+            padding: 6px 4px 16px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            border-bottom: 1px solid var(--border);
+          }
+
+          .brand-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            color: var(--text);
+            min-width: 0;
+          }
+
+          .brand-link:hover {
+            text-decoration: none;
+          }
+
+          .brand-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: var(--primary);
             display: grid;
+            place-items: center;
+            overflow: hidden;
+            flex-shrink: 0;
           }
-          .sidebar-link:hover,
-          .kitchen-item:hover {
-            transform: none;
+
+          .brand-logo {
+            width: 20px;
+            height: 20px;
+            object-fit: contain;
           }
-        }
-      `}</style>
+
+          .brand-copy {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            gap: 2px;
+          }
+
+          .brand-kicker {
+            font-size: 9px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.18em;
+            color: var(--muted);
+          }
+
+          .brand-name {
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: var(--text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+
+          .mobile-close {
+            display: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--muted);
+            place-items: center;
+            cursor: pointer;
+            flex-shrink: 0;
+          }
+
+          .mobile-close:hover {
+            color: var(--text);
+            background: color-mix(in oklab, var(--border) 60%, transparent);
+          }
+
+          .sidebar-nav,
+          .kitchen-section,
+          .sidebar-footer {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+          }
+
+          .nav-section-label,
+          .kitchen-label {
+            padding: 0 8px 6px;
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--muted);
+          }
+
+          .sidebar-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 10px;
+            border-radius: 8px;
+            color: var(--muted);
+            text-decoration: none;
+            transition: background 0.12s ease, color 0.12s ease;
+          }
+
+          .sidebar-link:hover {
+            color: var(--text);
+            background: color-mix(in oklab, var(--border) 70%, transparent);
+            text-decoration: none;
+          }
+
+          .sidebar-link.active {
+            color: var(--primary);
+            background: color-mix(in oklab, var(--primary) 10%, transparent);
+          }
+
+          .link-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            color: inherit;
+            width: 20px;
+          }
+
+          .link-label {
+            font-size: 14px;
+            font-weight: 500;
+            line-height: 1.25;
+            letter-spacing: -0.015em;
+            color: inherit;
+          }
+
+          .sidebar-link.active .link-label {
+            font-weight: 600;
+          }
+
+          .kitchen-section {
+            margin-top: 14px;
+            padding-top: 14px;
+            border-top: 1px solid var(--border);
+            margin-bottom: 12px;
+          }
+
+          .kitchen-item,
+          .footer-link {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            padding: 8px 10px;
+            border-radius: 8px;
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 12.5px;
+            font-weight: 500;
+            transition: background 0.12s ease, color 0.12s ease;
+          }
+
+          .kitchen-item :global(span:nth-child(2)),
+          .footer-link :global(span:last-child) {
+            line-height: 1.2;
+          }
+
+          .kitchen-item:hover,
+          .footer-link:hover {
+            color: var(--text);
+            background: color-mix(in oklab, var(--border) 70%, transparent);
+            text-decoration: none;
+          }
+
+          .kitchen-item span:nth-child(2) {
+            flex: 1;
+            font-size: 12.5px;
+            line-height: 1.2;
+          }
+
+          .kitchen-count {
+            min-width: 22px;
+            text-align: center;
+            padding: 1px 6px;
+            border-radius: 999px;
+            font-size: 10.5px;
+            font-weight: 600;
+            color: var(--muted);
+            background: color-mix(in oklab, var(--border) 80%, transparent);
+          }
+
+          .create-recipe-btn {
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            width: 100%;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            font: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            color: var(--primary-contrast);
+            background: var(--primary);
+            transition: filter 0.12s ease;
+          }
+
+          .create-recipe-btn:hover {
+            filter: brightness(1.06);
+          }
+
+          .sidebar-footer {
+            margin-top: auto;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+          }
+
+          .footer-title {
+            padding-bottom: 6px;
+          }
+
+          .footer-link span {
+            line-height: 1.2;
+          }
+
+          @media (max-width: 768px) {
+            .sidebar-backdrop {
+              display: block;
+              position: fixed;
+              inset: 0;
+              border: 0;
+              padding: 0;
+              background: rgba(2, 6, 23, 0.48);
+              backdrop-filter: blur(6px);
+              opacity: 0;
+              pointer-events: none;
+              transition: opacity 0.22s ease;
+              z-index: 69;
+            }
+
+            .sidebar-backdrop.open {
+              opacity: 1;
+              pointer-events: auto;
+            }
+
+            .ck-sidebar {
+              width: min(86vw, 300px);
+              transform: translateX(calc(-100% - 22px));
+              transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+            }
+
+            .ck-sidebar.mobile-open {
+              transform: translateX(0);
+            }
+
+            .mobile-close {
+              display: grid;
+            }
+
+            .link-hint {
+              white-space: normal;
+            }
+          }
+        `}</style>
       </aside>
     </>
   );
