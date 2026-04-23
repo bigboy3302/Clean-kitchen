@@ -55,73 +55,53 @@ export default function AppShell({ children }: { children: ReactNode }) {
   return (
     <>
       <Sidebar mobileOpen={mobileNavOpen} onRequestClose={() => setMobileNavOpen(false)} />
-
       <div className="shell-body">
         <TopBar mobileNavOpen={mobileNavOpen} onOpenMobileNav={() => setMobileNavOpen((open) => !open)} />
-
-        <main className="shell-main">{children}</main>
-
+        <main className="shell-main">
+          {children}
+        </main>
         <footer className="shell-footer">
-          <span>© 2026 Clean Kitchen. All rights reserved.</span>
+          <span>© 2024 Clean Kitchen. All rights reserved.</span>
           <a href="/privacy">Privacy Policy</a>
           <a href="/terms">Terms of Service</a>
-          <a href="/support">Help &amp; Support</a>
-          <a href="mailto:adriansraitums95@gmail.com">adriansraitums95@gmail.com</a>
         </footer>
       </div>
 
       <style jsx>{`
         .shell-body {
-          margin-left: 278px;
+          margin-left: 240px;
           min-height: 100dvh;
-          display: grid;
-          grid-template-rows: auto 1fr auto;
-          min-width: 0;
+          display: flex;
+          flex-direction: column;
         }
-
         .shell-main {
-          min-height: 0;
-          min-width: 0;
+          flex: 1;
           padding: 0;
         }
-
         .shell-footer {
-          margin-top: auto;
-          padding: 13px 24px 16px;
+          padding: 20px 24px;
           display: flex;
-          flex-wrap: wrap;
           align-items: center;
-          gap: 12px 16px;
+          gap: 20px;
           font-size: 12px;
           color: var(--muted);
           border-top: 1px solid var(--border);
-          background: color-mix(in oklab, var(--bg-raised) 96%, var(--bg) 4%);
         }
-
         .shell-footer a {
           color: var(--muted);
           text-decoration: none;
-          transition: color 0.14s ease;
+          transition: color 0.14s;
         }
-
-        .shell-footer a:hover {
-          color: var(--text);
-        }
-
+        .shell-footer a:hover { color: var(--text); }
         @media (max-width: 768px) {
           .shell-body {
             margin-left: 0;
+            min-width: 0;
           }
-
           .shell-main {
-            padding-bottom: 0;
+            padding-bottom: 20px;
           }
-
-          .shell-footer {
-            padding: 14px 16px 16px;
-            gap: 12px;
-            font-size: 11.5px;
-          }
+          .shell-footer { display: none; }
         }
       `}</style>
     </>

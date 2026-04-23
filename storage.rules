@@ -6,8 +6,9 @@ service firebase.storage {
     function isVideo()    { return request.resource.contentType.matches('video/.*'); }
     function sizeUnder(n) { return request.resource.size < n; }
     function isAdmin() {
-      // same logic as Firestore rules (mirror your approach)
-      return isSignedIn() && request.auth.token.admin == true;
+      return isSignedIn() && (
+        request.auth.uid in ['X4kOwvUI62NCseuMpqgrqvsFgdm2']
+      );
     }
 
     /* avatars */
@@ -17,7 +18,7 @@ service firebase.storage {
                             && request.auth.uid == uid
                             && isImage()
                             && sizeUnder(5 * 1024 * 1024 + 1);
-      allow delete, list: if isSignedIn() && request.auth.uid == uid;
+      allow delete, list: if (isSignedIn() && request.auth.uid == uid) || isAdmin();
     }
 
     /* post media */
@@ -27,7 +28,7 @@ service firebase.storage {
                     && request.auth.uid == uid
                     && ((isImage() && sizeUnder(20 * 1024 * 1024)) ||
                         (request.resource.contentType.matches('video/.*') && sizeUnder(100 * 1024 * 1024)));
-      allow delete: if isSignedIn() && request.auth.uid == uid;
+      allow delete, list: if (isSignedIn() && request.auth.uid == uid) || isAdmin();
       allow update: if false;
     }
 
@@ -52,12 +53,25 @@ service firebase.storage {
                     && sizeUnder(15 * 1024 * 1024)
                     && exists(/databases/(default)/documents/posts/$(postId)/comments/$(commentId))
                     && get(/databases/(default)/documents/posts/$(postId)/comments/$(commentId)).data.uid == request.auth.uid;
-      allow delete: if isSignedIn()
-                    && exists(/databases/(default)/documents/posts/$(postId)/comments/$(commentId))
-                    && (
-                         get(/databases/(default)/documents/posts/$(postId)/comments/$(commentId)).data.uid == request.auth.uid ||
-                         get(/databases/(default)/documents/posts/$(postId)).data.uid == request.auth.uid
-                       );
+      allow delete, list: if isAdmin() || (
+                            isSignedIn()
+                            && exists(/databases/(default)/documents/posts/$(postId)/comments/$(commentId))
+                            && (
+                                 get(/databases/(default)/documents/posts/$(postId)/comments/$(commentId)).data.uid == request.auth.uid ||
+                                 get(/databases/(default)/documents/posts/$(postId)).data.uid == request.auth.uid
+                               )
+                          );
+      allow update: if false;
+    }
+
+    /* recipe images */
+    match /recipeImages/{uid}/{allPaths=**} {
+      allow read: if true;
+      allow create: if isSignedIn()
+                    && request.auth.uid == uid
+                    && isImage()
+                    && sizeUnder(20 * 1024 * 1024);
+      allow delete, list: if (isSignedIn() && request.auth.uid == uid) || isAdmin();
       allow update: if false;
     }
 
