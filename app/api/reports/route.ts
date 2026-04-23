@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import sgMail from "@sendgrid/mail";
+import { requireUser, UnauthorizedError } from "@/lib/server/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,15 +18,18 @@ function getSendGridDetails(err: unknown): unknown {
   return maybe.response?.body ?? maybe.message ?? err;
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
+    const user = await requireUser(req);
     const body = (await req.json()) as {
       postId?: string;
       reason?: string;
       reporterUid?: string;
+      reporterEmail?: string | null;
+      postUrl?: string | null;
     };
 
-    const { postId, reason, reporterUid } = body;
+    const { postId, reason, reporterEmail, postUrl } = body;
     if (!postId || !reason) {
       return NextResponse.json(
         { ok: false, error: "Missing postId or reason" },
@@ -48,11 +52,27 @@ export async function POST(req: Request) {
       from: process.env.REPORT_EMAIL_FROM!,
       replyTo: process.env.REPORT_EMAIL_TO!,
       subject: `New report for post ${postId}`,
-      text: `Post: ${postId}\nReporter: ${reporterUid ?? "unknown"}\n\nReason:\n${reason}`,
+      text: [
+        `Post: ${postId}`,
+        `Reporter UID: ${user.uid}`,
+        `Reporter Email: ${reporterEmail || user.email || "unknown"}`,
+        postUrl ? `Post URL: ${postUrl}` : null,
+        "",
+        "Reason:",
+        reason,
+      ]
+        .filter(Boolean)
+        .join("\n"),
     });
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err: unknown) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json(
+        { ok: false, error: "Authentication required" },
+        { status: 401 }
+      );
+    }
     console.error("Report email failed:", getSendGridDetails(err));
     return NextResponse.json(
       { ok: false, error: "Email failed" },

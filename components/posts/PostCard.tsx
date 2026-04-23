@@ -4,9 +4,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
-import { db } from "@/lib/firebas1e";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "@/lib/firebas1e";
 import { collection, onSnapshot, query } from "firebase/firestore";
 import Avatar from "@/components/ui/Avatar";
+import { useAuthModal } from "@/context/AuthModalContext";
 
 type Author = { username?: string|null; displayName?: string|null; avatarURL?: string|null };
 type MediaItem = { type:"image"|"video"; url:string; w?:number; h?:number; duration?:number };
@@ -75,8 +77,11 @@ function timeAgo(ts: Post["createdAt"]) {
 export default function PostCard({
   post, meUid, onEdit, onAddMedia, onDelete, onReport, onToggleRepost, onToggleLike,
 }: Props) {
+  const { openLogin } = useAuthModal();
   const { text, media = [], author = {}, createdAt } = post || {};
-  const isOwner = !!(meUid && post?.uid && meUid === post.uid);
+  const [sessionUid, setSessionUid] = useState<string | null>(auth.currentUser?.uid ?? null);
+  const viewerUid = meUid ?? sessionUid;
+  const isOwner = !!(viewerUid && post?.uid && viewerUid === post.uid);
   const createdAtLabel = useMemo(() => timeAgo(createdAt), [createdAt]);
   const hasMedia = media && media.length > 0;
 
@@ -104,19 +109,26 @@ export default function PostCard({
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    const stop = onAuthStateChanged(auth, (user) => {
+      setSessionUid(user?.uid ?? null);
+    });
+    return () => stop();
+  }, []);
+
+  useEffect(() => {
     if (!post?.id) return;
     const likesCol = collection(db, "posts", post.id, "likes");
     const stopLikes = onSnapshot(query(likesCol), (snap) => {
       setLikes(snap.size);
-      if (meUid) setLiked(snap.docs.some(d => d.id === meUid));
+      if (viewerUid) setLiked(snap.docs.some(d => d.id === viewerUid));
     });
     const repostsCol = collection(db, "posts", post.id, "reposts");
     const stopReposts = onSnapshot(query(repostsCol), (snap) => {
       setReposts(snap.size);
-      if (meUid) setHasReposted(snap.docs.some(d => d.id === meUid));
+      if (viewerUid) setHasReposted(snap.docs.some(d => d.id === viewerUid));
     });
     return () => { stopLikes(); stopReposts(); };
-  }, [post?.id, meUid]);
+  }, [post?.id, viewerUid]);
 
   useEffect(() => {
     if (!editing) setDraft(text || "");
@@ -148,7 +160,7 @@ export default function PostCard({
   );
 
   function ensureCanLike(): boolean {
-    if (!meUid) { alert("Please sign in to like posts."); return false; }
+    if (!viewerUid) { openLogin(`/posts/${post?.id ?? ""}`); return false; }
     return true;
   }
   async function optimisticLike(next: boolean) {
@@ -252,8 +264,8 @@ export default function PostCard({
   }
 
   function openReportDialog() {
-    if (!meUid) {
-      alert("Please sign in to report posts.");
+    if (!viewerUid) {
+      openLogin(`/posts/${post?.id ?? ""}`);
       return;
     }
     setReportReason("");
@@ -271,8 +283,8 @@ export default function PostCard({
   }
 
   async function submitReport() {
-    if (!meUid) {
-      alert("Please sign in to report posts.");
+    if (!viewerUid) {
+      openLogin(`/posts/${post?.id ?? ""}`);
       return;
     }
     const trimmedReason = reportReason.trim();
@@ -1063,4 +1075,3 @@ export default function PostCard({
     </>
   );
 }
-

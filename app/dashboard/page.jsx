@@ -432,13 +432,17 @@ export default function DashboardPage() {
     if (!me || !post?.id) { openLogin(`/posts/${post?.id ?? ""}`); throw new Error("AUTH_REQUIRED"); }
     const reason = typeof details?.reason === "string" ? details.reason.trim() : "";
     if (reason.length < 10) throw new Error("Please provide at least 10 characters explaining the issue.");
+    const idToken = await me.getIdToken();
     const postRef = doc(db, "posts", post.id, "reports", me.uid);
     const postPreview = (post?.title || post?.text || post?.description || "").toString().slice(0, 180);
     await setDoc(postRef, { uid: me.uid, postId: post.id, postOwnerUid: post?.uid ?? null, postPreview, reason, createdAt: serverTimestamp() }, { merge: false });
     try {
       const response = await fetch("/api/reports", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
         body: JSON.stringify({
           postId: post.id, postOwnerUid: post.uid ?? null, postAuthor: post.author ?? null,
           reporterUid: me.uid, reporterEmail: userEmail || null, reason,
