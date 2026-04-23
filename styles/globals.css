@@ -225,7 +225,14 @@ p  { color: var(--muted); margin: 0 0 10px }
   color: #4ade80;
 }
 
+.recipesPage .recipeSearchSticky {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
 .recipesPage .recipeSearchBar {
+  position: sticky;
   background: var(--bg-raised);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
@@ -331,13 +338,6 @@ p  { color: var(--muted); margin: 0 0 10px }
   .recipesPage .recipeCard { grid-template-rows: 140px 1fr; }
 }
 
-@media (max-width: 720px) {
-  .recipesPage .recipeSearchSticky {
-    position: sticky;
-    top: calc(env(safe-area-inset-top, 0px) + 8px);
-    z-index: 900;
-  }
-}
 
 label { display: block; margin: 0 0 6px; font-size: 13px; color: var(--text); font-weight: 600 }
 input, select, textarea {
