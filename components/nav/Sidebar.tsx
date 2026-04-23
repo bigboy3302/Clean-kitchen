@@ -119,68 +119,70 @@ export default function Sidebar({
           </button>
         </div>
 
-        <nav className="sidebar-nav" aria-label="Primary">
-          <span className="nav-section-label">Main</span>
+        <div className="sidebar-scroll">
+          <nav className="sidebar-nav" aria-label="Primary">
+            <span className="nav-section-label">Main</span>
 
-          {navLinks.map(({ href, label, hint, Icon }) => {
-            const active = pathname === href || (href !== "/dashboard" && pathname?.startsWith(href));
-            return (
+            {navLinks.map(({ href, label, hint, Icon }) => {
+              const active = pathname === href || (href !== "/dashboard" && pathname?.startsWith(href));
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={clsx("sidebar-link", active && "active")}
+                  aria-current={active ? "page" : undefined}
+                  onClick={onRequestClose}
+                >
+                  <span className="link-icon">
+                    <Icon size={18} strokeWidth={1.8} aria-hidden />
+                  </span>
+
+                  <span className="link-copy">
+                    <span className="link-label">{label}</span>
+                    <span className="link-hint">{hint}</span>
+                  </span>
+                </Link>
+              );
+            })}
+
+            {isAdmin ? (
               <Link
-                key={href}
-                href={href}
-                className={clsx("sidebar-link", active && "active")}
-                aria-current={active ? "page" : undefined}
+                href="/admin"
+                className={clsx("sidebar-link admin-link", pathname?.startsWith("/admin") && "active")}
                 onClick={onRequestClose}
               >
                 <span className="link-icon">
-                  <Icon size={18} strokeWidth={1.8} aria-hidden />
+                  <ShieldAlert size={18} strokeWidth={1.8} aria-hidden />
                 </span>
-
                 <span className="link-copy">
-                  <span className="link-label">{label}</span>
-                  <span className="link-hint">{hint}</span>
+                  <span className="link-label">Admin Panel</span>
+                  <span className="link-hint">Moderation and controls</span>
                 </span>
               </Link>
-            );
-          })}
+            ) : null}
+          </nav>
 
-          {isAdmin ? (
-            <Link
-              href="/admin"
-              className={clsx("sidebar-link admin-link", pathname?.startsWith("/admin") && "active")}
-              onClick={onRequestClose}
-            >
-              <span className="link-icon">
-                <ShieldAlert size={18} strokeWidth={1.8} aria-hidden />
-              </span>
-              <span className="link-copy">
-                <span className="link-label">Admin Panel</span>
-                <span className="link-hint">Moderation and controls</span>
-              </span>
+          <div className="kitchen-section">
+            <span className="kitchen-label">Library</span>
+
+            <Link href="/recipes" className="kitchen-item" onClick={onRequestClose}>
+              <FileText size={15} aria-hidden />
+              <span className="kitchen-text">My Recipes</span>
+              <span className="kitchen-count">{myRecipesCount}</span>
             </Link>
-          ) : null}
-        </nav>
 
-        <div className="kitchen-section">
-          <span className="kitchen-label">Library</span>
+            <Link href="/saved" className="kitchen-item" onClick={onRequestClose}>
+              <Bookmark size={15} aria-hidden />
+              <span className="kitchen-text">Saved Recipes</span>
+              <span className="kitchen-count">{savedCount}</span>
+            </Link>
 
-          <Link href="/recipes" className="kitchen-item" onClick={onRequestClose}>
-            <FileText size={15} aria-hidden />
-            <span className="kitchen-text">My Recipes</span>
-            <span className="kitchen-count">{myRecipesCount}</span>
-          </Link>
-
-          <Link href="/saved" className="kitchen-item" onClick={onRequestClose}>
-            <Bookmark size={15} aria-hidden />
-            <span className="kitchen-text">Saved Recipes</span>
-            <span className="kitchen-count">{savedCount}</span>
-          </Link>
-
-          <Link href="/pantry" className="kitchen-item" onClick={onRequestClose}>
-            <Boxes size={15} aria-hidden />
-            <span className="kitchen-text">Pantry Items</span>
-            <span className="kitchen-count">{pantryCount}</span>
-          </Link>
+            <Link href="/pantry" className="kitchen-item" onClick={onRequestClose}>
+              <Boxes size={15} aria-hidden />
+              <span className="kitchen-text">Pantry Items</span>
+              <span className="kitchen-count">{pantryCount}</span>
+            </Link>
+          </div>
         </div>
 
         <div className="sidebar-footer">
@@ -207,64 +209,54 @@ export default function Sidebar({
         </div>
 
         <style jsx>{`
+          /* ── sidebar shell ── */
           .ck-sidebar {
-            width: 278px;
+            width: 272px;
             height: 100dvh;
             position: fixed;
             top: 0;
             left: 0;
             display: flex;
             flex-direction: column;
-            padding: 14px 12px;
-            background:
-              radial-gradient(circle at top left, color-mix(in oklab, var(--primary) 14%, transparent), transparent 28%),
-              linear-gradient(
-                180deg,
-                color-mix(in oklab, var(--bg-raised) 96%, var(--bg) 4%),
-                color-mix(in oklab, var(--bg) 98%, black 2%)
-              );
-            border-right: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
-            box-shadow: inset -1px 0 0 color-mix(in oklab, var(--border) 42%, transparent);
+            padding: 16px 12px 12px;
+            background: var(--bg-raised);
+            border-right: 1px solid var(--border);
             overflow: hidden;
             z-index: 70;
             color: var(--text);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
           }
 
-          .sidebar-backdrop {
-            display: none;
-          }
+          .sidebar-backdrop { display: none; }
 
+          /* ── brand ── */
           .sidebar-brand {
-            padding: 6px 4px 14px;
-            margin-bottom: 12px;
+            padding: 4px 4px 16px;
+            margin-bottom: 8px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 10px;
-            border-bottom: 1px solid color-mix(in oklab, var(--border) 84%, transparent);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
           }
 
           .brand-link {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 11px;
             min-width: 0;
             text-decoration: none;
             color: var(--text);
           }
 
+          .brand-link:hover { text-decoration: none; }
+
           .brand-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 12px;
-            background: linear-gradient(
-              135deg,
-              var(--primary),
-              color-mix(in oklab, var(--primary) 74%, white 26%)
-            );
-            box-shadow: 0 10px 24px color-mix(in oklab, var(--primary) 24%, transparent);
+            width: 38px;
+            height: 38px;
+            border-radius: 11px;
+            background: var(--primary);
+            box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 22%, transparent);
             display: grid;
             place-items: center;
             overflow: hidden;
@@ -272,8 +264,8 @@ export default function Sidebar({
           }
 
           .brand-logo {
-            width: 24px;
-            height: 24px;
+            width: 22px;
+            height: 22px;
             object-fit: contain;
           }
 
@@ -281,22 +273,23 @@ export default function Sidebar({
             display: flex;
             flex-direction: column;
             min-width: 0;
-            gap: 2px;
+            gap: 1px;
           }
 
           .brand-kicker {
-            font-size: 9px;
-            font-weight: 800;
+            font-size: 9.5px;
+            font-weight: 600;
+            letter-spacing: 0.12em;
             text-transform: uppercase;
-            letter-spacing: 0.2em;
-            color: color-mix(in oklab, var(--muted) 82%, var(--text));
+            color: var(--primary);
+            opacity: 0.85;
           }
 
           .brand-name {
-            font-size: 17px;
+            font-size: 16px;
             font-weight: 800;
-            line-height: 1.1;
-            letter-spacing: -0.03em;
+            line-height: 1.15;
+            letter-spacing: -0.04em;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -305,135 +298,174 @@ export default function Sidebar({
 
           .mobile-close {
             display: none;
-            width: 40px;
-            height: 40px;
-            border-radius: 12px;
-            border: 1px solid color-mix(in oklab, var(--border) 84%, transparent);
-            background: color-mix(in oklab, var(--bg) 82%, transparent);
-            color: var(--text);
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--muted);
             place-items: center;
             cursor: pointer;
             flex-shrink: 0;
+            transition: background 0.12s, color 0.12s;
           }
 
-          .sidebar-nav,
-          .kitchen-section,
-          .sidebar-footer {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
+          .mobile-close:hover {
+            background: color-mix(in oklab, var(--border) 70%, transparent);
+            color: var(--text);
           }
 
+          /* ── scroll area ── */
+          .sidebar-scroll {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0;
+            scrollbar-width: none;
+          }
+          .sidebar-scroll::-webkit-scrollbar { display: none; }
+
+          /* ── section labels ── */
           .nav-section-label,
           .kitchen-label {
-            padding: 0 10px 8px;
-            font-size: 10px;
-            font-weight: 800;
-            letter-spacing: 0.22em;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            padding: 0 4px 8px;
+            font-size: 10.5px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
             text-transform: uppercase;
-            color: color-mix(in oklab, var(--muted) 76%, var(--text));
+            color: var(--muted);
+          }
+
+          .nav-section-label::before,
+          .kitchen-label::before {
+            content: '';
+            display: inline-block;
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: var(--primary);
+            opacity: 0.7;
+            flex-shrink: 0;
+          }
+
+          /* ── nav ── */
+          .sidebar-nav,
+          .kitchen-section {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
           }
 
           .sidebar-link {
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 10px;
-            border-radius: 16px;
-            color: color-mix(in oklab, var(--text) 80%, var(--muted));
+            gap: 11px;
+            padding: 8px 10px;
+            border-radius: 11px;
+            color: var(--muted);
             text-decoration: none;
-            border: 1px solid transparent;
-            transition: 0.18s ease;
+            transition: background 0.14s, color 0.14s;
           }
 
           .sidebar-link:hover {
             color: var(--text);
-            background: color-mix(in oklab, var(--bg) 76%, var(--primary) 24% / 10%);
-            border-color: color-mix(in oklab, var(--border) 72%, var(--primary) 28%);
-            transform: translateX(2px);
+            background: color-mix(in oklab, var(--border) 70%, transparent);
+            text-decoration: none;
           }
 
           .sidebar-link.active {
             color: var(--text);
-            background: linear-gradient(
-              135deg,
-              color-mix(in oklab, var(--primary) 18%, transparent),
-              color-mix(in oklab, var(--bg) 88%, transparent)
-            );
-            border-color: color-mix(in oklab, var(--primary) 30%, var(--border));
-            box-shadow: 0 10px 22px color-mix(in oklab, var(--primary) 10%, transparent);
+            background: color-mix(in oklab, var(--primary) 12%, var(--bg-raised));
           }
 
-          .admin-link {
-            margin-top: 2px;
-          }
+          .admin-link { margin-top: 4px; }
 
+          /* ── link icon box ── */
           .link-icon {
-            width: 38px;
-            height: 38px;
-            border-radius: 12px;
+            width: 36px;
+            height: 36px;
+            border-radius: 9px;
             display: grid;
             place-items: center;
             flex-shrink: 0;
-            color: inherit;
-            background: color-mix(in oklab, var(--bg) 72%, var(--primary) 28% / 8%);
-            border: 1px solid color-mix(in oklab, var(--border) 84%, transparent);
+            color: var(--muted);
+            background: color-mix(in oklab, var(--border) 65%, transparent);
+            transition: background 0.14s, color 0.14s;
           }
 
+          .sidebar-link.active .link-icon {
+            background: color-mix(in oklab, var(--primary) 16%, var(--bg));
+            color: var(--primary);
+          }
+
+          .sidebar-link:hover .link-icon {
+            color: var(--text);
+          }
+
+          /* ── link text ── */
           .link-copy {
             min-width: 0;
             display: flex;
             flex-direction: column;
-            justify-content: center;
-            gap: 2px;
+            gap: 1px;
           }
 
           .link-label {
-            font-size: 13px;
-            font-weight: 700;
+            font-size: 14px;
+            font-weight: 600;
             line-height: 1.2;
             letter-spacing: -0.02em;
             color: inherit;
           }
 
+          .sidebar-link.active .link-label {
+            font-weight: 700;
+            color: var(--text);
+          }
+
           .link-hint {
             font-size: 11px;
             line-height: 1.25;
-            color: var(--muted);
-            white-space: normal;
+            color: color-mix(in oklab, var(--muted) 85%, transparent);
+            letter-spacing: 0;
           }
 
           .sidebar-link.active .link-hint {
-            color: color-mix(in oklab, var(--muted) 72%, var(--text));
+            color: color-mix(in oklab, var(--muted) 75%, var(--text));
           }
 
+          /* ── library section ── */
           .kitchen-section {
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid color-mix(in oklab, var(--border) 84%, transparent);
-            margin-bottom: 12px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+            margin-bottom: 4px;
           }
 
-          .kitchen-item,
-          .footer-link {
+          .kitchen-item {
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 9px 10px;
-            border-radius: 14px;
-            color: color-mix(in oklab, var(--text) 76%, var(--muted));
+            padding: 7px 10px;
+            border-radius: 9px;
+            color: var(--muted);
             text-decoration: none;
-            font-size: 12.5px;
-            font-weight: 600;
-            border: 1px solid transparent;
-            transition: 0.16s ease;
+            font-size: 13px;
+            font-weight: 500;
+            transition: background 0.13s, color 0.13s;
           }
 
-          .kitchen-item:hover,
-          .footer-link:hover {
+          .kitchen-item:hover {
             color: var(--text);
-            background: color-mix(in oklab, var(--bg) 76%, var(--primary) 24% / 10%);
-            border-color: color-mix(in oklab, var(--border) 72%, var(--primary) 28%);
+            background: color-mix(in oklab, var(--border) 70%, transparent);
+            text-decoration: none;
+          }
+
+          .kitchen-item :global(svg) {
+            flex-shrink: 0;
+            color: var(--muted);
           }
 
           .kitchen-text {
@@ -442,27 +474,48 @@ export default function Sidebar({
           }
 
           .kitchen-count {
-            min-width: 28px;
-            text-align: center;
-            padding: 3px 8px;
+            padding: 2px 7px;
             border-radius: 999px;
-            font-size: 10px;
-            font-weight: 800;
-            color: var(--text);
+            font-size: 10.5px;
+            font-weight: 700;
+            color: var(--primary);
             background: color-mix(in oklab, var(--primary) 12%, transparent);
-            border: 1px solid color-mix(in oklab, var(--border) 68%, var(--primary) 32%);
           }
 
+          /* ── footer ── */
           .sidebar-footer {
-            margin-top: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            flex-shrink: 0;
             padding-top: 12px;
-            border-top: 1px solid color-mix(in oklab, var(--border) 84%, transparent);
+            border-top: 1px solid var(--border);
           }
 
-          .footer-title {
-            padding-bottom: 10px;
+          .footer-title { padding-bottom: 6px; }
+
+          .footer-link {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 12.5px;
+            font-weight: 500;
+            transition: background 0.12s, color 0.12s;
           }
 
+          .footer-link:hover {
+            color: var(--text);
+            background: color-mix(in oklab, var(--border) 70%, transparent);
+            text-decoration: none;
+          }
+
+          .footer-link :global(svg) { flex-shrink: 0; opacity: 0.7; }
+
+          /* ── mobile ── */
           @media (max-width: 768px) {
             .sidebar-backdrop {
               display: block;
@@ -484,24 +537,66 @@ export default function Sidebar({
             }
 
             .ck-sidebar {
-              width: min(86vw, 320px);
-              transform: translateX(calc(-100% - 22px));
-              transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+              width: min(78vw, 260px);
+              padding: 12px 10px;
+              transform: translateX(calc(-100% - 20px));
+              transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
             }
 
-            .ck-sidebar.mobile-open {
-              transform: translateX(0);
+            .ck-sidebar.mobile-open { transform: translateX(0); }
+
+            .mobile-close { display: grid; }
+
+            .sidebar-brand {
+              padding: 2px 2px 12px;
+              margin-bottom: 6px;
             }
 
-            .mobile-close {
-              display: grid;
+            .brand-icon { width: 32px; height: 32px; border-radius: 9px; }
+            .brand-logo { width: 18px; height: 18px; }
+            .brand-name { font-size: 14px; }
+            .brand-kicker { font-size: 8.5px; }
+
+            .nav-section-label,
+            .kitchen-label {
+              font-size: 9.5px;
+              padding-bottom: 6px;
             }
 
-            .sidebar-link:hover,
-            .kitchen-item:hover,
-            .footer-link:hover {
-              transform: none;
+            .sidebar-nav,
+            .kitchen-section,
+            .sidebar-footer { gap: 1px; }
+
+            .sidebar-link {
+              padding: 7px 8px;
+              border-radius: 9px;
+              gap: 9px;
             }
+
+            .link-icon {
+              width: 30px;
+              height: 30px;
+              border-radius: 8px;
+            }
+
+            .link-label { font-size: 13px; }
+            .link-hint { font-size: 10.5px; }
+
+            .kitchen-section {
+              margin-top: 12px;
+              padding-top: 12px;
+              margin-bottom: 2px;
+            }
+
+            .kitchen-item { padding: 6px 8px; font-size: 12.5px; }
+            .footer-link { padding: 5px 8px; font-size: 12px; }
+            .footer-link :global(svg) { width: 13px; height: 13px; }
+          }
+
+          @media (max-width: 380px) {
+            .ck-sidebar { width: 82vw; padding: 10px 8px; }
+            .link-icon { width: 28px; height: 28px; }
+            .link-label { font-size: 12.5px; }
           }
         `}</style>
       </aside>

@@ -90,7 +90,7 @@ export default function TopBar({
         <div className="mobileLead">
           <button
             type="button"
-            className={clsx("menuButton", mobileNavOpen && "open")}
+            className={clsx("menuButton", mobileNavOpen && "menuButton--hidden")}
             onClick={onOpenMobileNav}
             aria-expanded={mobileNavOpen}
             aria-label={mobileNavOpen ? "Close navigation menu" : "Open navigation menu"}
@@ -98,10 +98,10 @@ export default function TopBar({
             {mobileNavOpen ? <X size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
           </button>
 
-          <strong className="mobileTitle">{pageTitle}</strong>
+          <strong className={clsx("mobileTitle", mobileNavOpen && "mobileTitle--hidden")}>{pageTitle}</strong>
         </div>
 
-        <form className="search" onSubmit={handleSearch} role="search">
+        <form className={clsx("search", mobileNavOpen && "search--hidden")} onSubmit={handleSearch} role="search">
           <span className="searchIcon" aria-hidden>
             <Search size={15} />
           </span>
@@ -203,6 +203,10 @@ export default function TopBar({
           flex-shrink: 0;
         }
 
+        .menuButton--hidden {
+          visibility: hidden;
+        }
+
         .mobileTitle {
           font-size: 15px;
           line-height: 1.1;
@@ -211,6 +215,10 @@ export default function TopBar({
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
+        }
+
+        .mobileTitle--hidden {
+          visibility: hidden;
         }
 
         .search {
@@ -337,34 +345,43 @@ export default function TopBar({
           background: color-mix(in oklab, var(--primary) 8%, transparent);
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 900px) {
           .topbar {
-            top: 0;
             padding: 8px 12px 0;
           }
 
           .inner {
+            display: flex;
+            flex-wrap: wrap;
             min-height: auto;
             padding: 0;
-            flex-wrap: wrap;
-            gap: 10px;
+            gap: 8px;
+            align-items: center;
           }
 
           .mobileLead {
             display: flex;
-            flex: 1;
             min-width: 0;
+            flex: 1;
+            order: 1;
+          }
+
+          .actions {
+            order: 2;
+            margin-left: auto;
+            gap: 8px;
+            flex-shrink: 0;
           }
 
           .search {
             order: 3;
+            width: 100%;
             flex-basis: 100%;
             max-width: none;
           }
 
-          .actions {
-            margin-left: 0;
-            gap: 8px;
+          .search--hidden {
+            display: none;
           }
 
           .profileName {
@@ -372,7 +389,25 @@ export default function TopBar({
           }
 
           .searchInput {
-            height: 42px;
+            height: 40px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .topbar {
+            padding: 8px 10px 0;
+          }
+
+          .mobileTitle {
+            font-size: 14px;
+          }
+
+          .actions {
+            gap: 6px;
+          }
+
+          .profileButton {
+            padding: 4px 8px 4px 4px;
           }
         }
       `}</style>

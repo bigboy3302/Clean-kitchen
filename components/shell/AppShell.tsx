@@ -66,7 +66,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <a href="/privacy">Privacy Policy</a>
           <a href="/terms">Terms of Service</a>
           <a href="/support">Help &amp; Support</a>
-          <a href="mailto:adriansraitums95@gmail.com">adriansraitums95@gmail.com</a>
         </footer>
       </div>
 
