@@ -518,12 +518,24 @@ export default function Sidebar({
           /* ── mobile ── */
           @media (max-width: 768px) {
             .sidebar-backdrop {
-              display: block;
+              display: none;
               position: fixed;
               inset: 0;
+              width: 100vw;
+              height: 100dvh;
+              min-width: 0;
+              min-height: 0;
               border: 0;
               padding: 0;
-              background: rgba(2, 6, 23, 0.5);
+              margin: 0;
+              appearance: none;
+              -webkit-appearance: none;
+              border-radius: 0;
+              outline: none;
+              background: transparent;
+              color: transparent;
+              font-size: 0;
+              line-height: 0;
               backdrop-filter: blur(6px);
               opacity: 0;
               pointer-events: none;
@@ -532,6 +544,8 @@ export default function Sidebar({
             }
 
             .sidebar-backdrop.open {
+              display: block;
+              background: rgba(2, 6, 23, 0.5);
               opacity: 1;
               pointer-events: auto;
             }

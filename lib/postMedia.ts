@@ -14,6 +14,7 @@ type MediaItem = {
   url: string;
   type: "image" | "video";
   path: string;
+  storagePath: string;
 };
 
 export async function addMediaToPost({
@@ -40,7 +41,7 @@ export async function addMediaToPost({
       const isVideo = file.type.startsWith("video");
       const ext = file.name.split(".").pop() || (isVideo ? "mp4" : "jpg");
       const objectName = `${Date.now()}-${i}.${ext}`;
-      const objectPath = `users/${uid}/posts/${postId}/${objectName}`;
+      const objectPath = `posts/${uid}/${postId}/${objectName}`;
       const storageRef = ref(storage, objectPath);
 
       const task = uploadBytesResumable(storageRef, file, {
@@ -65,6 +66,7 @@ export async function addMediaToPost({
                 url,
                 type: isVideo ? "video" : "image",
                 path: objectPath,
+                storagePath: objectPath,
               });
               resolve();
             } catch (e) {

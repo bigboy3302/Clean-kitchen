@@ -192,15 +192,8 @@ export default function DashboardPage() {
   const [communityRecipes, setCommunityRecipes] = useState([]);
   const [pantryItems, setPantryItems] = useState([]);
 
-  const [openComposer, setOpenComposer] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
-  const [postText, setPostText] = useState("");
-  const [postFiles, setPostFiles] = useState([]);
-  const [previews, setPreviews] = useState([]);
-  const [busyPost, setBusyPost] = useState(false);
-  const [errPost, setErrPost] = useState(null);
   const [shareToast, setShareToast] = useState(null);
-  const fileRef = useRef(null);
   const shareToastTimer = useRef(null);
 
   const today = useMemo(() => {
@@ -476,61 +469,6 @@ export default function DashboardPage() {
     shareToastTimer.current = setTimeout(() => setShareToast(null), 2800);
   }
 
-  function onPick(e) {
-    const list = Array.from(e.target.files || []).slice(0, 4);
-    setPostFiles(list);
-    setPreviews(list.map((f) => ({ url: URL.createObjectURL(f), type: f.type.startsWith("video") ? "video" : "image" })));
-  }
-
-  async function createPost() {
-    if (!uid) { openRegister("/dashboard"); return; }
-    const text = postText.trim();
-    if (!text && postFiles.length === 0) return;
-    setBusyPost(true);
-    setErrPost(null);
-    try {
-      let author = { username: null, displayName: null, avatarURL: null };
-      try {
-        const uSnap = await getDoc(doc(db, "users", uid));
-        if (uSnap.exists()) {
-          const u = uSnap.data() || {};
-          author = {
-            username: u.username || null,
-            displayName: u.firstName ? `${u.firstName}${u.lastName ? " " + u.lastName : ""}` : u.displayName || null,
-            avatarURL: u.photoURL || null,
-          };
-        }
-      } catch {}
-      const postRef = await addDoc(collection(db, "posts"), { uid, text: text || null, media: [], likes: 0, reposts: 0, createdAt: serverTimestamp(), author });
-      if (postFiles.length) {
-        const uploaded = [];
-        for (const file of postFiles) {
-          const isVideo = file.type.startsWith("video");
-          let w = 0, h = 0, duration;
-          try {
-            if (isVideo) { const d = await getVideoDims(file); w = d.w; h = d.h; duration = d.duration; }
-            else { const d = await getImageDims(file); w = d.w; h = d.h; }
-          } catch {}
-          const safeName = `${Date.now()}-${file.name}`.replace(/\s+/g, "_");
-          const storagePath = `posts/${uid}/${postRef.id}/${safeName}`;
-          const url = await uploadWithProgress(ref(storage, storagePath), file);
-          uploaded.push({ mid: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, type: isVideo ? "video" : "image", url, storagePath, w, h, ...(isVideo ? { duration } : {}) });
-        }
-        await updateDoc(postRef, { media: uploaded });
-      }
-      setPostText("");
-      setPostFiles([]);
-      setPreviews([]);
-      if (fileRef.current) fileRef.current.value = "";
-      setOpenComposer(false);
-    } catch (e) {
-      const msg = String(e?.message || e);
-      setErrPost(/permission|insufficient|denied/i.test(msg) ? "Permission denied. Check auth and rules." : msg);
-    } finally {
-      setBusyPost(false);
-    }
-  }
-
   if (!ready) return null;
 
   const greeting = userName ? `Welcome back, ${userName}` : "Welcome back";
@@ -785,17 +723,14 @@ export default function DashboardPage() {
             <div className="feed-head">
               <h2 className="section-title" style={{ marginBottom: 0 }}>Community Feed</h2>
               <div className="feed-head-right">
-                <span className="feed-sort-label">Latest ▾</span>
-                <button
-                  className="feed-new-btn"
-                  onClick={() => uid ? setOpenComposer(true) : openRegister("/dashboard")}
-                >
-                  <IconShare /> Create Post
-                </button>
+                <span className="feed-sort-label">Latest updates</span>
+                <Link className="feed-new-btn" href="/posts">
+                  <IconShare /> Open Community
+                </Link>
               </div>
             </div>
             <div className="feed">
-              {recentPosts.map((p) => (
+              {recentPosts.slice(0, 3).map((p) => (
                 <PostCard
                   key={p.id}
                   post={p}
@@ -812,15 +747,17 @@ export default function DashboardPage() {
               {recentPosts.length === 0 && (
                 <div className="feed-empty">
                   <p>No community posts yet. Be the first to share!</p>
-                  <button
-                    className="pant-btn pant-primary"
-                    onClick={() => uid ? setOpenComposer(true) : openRegister("/dashboard")}
-                  >
-                    Create First Post
-                  </button>
+                  <Link className="pant-btn pant-primary" href="/posts">
+                    Open Community
+                  </Link>
                 </div>
               )}
             </div>
+            {recentPosts.length > 0 ? (
+              <div className="feed-preview-link">
+                <Link href="/posts" className="see-all-link">See all community posts →</Link>
+              </div>
+            ) : null}
           </section>
         </main>
 
@@ -886,8 +823,8 @@ export default function DashboardPage() {
               <QuickActionCard
                 tone="violet"
                 icon={<IconPencilSquare />}
-                label="Create Post"
-                onClick={() => uid ? setOpenComposer(true) : openRegister("/dashboard")}
+                label="Community"
+                href="/posts"
                 className="qa-list-item"
               />
               <QuickActionCard href="/saved" tone="rose" icon={<IconBookmark />} label="Saved Recipes" className="qa-list-item" />
@@ -963,57 +900,6 @@ export default function DashboardPage() {
       {shareToast && (
         <div className="share-toast" role="status" aria-live="polite">
           <span className="share-toast-check">✓</span> {shareToast}
-        </div>
-      )}
-
-      {/* COMPOSER MODAL */}
-      {openComposer && (
-        <div className="backdrop" onClick={() => setOpenComposer(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="mHead">
-              <div className="mTitle">Share with the community</div>
-              <button className="x" onClick={() => setOpenComposer(false)}>✕</button>
-            </div>
-            <div className="mBody">
-              {errPost ? <p className="bad">{errPost}</p> : null}
-              <label className="lab">What&apos;s on your mind?</label>
-              <textarea
-                rows={4}
-                value={postText}
-                onChange={(e) => setPostText(e.target.value)}
-                placeholder="Share a recipe tip, kitchen win, or food photo..."
-              />
-              <label className="lab">Add photos or videos (up to 4)</label>
-              <input ref={fileRef} type="file" accept="image/*,video/*" multiple onChange={onPick} />
-              {previews.length > 0 && (
-                <div className="videoWarn">
-                  <span className="videoWarnIcon">⚠</span>
-                  {previews.some((m) => m.type === "video")
-                    ? "Videos can take a few minutes to upload — please keep this window open until posting is done."
-                    : "Photos may take a few seconds to upload — please keep this window open until posting is done."}
-                </div>
-              )}
-              {previews.length > 0 && (
-                <div className={`preview grid-${Math.min(previews.length, 2)}`}>
-                  {previews.map((m, i) => (
-                    <div key={i} className="pCell">
-                      {m.type === "video" ? (
-                        <video src={m.url} controls muted />
-                      ) : (
-                        <NextImage src={m.url} alt={`Selected media ${i + 1}`} fill sizes="(max-width: 768px) 100vw, 420px" className="pImage" unoptimized />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="mFoot">
-              <button className="btn ghost" onClick={() => setOpenComposer(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={createPost} disabled={busyPost}>
-                {busyPost ? "Publishing…" : "Publish"}
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
@@ -1720,6 +1606,11 @@ export default function DashboardPage() {
         .feed-new-btn:hover { background: color-mix(in oklab, var(--primary) 18%, transparent); transform: translateY(-1px); }
         .feed { display: grid; gap: 18px; }
         :global(.feed > *) { max-width: 720px; width: 100%; margin: 0 auto; }
+        .feed-preview-link {
+          margin-top: 12px;
+          display: flex;
+          justify-content: flex-end;
+        }
         .feed-empty {
           display: grid;
           gap: 16px;
@@ -1904,106 +1795,6 @@ export default function DashboardPage() {
           to   { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
 
-        /* ── MODAL ── */
-        .backdrop {
-          position: fixed; inset: 0;
-          background: color-mix(in oklab, #000 58%, transparent);
-          backdrop-filter: blur(6px);
-          display: grid;
-          place-items: center;
-          z-index: 1000;
-        }
-        .modal {
-          width: min(760px, calc(100vw - 32px));
-          background: var(--bg-raised);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-card);
-          box-shadow: 0 28px 68px rgba(15,23,42,0.42);
-          overflow: hidden;
-        }
-        .mHead {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 16px 20px;
-          border-bottom: 1px solid var(--border);
-        }
-        .mTitle { font-weight: 800; font-size: 18px; }
-        .x {
-          border: 0; background: transparent; color: var(--muted);
-          cursor: pointer; font-size: 18px; border-radius: var(--radius-button);
-          width: 32px; height: 32px; display: grid; place-items: center;
-        }
-        .x:hover { color: var(--text); background: color-mix(in oklab, var(--primary) 12%, transparent); }
-        .mBody { padding: 20px; display: grid; gap: 14px; }
-        .lab { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
-        textarea, input[type="text"], input[type="file"] {
-          width: 100%;
-          border: 1px solid var(--border);
-          border-radius: var(--radius-button);
-          background: var(--bg);
-          color: var(--text);
-          padding: 12px 14px;
-          font: inherit;
-        }
-        textarea:focus, input[type="text"]:focus, input[type="file"]:focus {
-          outline: none;
-          border-color: color-mix(in oklab, var(--primary) 42%, var(--border));
-          box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 18%, transparent);
-        }
-        textarea { min-height: 120px; resize: vertical; }
-        .videoWarn { display: flex; align-items: flex-start; gap: 8px; background: #fef2f2; border: 1.5px solid #fca5a5; border-radius: 10px; padding: 10px 12px; font-size: 13px; color: #991b1b; line-height: 1.45; }
-        .videoWarnIcon { flex-shrink: 0; font-size: 15px; margin-top: 1px; }
-        .preview { display: grid; gap: 12px; }
-        .preview.grid-1 { grid-template-columns: 1fr; }
-        .preview.grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .pCell {
-          position: relative;
-          border: 1px solid var(--border);
-          border-radius: var(--radius-button);
-          overflow: hidden;
-          background: #000;
-          aspect-ratio: 16 / 10;
-        }
-        .pCell video { width: 100%; height: 100%; object-fit: cover; display: block; }
-        .pCell :global(.pImage) { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-        .mFoot {
-          display: flex;
-          justify-content: flex-end;
-          gap: 12px;
-          padding: 16px 20px;
-          border-top: 1px solid var(--border);
-        }
-        .btn {
-          border: 1px solid var(--border);
-          background: var(--bg);
-          color: var(--text);
-          border-radius: var(--radius-button);
-          padding: 10px 18px;
-          font-weight: 700;
-          cursor: pointer;
-          transition: transform 0.12s, background 0.16s, border-color 0.16s, box-shadow 0.16s;
-          font-family: inherit;
-        }
-        .btn:hover { background: color-mix(in oklab, var(--bg) 80%, var(--primary) 10%); }
-        .btn:active { transform: translateY(1px); }
-        .btn-primary {
-          background: var(--primary);
-          color: var(--primary-contrast);
-          border-color: color-mix(in oklab, var(--primary) 55%, var(--border));
-          box-shadow: 0 10px 28px color-mix(in oklab, var(--primary) 28%, transparent);
-        }
-        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
-        .ghost { background: transparent; }
-        .bad {
-          margin: 0;
-          padding: 10px 12px;
-          border-radius: var(--radius-button);
-          border: 1px solid rgba(239,68,68,0.26);
-          background: rgba(239,68,68,0.12);
-          color: #7f1d1d;
-          font-size: 13px;
-        }
       `}</style>
     </div>
   );

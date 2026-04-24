@@ -164,7 +164,7 @@ export default function PostThreadPage() {
         setLoading(false);
         if (!snap.exists()) {
           setPost(null);
-          router.replace("/dashboard");
+          router.replace("/posts");
           return;
         }
         const record = snap.data() as PostRecord | undefined;
@@ -423,7 +423,7 @@ export default function PostThreadPage() {
             </div>
           </div>
           <div className="actions">
-            <Link className="btn-ghost" href="/dashboard">
+            <Link className="btn-ghost" href="/posts">
               Back
             </Link>
           </div>
