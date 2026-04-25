@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   type ChangeEvent,
@@ -21,7 +20,7 @@ import {
   updateProfile,
 } from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
-import { X } from "lucide-react";
+import { Eye, EyeOff, X } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { auth, db } from "@/lib/firebas1e";
@@ -40,9 +39,32 @@ const REQUIRED_FIELDS_ERROR =
   "Please complete the following fields: Name, Surname, Email and Password.";
 const EMAIL_ERROR = "Please enter a valid email address.";
 const PASSWORD_ERROR = "Password must be at least 8 characters.";
+const NAME_ERROR = "Name is required.";
+const SURNAME_ERROR = "Surname is required.";
 
 function isEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function validateRequiredName(value: string) {
+  return value.trim() ? null : NAME_ERROR;
+}
+
+function validateRequiredSurname(value: string) {
+  return value.trim() ? null : SURNAME_ERROR;
+}
+
+function validateRegisterEmail(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "Email is required.";
+  if (!isEmail(trimmed)) return EMAIL_ERROR;
+  return null;
+}
+
+function validateRegisterPassword(value: string) {
+  if (!value) return "Password is required.";
+  if (value.length < 8) return PASSWORD_ERROR;
+  return null;
 }
 
 function mapLoginError(code?: string) {
@@ -106,6 +128,7 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
   const [loginPasswordErr, setLoginPasswordErr] = useState<string | null>(null);
   const [loginFormErr, setLoginFormErr] = useState<string | null>(null);
   const [loginBusy, setLoginBusy] = useState(false);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [touchedEmail, setTouchedEmail] = useState(false);
   const [touchedPassword, setTouchedPassword] = useState(false);
 
@@ -113,9 +136,18 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
   const [lastName, setLastName] = useState("");
   const [registerEmail, setRegisterEmail] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
+  const [registerFirstNameErr, setRegisterFirstNameErr] = useState<string | null>(null);
+  const [registerLastNameErr, setRegisterLastNameErr] = useState<string | null>(null);
+  const [registerEmailErr, setRegisterEmailErr] = useState<string | null>(null);
+  const [registerPasswordErr, setRegisterPasswordErr] = useState<string | null>(null);
   const [registerErr, setRegisterErr] = useState<string | null>(null);
   const [registerInfo, setRegisterInfo] = useState<string | null>(null);
   const [registerBusy, setRegisterBusy] = useState(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [touchedFirstName, setTouchedFirstName] = useState(false);
+  const [touchedLastName, setTouchedLastName] = useState(false);
+  const [touchedRegisterEmail, setTouchedRegisterEmail] = useState(false);
+  const [touchedRegisterPassword, setTouchedRegisterPassword] = useState(false);
   const [phase, setPhase] = useState<RegisterPhase>("form");
   const COOLDOWN = 60;
   const [cooldown, setCooldown] = useState(0);
@@ -144,6 +176,26 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
     timerRef.current = null;
   }, [cooldown]);
 
+  useEffect(() => {
+    if (!touchedFirstName) return;
+    setRegisterFirstNameErr(validateRequiredName(firstName));
+  }, [firstName, touchedFirstName]);
+
+  useEffect(() => {
+    if (!touchedLastName) return;
+    setRegisterLastNameErr(validateRequiredSurname(lastName));
+  }, [lastName, touchedLastName]);
+
+  useEffect(() => {
+    if (!touchedRegisterEmail) return;
+    setRegisterEmailErr(validateRegisterEmail(registerEmail));
+  }, [registerEmail, touchedRegisterEmail]);
+
+  useEffect(() => {
+    if (!touchedRegisterPassword) return;
+    setRegisterPasswordErr(validateRegisterPassword(registerPassword));
+  }, [registerPassword, touchedRegisterPassword]);
+
   useEffect(
     () => () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -156,15 +208,6 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
     setRegisterErr(null);
     setRegisterInfo(null);
   }, [mode]);
-
-  const canSubmitLogin = useMemo(
-    () =>
-      !loginBusy &&
-      loginEmail.trim().length > 0 &&
-      loginPassword.length >= 8 &&
-      isEmail(loginEmail.trim()),
-    [loginBusy, loginEmail, loginPassword]
-  );
 
   const nextPath = redirectTo || "/recipes";
 
@@ -185,8 +228,16 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
     setLastName("");
     setRegisterEmail("");
     setRegisterPassword("");
+    setRegisterFirstNameErr(null);
+    setRegisterLastNameErr(null);
+    setRegisterEmailErr(null);
+    setRegisterPasswordErr(null);
     setRegisterErr(null);
     setRegisterInfo(null);
+    setTouchedFirstName(false);
+    setTouchedLastName(false);
+    setTouchedRegisterEmail(false);
+    setTouchedRegisterPassword(false);
     setCooldown(0);
   }
 
@@ -244,21 +295,26 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
     event.preventDefault();
     setRegisterErr(null);
     setRegisterInfo(null);
+    setTouchedFirstName(true);
+    setTouchedLastName(true);
+    setTouchedRegisterEmail(true);
+    setTouchedRegisterPassword(true);
 
     const trimmedFirst = firstName.trim();
     const trimmedLast = lastName.trim();
     const trimmedEmail = registerEmail.trim();
+    const nextFirstNameErr = validateRequiredName(firstName);
+    const nextLastNameErr = validateRequiredSurname(lastName);
+    const nextEmailErr = validateRegisterEmail(registerEmail);
+    const nextPasswordErr = validateRegisterPassword(registerPassword);
 
-    if (!trimmedFirst || !trimmedLast || !trimmedEmail || !registerPassword) {
+    setRegisterFirstNameErr(nextFirstNameErr);
+    setRegisterLastNameErr(nextLastNameErr);
+    setRegisterEmailErr(nextEmailErr);
+    setRegisterPasswordErr(nextPasswordErr);
+
+    if (nextFirstNameErr || nextLastNameErr || nextEmailErr || nextPasswordErr) {
       setRegisterErr(REQUIRED_FIELDS_ERROR);
-      return;
-    }
-    if (!isEmail(trimmedEmail)) {
-      setRegisterErr(EMAIL_ERROR);
-      return;
-    }
-    if (registerPassword.length < 8) {
-      setRegisterErr(PASSWORD_ERROR);
       return;
     }
 
@@ -408,11 +464,16 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
   }
 
   const closeLabel = mode === "login" ? "Close sign in" : "Close sign up";
+  const loginPasswordToggleLabel = showLoginPassword ? "Hide password" : "Show password";
+  const registerPasswordToggleLabel = showRegisterPassword ? "Hide password" : "Show password";
+  const lockVerificationStep = mode === "register" && phase === "verify";
 
   return (
     <div
       className="authModalBackdrop"
-      onClick={onClose}
+      onClick={() => {
+        if (!lockVerificationStep) onClose();
+      }}
       role="presentation"
     >
       <section
@@ -422,9 +483,11 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
         aria-modal="true"
         aria-labelledby="auth-modal-title"
       >
-        <button type="button" className="authModalClose" onClick={onClose} aria-label={closeLabel}>
-          <X size={18} />
-        </button>
+        {!lockVerificationStep ? (
+          <button type="button" className="authModalClose" onClick={onClose} aria-label={closeLabel}>
+            <X size={18} />
+          </button>
+        ) : null}
 
         <aside className="authModalBrand">
           <span className="authModalBadge">Clean Kitchen</span>
@@ -475,7 +538,7 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
 
           {mode === "login" ? (
             <>
-              <form onSubmit={handleLoginSubmit} className="authFormStack">
+              <form onSubmit={handleLoginSubmit} className="authFormStack" noValidate>
                 <div>
                   <Input
                     label="Email"
@@ -500,7 +563,7 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
                 <div>
                   <Input
                     label="Password"
-                    type="password"
+                    type={showLoginPassword ? "text" : "password"}
                     value={loginPassword}
                     onBlur={() => setTouchedPassword(true)}
                     onChange={(event: ChangeEvent<HTMLInputElement>) =>
@@ -509,6 +572,17 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
                     placeholder="••••••••"
                     aria-invalid={Boolean(loginPasswordErr)}
                     aria-describedby={loginPasswordErr ? "auth-login-password-error" : undefined}
+                    endAdornment={
+                      <button
+                        type="button"
+                        className="passwordToggle"
+                        aria-label={loginPasswordToggleLabel}
+                        aria-pressed={showLoginPassword}
+                        onClick={() => setShowLoginPassword((value) => !value)}
+                      >
+                        {showLoginPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    }
                     required
                   />
                   {loginPasswordErr ? (
@@ -518,9 +592,13 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
                   ) : null}
                 </div>
 
-                {loginFormErr ? <p className="formAlert">{loginFormErr}</p> : null}
+                {loginFormErr ? (
+                  <p className="formAlert" role="alert">
+                    <strong>Sign in failed.</strong> {loginFormErr}
+                  </p>
+                ) : null}
 
-                <Button type="submit" disabled={!canSubmitLogin} className="fullWidth">
+                <Button type="submit" disabled={loginBusy} className="fullWidth">
                   {loginBusy ? "Signing in..." : "Sign in"}
                 </Button>
               </form>
@@ -557,48 +635,111 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
             </>
           ) : phase === "form" ? (
             <>
-              <form onSubmit={handleRegisterSubmit} className="authFormStack">
+              <form onSubmit={handleRegisterSubmit} className="authFormStack" noValidate>
                 <div className="nameRow">
-                  <Input
-                    label="Name"
-                    value={firstName}
-                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                      setFirstName(event.currentTarget.value)
-                    }
-                    required
-                  />
-                  <Input
-                    label="Surname"
-                    value={lastName}
-                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                      setLastName(event.currentTarget.value)
-                    }
-                    required
-                  />
+                  <div>
+                    <Input
+                      label="Name"
+                      value={firstName}
+                      onBlur={() => setTouchedFirstName(true)}
+                      onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                        setFirstName(event.currentTarget.value)
+                      }
+                      aria-invalid={Boolean(registerFirstNameErr)}
+                      aria-describedby={
+                        registerFirstNameErr ? "auth-register-name-error" : undefined
+                      }
+                      required
+                    />
+                    {registerFirstNameErr ? (
+                      <p id="auth-register-name-error" className="fieldError">
+                        {registerFirstNameErr}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div>
+                    <Input
+                      label="Surname"
+                      value={lastName}
+                      onBlur={() => setTouchedLastName(true)}
+                      onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                        setLastName(event.currentTarget.value)
+                      }
+                      aria-invalid={Boolean(registerLastNameErr)}
+                      aria-describedby={
+                        registerLastNameErr ? "auth-register-surname-error" : undefined
+                      }
+                      required
+                    />
+                    {registerLastNameErr ? (
+                      <p id="auth-register-surname-error" className="fieldError">
+                        {registerLastNameErr}
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
 
-                <Input
-                  label="Email"
-                  type="email"
-                  value={registerEmail}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                    setRegisterEmail(event.currentTarget.value)
-                  }
-                  placeholder="you@email.com"
-                  required
-                />
+                <div>
+                  <Input
+                    label="Email"
+                    type="email"
+                    value={registerEmail}
+                    onBlur={() => setTouchedRegisterEmail(true)}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                      setRegisterEmail(event.currentTarget.value)
+                    }
+                    placeholder="you@email.com"
+                    aria-invalid={Boolean(registerEmailErr)}
+                    aria-describedby={
+                      registerEmailErr ? "auth-register-email-error" : undefined
+                    }
+                    required
+                  />
+                  {registerEmailErr ? (
+                    <p id="auth-register-email-error" className="fieldError">
+                      {registerEmailErr}
+                    </p>
+                  ) : null}
+                </div>
 
-                <Input
-                  label="Password (min 8)"
-                  type="password"
-                  value={registerPassword}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                    setRegisterPassword(event.currentTarget.value)
-                  }
-                  required
-                />
+                <div>
+                  <Input
+                    label="Password (min 8)"
+                    type={showRegisterPassword ? "text" : "password"}
+                    value={registerPassword}
+                    onBlur={() => setTouchedRegisterPassword(true)}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                      setRegisterPassword(event.currentTarget.value)
+                    }
+                    aria-invalid={Boolean(registerPasswordErr)}
+                    aria-describedby={
+                      registerPasswordErr ? "auth-register-password-error" : undefined
+                    }
+                    endAdornment={
+                      <button
+                        type="button"
+                        className="passwordToggle"
+                        aria-label={registerPasswordToggleLabel}
+                        aria-pressed={showRegisterPassword}
+                        onClick={() => setShowRegisterPassword((value) => !value)}
+                      >
+                        {showRegisterPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    }
+                    required
+                  />
+                  {registerPasswordErr ? (
+                    <p id="auth-register-password-error" className="fieldError">
+                      {registerPasswordErr}
+                    </p>
+                  ) : null}
+                </div>
 
-                {registerErr ? <p className="formAlert">{registerErr}</p> : null}
+                {registerErr ? (
+                  <p className="formAlert" role="alert">
+                    <strong>Check the form.</strong> {registerErr}
+                  </p>
+                ) : null}
                 {registerInfo ? <p className="infoAlert">{registerInfo}</p> : null}
 
                 <Button type="submit" disabled={registerBusy} className="fullWidth">
@@ -647,12 +788,6 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
               </p>
             </>
           )}
-
-          <p className="legalCopy">
-            You can browse without an account.
-            {" "}
-            <Link href="/recipes">Browse recipes first</Link>
-          </p>
         </div>
       </section>
 
@@ -795,6 +930,27 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
           font-weight: 600;
           color: color-mix(in oklab, var(--primary) 78%, var(--text) 22%);
         }
+        .passwordToggle {
+          width: 32px;
+          height: 32px;
+          border: 0;
+          border-radius: 999px;
+          padding: 0;
+          background: transparent;
+          color: var(--muted);
+          display: grid;
+          place-items: center;
+          cursor: pointer;
+          transition: background .15s ease, color .15s ease;
+        }
+        .passwordToggle:hover {
+          background: color-mix(in oklab, var(--primary) 14%, transparent);
+          color: var(--text);
+        }
+        .passwordToggle:focus-visible {
+          outline: 2px solid color-mix(in oklab, var(--ring) 72%, transparent);
+          outline-offset: 2px;
+        }
         .formAlert,
         .infoAlert {
           margin: 0;
@@ -843,7 +999,6 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
           width: 100%;
         }
         .switchCopy,
-        .legalCopy,
         .verifyCopy {
           margin: 0;
           color: var(--muted);
@@ -864,9 +1019,6 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
           display: grid;
           gap: 12px;
           grid-template-columns: repeat(3, minmax(0, 1fr));
-        }
-        .legalCopy :global(a) {
-          color: var(--text);
         }
         @keyframes authModalFadeIn {
           from {
@@ -926,7 +1078,6 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
           .verifyActions {
             grid-template-columns: minmax(0, 1fr);
           }
-          .legalCopy,
           .switchCopy {
             text-align: center;
           }
