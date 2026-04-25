@@ -362,7 +362,7 @@ export default function OnboardingPage() {
                     className="genderInput"
                     required
                   />
-                  <span className="genderText">Male</span>
+                  <span>Male</span>
                 </label>
                 <label className={`genderOption ${sex === "female" ? "active" : ""}`}>
                   <input
@@ -372,7 +372,7 @@ export default function OnboardingPage() {
                     onChange={() => setSex("female")}
                     className="genderInput"
                   />
-                  <span className="genderText">Female</span>
+                  <span>Female</span>
                 </label>
               </div>
             </div>
@@ -397,7 +397,6 @@ export default function OnboardingPage() {
           display: flex;
           align-items: center;
           justify-content: center;
-         
           overflow: hidden;
         }
         .onboardingGlow {
@@ -570,19 +569,20 @@ export default function OnboardingPage() {
           gap: 12px;
         }
         .genderOption {
-          position: relative;
-          display: flex;
+          display: inline-flex;
           align-items: center;
           justify-content: center;
-          min-height: 68px;
-          border-radius: 20px;
+          gap: 10px;
+          min-height: 54px;
+          border-radius: 18px;
           border: 1px solid color-mix(in oklab, var(--border) 82%, transparent);
-          padding: 14px;
+          padding: 10px 14px;
+          font-size: 0.92rem;
+          font-weight: 700;
           color: var(--text);
           background: color-mix(in oklab, var(--bg2) 96%, transparent);
           transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
           cursor: pointer;
-          overflow: hidden;
         }
         .genderOption:hover {
           border-color: color-mix(in oklab, var(--primary) 32%, var(--border));
@@ -594,17 +594,7 @@ export default function OnboardingPage() {
           background: color-mix(in oklab, var(--bg2) 78%, var(--primary) 22%);
         }
         .genderInput {
-          position: absolute;
-          inset: 0;
-          opacity: 0;
-          pointer-events: none;
-        }
-        .genderText {
-          display: block;
-          text-align: center;
-          font-size: 1rem;
-          font-weight: 800;
-          letter-spacing: -0.01em;
+          accent-color: var(--primary);
         }
         .formError {
           margin: 0;

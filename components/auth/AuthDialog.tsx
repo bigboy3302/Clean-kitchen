@@ -15,6 +15,7 @@ import {
   createUserWithEmailAndPassword,
   deleteUser,
   sendEmailVerification,
+  signOut,
   signInWithEmailAndPassword,
   signInWithPopup,
   updateProfile,
@@ -450,15 +451,30 @@ export default function AuthDialog({ mode, onModeChange, onClose, redirectTo }: 
     setRegisterBusy(true);
     try {
       await deleteUser(user);
-      try {
-        localStorage.removeItem("ck_pending_profile");
-      } catch {
-        // ignore
+    } catch (error: unknown) {
+      const code = getErrorCode(error);
+
+      if (code !== "auth/requires-recent-login") {
+        setRegisterErr("Failed to cancel registration. Please try again.");
+        setRegisterBusy(false);
+        return;
       }
-      resetRegisterFlow();
+    }
+
+    try {
+      await signOut(auth);
     } catch {
-      setRegisterErr("Failed to cancel registration. Please try again.");
+      // ignore sign-out issues here
+    }
+
+    try {
+      localStorage.removeItem("ck_pending_profile");
+    } catch {
+      // ignore
     } finally {
+      setShowRegisterPassword(false);
+      onModeChange("register");
+      resetRegisterFlow();
       setRegisterBusy(false);
     }
   }
