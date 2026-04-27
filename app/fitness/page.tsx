@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import Container from "@/components/Container";
 import FitnessHeader from "@/components/fitness/FitnessHeader";
 import WorkoutGrid from "@/components/fitness/WorkoutGrid";
 import Button from "@/components/ui/Button";
+import { useAuthModal } from "@/context/AuthModalContext";
+import { useAuth } from "@/hooks/useAuth";
 import { useDebounce } from "@/hooks/useDebounce";
 import {
   Goal,
@@ -35,6 +36,8 @@ const activityLabels: Record<Activity, string> = {
 };
 
 export default function FitnessPage() {
+  const { user, loading: authLoading } = useAuth();
+  const { openLogin } = useAuthModal();
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 450);
 
@@ -52,12 +55,13 @@ export default function FitnessPage() {
   const ageRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
     let alive = true;
     (async () => {
       try {
         const metrics = await getMetrics();
         if (!alive || !metrics) {
-          if (alive) setEditing(true);
+          if (alive) setEditing(!!user);
           return;
         }
         if (!alive) return;
@@ -76,7 +80,7 @@ export default function FitnessPage() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [authLoading, user]);
 
   useEffect(() => {
     if (!editing) return;
@@ -120,8 +124,28 @@ export default function FitnessPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  function openMetricsEditor() {
+    if (!user) {
+      openLogin("/fitness");
+      return;
+    }
+    setEditing(true);
+  }
+
+  function openPlanner() {
+    if (!user) {
+      openLogin("/fitness/day");
+      return;
+    }
+    window.location.href = "/fitness/day";
+  }
+
   async function onSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!user) {
+      openLogin("/fitness");
+      return;
+    }
     setSaving(true);
     try {
       const payload: Metrics = {
@@ -165,8 +189,22 @@ export default function FitnessPage() {
               )}
             </div>
             <div className="metricsRight">
-              <Link href="/fitness/day" className="plannerBtn">Today&apos;s planner</Link>
-              <button type="button" className="editMetricsBtn" onClick={() => setEditing(true)}>
+              <button
+                type="button"
+                className="plannerBtn"
+                onClick={openPlanner}
+                disabled={authLoading}
+                title={!user ? "Sign in to open today's planner" : undefined}
+              >
+                Today&apos;s planner
+              </button>
+              <button
+                type="button"
+                className="editMetricsBtn"
+                onClick={openMetricsEditor}
+                disabled={authLoading}
+                title={!user ? "Sign in to edit your fitness metrics" : undefined}
+              >
                 {numbersReady ? "Edit" : "Set up"}
               </button>
             </div>
@@ -189,6 +227,7 @@ export default function FitnessPage() {
               <div>
                 <p className="eyebrow">Update inputs</p>
                 <h3>Edit your metrics</h3>
+                {!user ? <p className="signinNote">Sign in to edit your fitness metrics.</p> : null}
               </div>
               <button type="button" className="modalClose" onClick={() => setEditing(false)}>
                 Close
@@ -204,6 +243,7 @@ export default function FitnessPage() {
                       type="button"
                       className={form.sex === option ? "chip on" : "chip"}
                       onClick={() => update("sex", option)}
+                      disabled={!user}
                     >
                       {titleCase(option)}
                     </button>
@@ -219,6 +259,7 @@ export default function FitnessPage() {
                   value={form.age}
                   onChange={(event) => update("age", safeNumber(event.target.value))}
                   placeholder="Age in years"
+                  disabled={!user}
                 />
               </label>
               <label>
@@ -229,6 +270,7 @@ export default function FitnessPage() {
                   value={form.heightCm}
                   onChange={(event) => update("heightCm", safeNumber(event.target.value))}
                   placeholder="Height in cm"
+                  disabled={!user}
                 />
               </label>
               <label>
@@ -239,11 +281,16 @@ export default function FitnessPage() {
                   value={form.weightKg}
                   onChange={(event) => update("weightKg", safeNumber(event.target.value))}
                   placeholder="Weight in kg"
+                  disabled={!user}
                 />
               </label>
               <label>
                 <span>Activity level</span>
-                <select value={form.activity} onChange={(event) => update("activity", event.target.value as Activity)}>
+                <select
+                  value={form.activity}
+                  onChange={(event) => update("activity", event.target.value as Activity)}
+                  disabled={!user}
+                >
                   {Object.entries(activityLabels).map(([value, label]) => (
                     <option key={value} value={value}>
                       {label}
@@ -260,6 +307,7 @@ export default function FitnessPage() {
                       type="button"
                       className={form.goal === option ? "chip on" : "chip"}
                       onClick={() => update("goal", option)}
+                      disabled={!user}
                     >
                       {titleCase(option)}
                     </button>
@@ -270,7 +318,7 @@ export default function FitnessPage() {
                 <Button type="button" variant="ghost" onClick={() => setEditing(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={saving}>
+                <Button type="submit" disabled={saving || !user}>
                   {saving ? "Saving…" : "Save metrics"}
                 </Button>
               </div>
@@ -338,6 +386,8 @@ export default function FitnessPage() {
         .plannerBtn {
           display: inline-flex;
           align-items: center;
+          justify-content: center;
+          border: 0;
           border-radius: 999px;
           padding: 9px 18px;
           font-weight: 700;
@@ -347,8 +397,13 @@ export default function FitnessPage() {
           font-size: 0.9rem;
           box-shadow: 0 10px 28px color-mix(in oklab, var(--primary) 28%, transparent);
           transition: filter 0.15s ease;
+          cursor: pointer;
         }
         .plannerBtn:hover { filter: brightness(1.07); }
+        .plannerBtn:disabled {
+          opacity: 0.6;
+          cursor: default;
+        }
         .editMetricsBtn {
           border-radius: 999px;
           border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
@@ -362,6 +417,10 @@ export default function FitnessPage() {
         }
         .editMetricsBtn:hover {
           background: color-mix(in oklab, var(--bg) 80%, transparent);
+        }
+        .editMetricsBtn:disabled {
+          opacity: 0.6;
+          cursor: default;
         }
         .setupHint {
           margin: 0;
@@ -400,6 +459,11 @@ export default function FitnessPage() {
           margin: 6px 0 0;
           font-size: 1.2rem;
           color: var(--text);
+        }
+        .signinNote {
+          margin: 8px 0 0;
+          color: var(--muted);
+          font-size: 0.9rem;
         }
         .modalClose {
           border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
