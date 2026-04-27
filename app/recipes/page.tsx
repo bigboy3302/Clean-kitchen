@@ -13,8 +13,6 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-
-// NOTE: if your file is actually "firebas1e", switch it back.
 import { auth, db } from "@/lib/firebas1e";
 
 import Button from "@/components/ui/Button";
@@ -36,6 +34,8 @@ import {
 /* -------------------------- helpers & type guards -------------------------- */
 
 const INGREDIENT_PAGE_SIZE = 12;
+const DEFAULT_RECIPE_BATCH = 28;
+const NAME_SEARCH_LIMIT = 28;
 
 type TimestampLike =
   | { seconds?: number; toDate?: () => Date }
@@ -384,6 +384,8 @@ export default function RecipesPage() {
 
   const didInit = useRef(false);
   const didAutoSearch = useRef(false);
+  const hasActiveFilters =
+    areaFilter !== "any" || sortBy !== "match" || diet !== "any" || maxTime !== null;
 
   useEffect(() => {
     if (didInit.current) return;
@@ -507,7 +509,7 @@ export default function RecipesPage() {
     (async () => {
       setInitialLoading(true);
       try {
-        const list = await getRandomMeals(15);
+        const list = await getRandomMeals(DEFAULT_RECIPE_BATCH);
         if (alive) setApiRecipes(list.map(withRecipeMeta));
       } catch {
         // ignore
@@ -542,14 +544,14 @@ export default function RecipesPage() {
       setErr(null);
       setPantryRecipes(null);
       if (!q.trim()) {
-        const list = await getRandomMeals(15);
+        const list = await getRandomMeals(DEFAULT_RECIPE_BATCH);
         setApiRecipes(list.map(withRecipeMeta));
         setBusySearch(false);
         return;
       }
       setBusySearch(true);
       try {
-        const list = await searchMealsByName(q.trim(), 24, {
+        const list = await searchMealsByName(q.trim(), NAME_SEARCH_LIMIT, {
           area: areaFilter,
           diet,
           sort: sortBy,
@@ -659,10 +661,10 @@ export default function RecipesPage() {
     setBusySearch(true);
     try {
       if (!q.trim()) {
-        const list = await getRandomMeals(15);
+        const list = await getRandomMeals(DEFAULT_RECIPE_BATCH);
         setApiRecipes(list.map(withRecipeMeta));
       } else {
-        const list = await searchMealsByName(q.trim(), 24, {
+        const list = await searchMealsByName(q.trim(), NAME_SEARCH_LIMIT, {
           area: areaFilter,
           diet,
           sort: sortBy,
@@ -756,6 +758,17 @@ export default function RecipesPage() {
     return list;
   }, [combined, areaFilter, sortBy]);
 
+  const activeFilterPills = useMemo(() => {
+    const pills: string[] = [];
+    if (areaFilter !== "any") pills.push(`Area: ${areaFilter}`);
+    if (sortBy !== "match") pills.push(`Sort: ${sortBy === "fast" ? "Fastest" : "Calories"}`);
+    if (diet !== "any") pills.push(`Diet: ${diet}`);
+    if (maxTime !== null) pills.push(`Max ${maxTime} min`);
+    return pills;
+  }, [areaFilter, sortBy, diet, maxTime]);
+
+  const resultsLabel = `${visibleRecipes.length} recipe${visibleRecipes.length === 1 ? "" : "s"}`;
+
   const isSignedIn = !!me;
   const isLoading = initialLoading || busySearch;
   return (
@@ -797,7 +810,7 @@ export default function RecipesPage() {
 
             <div className="filters filtersDesktop">
               <div className="filterItem">
-                <label className="small muted">Area</label>
+                <label className="filterLabel">Area</label>
                 <select
                   value={areaFilter}
                   onChange={(e) => setAreaFilter(e.currentTarget.value)}
@@ -811,7 +824,7 @@ export default function RecipesPage() {
                 </select>
               </div>
               <div className="filterItem">
-                <label className="small muted">Sort</label>
+                <label className="filterLabel">Sort</label>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.currentTarget.value as "match" | "fast" | "calories")}
@@ -823,7 +836,7 @@ export default function RecipesPage() {
                 </select>
               </div>
               <div className="filterItem">
-                <label className="small muted">Diet</label>
+                <label className="filterLabel">Diet</label>
                 <select
                   value={diet}
                   onChange={(e) =>
@@ -848,7 +861,7 @@ export default function RecipesPage() {
                 </select>
               </div>
               <div className="filterItem">
-                <label className="small muted">Max time</label>
+                <label className="filterLabel">Max time</label>
                 <select
                   value={maxTime ?? ""}
                   onChange={(e) =>
@@ -924,6 +937,32 @@ export default function RecipesPage() {
           {busySearch && <p className="muted small">Searching…</p>}
           {err && <p className="error">{err}</p>}
           {pantryRecipes && <p className="muted small">Showing suggestions from your pantry.</p>}
+          <div className="resultsBar">
+            <div className="resultsCopy">
+              <strong>{resultsLabel}</strong>
+              <span className="muted small">
+                {mode === "ingredient" ? "Ingredient search results" : "Recipes ready to browse"}
+              </span>
+            </div>
+            <div className="resultsExtras">
+              {activeFilterPills.length ? (
+                <div className="activeFilters" aria-label="Active filters">
+                  {activeFilterPills.map((pill) => (
+                    <span key={pill} className="activeFilterPill">
+                      {pill}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <span className="muted small">No filters applied</span>
+              )}
+              {hasActiveFilters ? (
+                <button className="linkBtn" type="button" onClick={clearSearch}>
+                  Reset filters
+                </button>
+              ) : null}
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1275,12 +1314,19 @@ export default function RecipesPage() {
 
         .filters {
           display: grid;
-          gap: 4px;
+          gap: 10px;
           align-items: end;
         }
         .filtersDesktop {
           grid-template-columns: repeat(4, minmax(0, 1fr));
           gap: 10px;
+          padding: 10px;
+          border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
+          border-radius: 18px;
+          background:
+            linear-gradient(180deg, color-mix(in oklab, var(--bg2) 94%, transparent), color-mix(in oklab, var(--bg) 90%, var(--bg2) 10%)),
+            radial-gradient(circle at top, color-mix(in oklab, var(--primary) 10%, transparent), transparent 55%);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
         }
         @media (max-width: 980px) {
           .filtersDesktop {
@@ -1289,7 +1335,22 @@ export default function RecipesPage() {
         }
         .filterItem {
           display: grid;
-          gap: 4px;
+          gap: 6px;
+          min-width: 0;
+          padding: 10px 12px 12px;
+          border-radius: 14px;
+          border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
+          background: color-mix(in oklab, var(--bg-raised) 92%, transparent);
+        }
+        .filterLabel {
+          display: inline-flex;
+          align-items: center;
+          margin: 0;
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--muted);
         }
         .filtersMobile {
           display: none;
@@ -1318,18 +1379,20 @@ export default function RecipesPage() {
         }
         .select {
           border: 1px solid var(--border);
-          border-radius: 10px;
-          padding: 8px 10px;
-          background: var(--bg2);
+          border-radius: 12px;
+          padding: 10px 12px;
+          background: color-mix(in oklab, var(--bg2) 88%, var(--bg) 12%);
           color: var(--text);
+          min-height: 44px;
         }
         .linkBtn {
           border: none;
           background: none;
-          color: var(--text);
-          text-decoration: underline;
+          color: var(--primary);
           cursor: pointer;
           font-size: 13px;
+          font-weight: 700;
+          padding: 0;
         }
 
         .seg {
@@ -1337,12 +1400,13 @@ export default function RecipesPage() {
           grid-auto-flow: column;
           gap: 0;
           border: 1px solid var(--border);
-          border-radius: 12px;
+          border-radius: 16px;
           overflow: hidden;
-          background: var(--bg2);
+          background: color-mix(in oklab, var(--bg2) 90%, var(--bg) 10%);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
         }
         .segBtn {
-          padding: 10px 12px;
+          padding: 12px 14px;
           font-weight: 700;
           border: 0;
           background: transparent;
@@ -1355,6 +1419,46 @@ export default function RecipesPage() {
         .segBtn.active {
           background: var(--primary);
           color: var(--primary-contrast);
+        }
+        .resultsBar {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 14px;
+          flex-wrap: wrap;
+          padding-top: 4px;
+        }
+        .resultsCopy {
+          display: grid;
+          gap: 3px;
+        }
+        .resultsCopy strong {
+          font-size: 15px;
+          color: var(--text);
+        }
+        .resultsExtras {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+        .activeFilters {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .activeFilterPill {
+          display: inline-flex;
+          align-items: center;
+          min-height: 32px;
+          padding: 6px 12px;
+          border-radius: 999px;
+          border: 1px solid color-mix(in oklab, var(--border) 70%, var(--primary) 30%);
+          background: color-mix(in oklab, var(--bg) 80%, var(--primary) 20% / 14%);
+          color: var(--text);
+          font-size: 12px;
+          font-weight: 700;
         }
 
         .muted {
@@ -1451,6 +1555,14 @@ export default function RecipesPage() {
         @media (min-width: 721px) {
           .filtersSheet {
             display: none;
+          }
+        }
+        @media (max-width: 720px) {
+          .resultsBar {
+            align-items: stretch;
+          }
+          .resultsExtras {
+            justify-content: flex-start;
           }
         }
       `}</style>
