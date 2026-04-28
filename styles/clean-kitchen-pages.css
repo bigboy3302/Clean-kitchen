@@ -1,0 +1,303 @@
+/* Clean Kitchen shared page polish. Uses the same CSS variables as the theme picker,
+   so light/dark/custom themes also affect these pages and the sidebar. */
+
+.ck-page {
+  width: min(1180px, 100%);
+  margin-inline: auto;
+  padding: 28px 22px 76px !important;
+}
+
+.ck-page .hero,
+.ck-page .heroInner,
+.ck-page .sectionCard,
+.ck-page .card,
+.ck-page .metricsBar,
+.ck-page .featureCard,
+.ck-page .ctaBand,
+.ck-page .stat,
+.ck-page .post,
+.ck-page .empty,
+.ck-page .loading {
+  border-radius: 30px !important;
+  border-color: color-mix(in oklab, var(--border) 55%, transparent) !important;
+  background:
+    radial-gradient(circle at 95% 0%, color-mix(in oklab, var(--primary) 11%, transparent), transparent 32%),
+    linear-gradient(145deg, color-mix(in oklab, var(--bg2) 96%, transparent), color-mix(in oklab, var(--bg) 90%, var(--bg2) 10%)) !important;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.09) !important;
+}
+
+.ck-page .title,
+.ck-page h1,
+.ck-page h2,
+.ck-page h3 {
+  letter-spacing: -0.055em !important;
+}
+
+.ck-page .eyebrow,
+.ck-page .sectionEyebrow,
+.ck-page .consumeEyebrow,
+.ck-page .sectionHead > span,
+.ck-page .feedHead > span {
+  color: var(--primary) !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.16em !important;
+}
+
+.ck-page button,
+.ck-page a,
+.ck-page input,
+.ck-page select,
+.ck-page textarea {
+  transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease !important;
+}
+
+.ck-page button:hover,
+.ck-page a:hover {
+  text-decoration: none !important;
+}
+
+.ck-page .guestBtn,
+.ck-page .plannerBtn,
+.ck-page .primaryCta,
+.ck-page .primaryCta {
+  border-radius: 999px !important;
+  background: var(--primary) !important;
+  color: var(--primary-contrast) !important;
+  box-shadow: 0 18px 42px color-mix(in oklab, var(--primary) 24%, transparent) !important;
+}
+
+.ck-page .guestBtn:hover,
+.ck-page .plannerBtn:hover,
+.ck-page .primaryCta:hover {
+  transform: translateY(-2px) !important;
+  filter: none !important;
+}
+
+/* Pantry: make it feel like a guided dashboard instead of a basic form page. */
+.ck-pantry-page .heroInner {
+  padding: clamp(22px, 4vw, 36px) !important;
+  align-items: end !important;
+  overflow: hidden;
+  position: relative;
+}
+
+.ck-pantry-page .heroInner::after {
+  content: "";
+  position: absolute;
+  right: -60px;
+  top: -80px;
+  width: 260px;
+  height: 260px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--primary) 18%, transparent);
+  filter: blur(18px);
+  pointer-events: none;
+}
+
+.ck-pantry-page .title {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(42px, 7vw, 78px) !important;
+  font-weight: 500 !important;
+  line-height: 0.9 !important;
+}
+
+.ck-pantry-page .sub {
+  max-width: 60ch;
+  font-size: 1rem !important;
+  line-height: 1.7 !important;
+}
+
+.ck-pantry-page .stats {
+  gap: 18px !important;
+  margin: 18px 0 24px !important;
+}
+
+.ck-pantry-page .stat {
+  min-height: 132px;
+  padding: 22px !important;
+  display: grid;
+  align-content: space-between;
+}
+
+.ck-pantry-page .sTop {
+  font-size: 12px !important;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 950 !important;
+}
+
+.ck-pantry-page .sNum {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 48px !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.08em;
+}
+
+.ck-pantry-page .addCard,
+.ck-pantry-page .consumeCard {
+  padding: 24px !important;
+}
+
+.ck-pantry-page .addTitle,
+.ck-pantry-page .consumeTitle,
+.ck-pantry-page .secTitle {
+  font-size: 1.35rem !important;
+  font-weight: 950 !important;
+}
+
+.ck-pantry-page .input,
+.ck-pantry-page input,
+.ck-pantry-page select {
+  border-radius: 16px !important;
+  min-height: 46px;
+  background: color-mix(in oklab, var(--bg2) 82%, transparent) !important;
+}
+
+.ck-pantry-page .btn,
+.ck-pantry-page button {
+  border-radius: 999px !important;
+}
+
+.ck-pantry-page .gridCards {
+  gap: 18px !important;
+}
+
+/* Fitness: clearer hierarchy and less confusing controls. */
+.ck-fitness-page {
+  gap: 24px !important;
+}
+
+.ck-fitness-page .metricsBar {
+  padding: 24px !important;
+  align-items: stretch !important;
+}
+
+.ck-fitness-page .metricsLeft {
+  display: grid;
+  gap: 12px;
+}
+
+.ck-fitness-page .statsRow {
+  gap: 10px !important;
+}
+
+.ck-fitness-page .statsRow .pill,
+.ck-fitness-page .pill {
+  min-height: 44px;
+  border-radius: 999px !important;
+  border-color: color-mix(in oklab, var(--border) 55%, transparent) !important;
+  background: color-mix(in oklab, var(--bg2) 84%, transparent) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.06);
+}
+
+.ck-fitness-page .metricsRight {
+  align-content: center;
+}
+
+.ck-fitness-page .plannerBtn,
+.ck-fitness-page .editMetricsBtn,
+.ck-fitness-page .chip,
+.ck-fitness-page .modalClose {
+  min-height: 42px;
+  border-radius: 999px !important;
+}
+
+.ck-fitness-page .editMetricsBtn {
+  background: color-mix(in oklab, var(--bg2) 80%, transparent) !important;
+}
+
+.ck-fitness-page .fitnessHeader,
+.ck-fitness-page .workoutGrid,
+.ck-fitness-page .workoutCard {
+  border-radius: 28px !important;
+}
+
+.ck-fitness-page .metricsModal {
+  border-radius: 30px !important;
+}
+
+.ck-fitness-page .modalHead {
+  background:
+    radial-gradient(circle at right top, color-mix(in oklab, var(--primary) 14%, transparent), transparent 34%),
+    color-mix(in oklab, var(--bg2) 92%, transparent);
+}
+
+/* Community: modern social dashboard feel. */
+.ck-community-page {
+  max-width: 1080px !important;
+  gap: 22px !important;
+}
+
+.ck-community-page .hero {
+  padding: clamp(24px, 4vw, 38px) !important;
+  overflow: hidden;
+  position: relative;
+}
+
+.ck-community-page .hero::after {
+  content: "";
+  position: absolute;
+  right: -44px;
+  top: -70px;
+  width: 220px;
+  height: 220px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--primary) 16%, transparent);
+  filter: blur(18px);
+}
+
+.ck-community-page .title {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(44px, 6vw, 72px) !important;
+  font-weight: 500 !important;
+  line-height: 0.92 !important;
+}
+
+.ck-community-page .intro {
+  max-width: 58ch;
+  font-size: 1rem !important;
+  line-height: 1.7 !important;
+}
+
+.ck-community-page .metaPill {
+  min-height: 38px !important;
+  border: 0 !important;
+  background: color-mix(in oklab, var(--primary) 12%, var(--bg2)) !important;
+  font-weight: 850 !important;
+}
+
+.ck-community-page .sectionCard {
+  padding: 24px !important;
+}
+
+.ck-community-page .sectionHead h2,
+.ck-community-page .feedHead h2 {
+  font-size: 1.5rem !important;
+  font-weight: 950 !important;
+}
+
+.ck-community-page .post {
+  border-radius: 28px !important;
+  overflow: hidden;
+}
+
+.ck-community-page .grid {
+  gap: 18px !important;
+}
+
+@media (max-width: 768px) {
+  .ck-page {
+    padding: 18px 14px 56px !important;
+  }
+
+  .ck-page .heroInner,
+  .ck-page .metricsBar,
+  .ck-page .sectionCard,
+  .ck-page .card {
+    border-radius: 24px !important;
+  }
+
+  .ck-pantry-page .stat {
+    min-height: auto;
+  }
+}

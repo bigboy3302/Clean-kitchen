@@ -1,0 +1,219 @@
+/* Clean Kitchen unified visual language. These classes use the live theme variables,
+   so changing the Theme Picker changes the sidebar, landing page, dashboard, cards and buttons. */
+:root {
+  --ck-radius-xl: 34px;
+  --ck-radius-lg: 28px;
+  --ck-radius-md: 18px;
+  --ck-soft-shadow: 0 24px 70px color-mix(in oklab, var(--text) 14%, transparent);
+  --ck-card-shadow: 0 18px 48px color-mix(in oklab, var(--text) 10%, transparent);
+  --ck-page-bg: color-mix(in oklab, var(--bg) 86%, var(--primary) 14%);
+  --ck-page-surface: color-mix(in oklab, var(--bg-raised) 86%, var(--bg) 14%);
+  --ck-card: color-mix(in oklab, var(--bg-raised) 94%, white 6%);
+  --ck-card-2: color-mix(in oklab, var(--bg-raised) 82%, var(--primary) 18%);
+  --ck-sidebar-bg: color-mix(in oklab, var(--bg) 78%, #020403 22%);
+  --ck-sidebar-fg: color-mix(in oklab, var(--text) 86%, white 14%);
+  --ck-sidebar-muted: color-mix(in oklab, var(--muted) 78%, var(--text) 22%);
+  --ck-accent: var(--primary);
+  --ck-accent-contrast: var(--primary-contrast);
+}
+
+html[data-theme="light"] {
+  --ck-page-bg: #f6f1e8;
+  --ck-page-surface: #fffaf0;
+  --ck-card: #fffdf8;
+  --ck-sidebar-bg: #080d0b;
+  --ck-sidebar-fg: #fffdf2;
+  --ck-sidebar-muted: rgba(255,255,255,.66);
+  --ck-accent: #9fc31b;
+  --ck-accent-contrast: #061006;
+}
+
+html[data-theme="dark"] {
+  --ck-page-bg: color-mix(in oklab, var(--bg) 92%, var(--primary) 8%);
+  --ck-page-surface: color-mix(in oklab, var(--bg-raised) 92%, var(--bg) 8%);
+  --ck-card: color-mix(in oklab, var(--bg-raised) 92%, white 8%);
+  --ck-sidebar-bg: color-mix(in oklab, var(--bg) 78%, black 22%);
+  --ck-sidebar-fg: var(--text);
+  --ck-sidebar-muted: color-mix(in oklab, var(--muted) 76%, white 24%);
+  --ck-accent: var(--primary);
+  --ck-accent-contrast: var(--primary-contrast);
+}
+
+html[data-theme="custom"] {
+  --ck-page-bg: color-mix(in oklab, var(--bg) 88%, var(--primary) 12%);
+  --ck-page-surface: color-mix(in oklab, var(--bg-raised) 88%, var(--bg) 12%);
+  --ck-card: color-mix(in oklab, var(--bg-raised) 92%, var(--primary) 8%);
+  --ck-sidebar-bg: color-mix(in oklab, var(--bg) 80%, black 20%);
+  --ck-sidebar-fg: var(--text);
+  --ck-sidebar-muted: color-mix(in oklab, var(--muted) 72%, var(--text) 28%);
+  --ck-accent: var(--primary);
+  --ck-accent-contrast: var(--primary-contrast);
+}
+
+.ck-page {
+  min-height: 100%;
+  color: var(--text);
+}
+
+.ck-page-pad {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: clamp(18px, 3vw, 34px);
+}
+
+.ck-eyebrow {
+  margin: 0;
+  color: var(--ck-accent);
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+.ck-display {
+  margin: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 500;
+  line-height: .92;
+  letter-spacing: -.075em;
+  color: var(--text);
+}
+
+.ck-display em {
+  color: var(--ck-accent);
+  font-style: italic;
+}
+
+.ck-copy {
+  color: var(--muted);
+  line-height: 1.75;
+}
+
+.ck-card,
+.ck-panel {
+  border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+  background:
+    radial-gradient(circle at top right, color-mix(in oklab, var(--ck-accent) 8%, transparent), transparent 42%),
+    var(--ck-card);
+  border-radius: var(--ck-radius-lg);
+  box-shadow: var(--ck-card-shadow);
+}
+
+.ck-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 18px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  text-decoration: none !important;
+  cursor: pointer;
+  transition: transform .18s ease, filter .18s ease, background .18s ease;
+}
+
+.ck-btn:hover { transform: translateY(-1px); filter: brightness(1.02); }
+
+.ck-btn-primary {
+  background: var(--ck-accent);
+  color: var(--ck-accent-contrast);
+  box-shadow: 0 18px 42px color-mix(in oklab, var(--ck-accent) 20%, transparent);
+}
+
+.ck-btn-dark {
+  background: color-mix(in oklab, var(--text) 92%, black 8%);
+  color: color-mix(in oklab, var(--bg) 92%, white 8%);
+}
+
+.ck-btn-soft {
+  background: color-mix(in oklab, var(--bg-raised) 84%, var(--primary) 16%);
+  color: var(--text);
+  border: 1px solid color-mix(in oklab, var(--border) 74%, transparent);
+}
+
+.ck-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(14px, 2vw, 22px);
+}
+
+.ck-stat-card {
+  min-height: 190px;
+  padding: clamp(18px, 2vw, 24px);
+  display: grid;
+  gap: 14px;
+}
+
+.ck-stat-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.ck-stat-title {
+  margin: 0;
+  color: var(--text);
+  font-weight: 850;
+  letter-spacing: -.035em;
+}
+
+.ck-stat-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: var(--ck-accent);
+  background: color-mix(in oklab, var(--ck-accent) 14%, transparent);
+}
+
+.ck-stat-value {
+  margin: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(42px, 5vw, 58px);
+  line-height: .9;
+  letter-spacing: -.075em;
+  color: var(--text);
+}
+
+.ck-stat-label {
+  margin: -8px 0 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.ck-pill {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: color-mix(in oklab, var(--ck-accent) 84%, var(--text) 16%);
+  background: color-mix(in oklab, var(--ck-accent) 12%, transparent);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.ck-info-card {
+  padding: 22px;
+  display: grid;
+  gap: 12px;
+}
+
+.ck-info-card h2,
+.ck-info-card h3 { margin: 0; color: var(--text); letter-spacing: -.045em; }
+.ck-info-card p { margin: 0; color: var(--muted); line-height: 1.7; }
+
+@media (max-width: 980px) {
+  .ck-grid-3 { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 560px) {
+  .ck-page-pad { padding: 14px; }
+  .ck-display { letter-spacing: -.055em; }
+}

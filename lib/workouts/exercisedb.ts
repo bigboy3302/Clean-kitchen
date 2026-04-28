@@ -1,10 +1,16 @@
 export type ExerciseDbItem = {
-  id: string;            
+  id: string;
   name: string;
   bodyPart: string;
   target: string;
   equipment: string;
-  gifUrl: string;        
+  gifUrl: string;
+  // New fields returned by current API version
+  secondaryMuscles?: string[];
+  instructions?: string[];
+  description?: string;
+  difficulty?: string;
+  category?: string;
 };
 
 function headers() {

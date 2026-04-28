@@ -205,7 +205,7 @@ export default function PostsPage() {
   }
 
   return (
-    <main className="wrap">
+    <main className="wrap ck-page ck-community-page">
       <section className="hero">
         <div className="heroCopy">
           <span className="eyebrow">Community</span>

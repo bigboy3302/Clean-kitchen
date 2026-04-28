@@ -15,25 +15,25 @@ export type Palette = {
 };
 
 const LIGHT: Palette = {
-  primary: "#0f172a",
-  primaryContrast: "#ffffff",
-  bg: "#f8fafc",
-  bg2: "#ffffff",
-  text: "#0f172a",
-  muted: "#475569",
-  border: "#e5e7eb",
-  ring: "#93c5fd",
+  primary: "#9fc31b",
+  primaryContrast: "#061006",
+  bg: "#f6f1e8",
+  bg2: "#fffdf8",
+  text: "#171915",
+  muted: "#696a61",
+  border: "#e5dccd",
+  ring: "#d8ff3d",
 };
 
 const DARK: Palette = {
-  primary: "#60a5fa",
-  primaryContrast: "#0b1220",
-  bg: "#0b1220",
-  bg2: "#0f1629",
-  text: "#e5e7eb",
-  muted: "#9aa4b2",
-  border: "#1f2937",
-  ring: "#2563eb",
+  primary: "#d8ff3d",
+  primaryContrast: "#061006",
+  bg: "#080d0b",
+  bg2: "#101812",
+  text: "#fffdf2",
+  muted: "#aeb7a7",
+  border: "#263327",
+  ring: "#9fc31b",
 };
 
 const RANDOM_PALETTES: Palette[] = [

@@ -1,4 +1,6 @@
 import "@/styles/globals.css";
+import "@/styles/clean-kitchen-theme.css";
+import "@/styles/clean-kitchen-pages.css";
 import type { ReactNode } from "react";
 import type { Metadata, Viewport } from "next";
 import ThemeScript from "@/components/theme/ThemeScript";

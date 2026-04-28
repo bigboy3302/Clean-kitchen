@@ -4,8 +4,8 @@ export default function ThemeScript() {
       try {
         const LS_MODE = "theme.mode";
         const LS_CUSTOM = "theme.custom";
-        const LIGHT = { primary:"#0f172a", primaryContrast:"#ffffff", bg:"#f8fafc", bg2:"#ffffff", text:"#0f172a", muted:"#475569", border:"#e5e7eb", ring:"#93c5fd" };
-        const DARK  = { primary:"#60a5fa", primaryContrast:"#0b1220", bg:"#0b1220", bg2:"#0f1629", text:"#e5e7eb", muted:"#9aa4b2", border:"#1f2937", ring:"#2563eb" };
+        const LIGHT = { primary:"#9fc31b", primaryContrast:"#061006", bg:"#f6f1e8", bg2:"#fffdf8", text:"#171915", muted:"#696a61", border:"#e5dccd", ring:"#d8ff3d" };
+        const DARK  = { primary:"#d8ff3d", primaryContrast:"#061006", bg:"#080d0b", bg2:"#101812", text:"#fffdf2", muted:"#aeb7a7", border:"#263327", ring:"#9fc31b" };
         const RANDOM = [
           { primary:"#14b8a6", primaryContrast:"#042f2e", bg:"#08111f", bg2:"#111c2f", text:"#edfdfb", muted:"#9fc7c1", border:"#1f3b45", ring:"#5eead4" },
           { primary:"#f97316", primaryContrast:"#fff7ed", bg:"#130f1d", bg2:"#201a2f", text:"#fff7ed", muted:"#c9b9a9", border:"#3a2c35", ring:"#fed7aa" },

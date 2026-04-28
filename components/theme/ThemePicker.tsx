@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React from "react";
 import { useTheme } from "./ThemeProvider";
@@ -11,8 +11,8 @@ const MODE_META = [
 ] as const;
 
 const PRESETS = [
-  { key: "light", label: "Soft light", hint: "Clean bright surfaces" },
-  { key: "dark", label: "Midnight", hint: "Low-glare contrast" }
+  { key: "light", label: "Clean Kitchen", hint: "Warm cream and lime" },
+  { key: "dark", label: "Midnight Kitchen", hint: "Dark premium lime" }
 ] as const;
 
 const COLOR_KEYS = [
@@ -27,8 +27,8 @@ const COLOR_KEYS = [
 ] as const;
 
 const DEFAULTS = {
-  light: { primary: "#0f172a", primaryContrast: "#ffffff", bg: "#f8fafc", bg2: "#ffffff", text: "#0f172a", muted: "#475569", border: "#e5e7eb", ring: "#93c5fd" },
-  dark: { primary: "#60a5fa", primaryContrast: "#0b1220", bg: "#0b1220", bg2: "#0f1629", text: "#e5e7eb", muted: "#9aa4b2", border: "#1f2937", ring: "#2563eb" }
+  light: { primary: "#9fc31b", primaryContrast: "#061006", bg: "#f6f1e8", bg2: "#fffdf8", text: "#171915", muted: "#696a61", border: "#e5dccd", ring: "#d8ff3d" },
+  dark: { primary: "#d8ff3d", primaryContrast: "#061006", bg: "#080d0b", bg2: "#101812", text: "#fffdf2", muted: "#aeb7a7", border: "#263327", ring: "#9fc31b" }
 } as const;
 
 export default function ThemePicker() {

@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
-import { ChevronDown, LogOut, Menu, Search, X } from "lucide-react";
+import { ChevronDown, LogOut, Menu, X } from "lucide-react";
 import clsx from "clsx";
 import Avatar from "@/components/ui/Avatar";
 import ExpiryBell from "@/components/nav/ExpiryBell";
@@ -12,6 +12,7 @@ import { auth } from "@/lib/firebas1e";
 import { useAuthModal } from "@/context/AuthModalContext";
 
 const MOBILE_TITLES: Array<{ prefix: string; label: string }> = [
+  { prefix: "/", label: "Clean Kitchen" },
   { prefix: "/dashboard", label: "Dashboard" },
   { prefix: "/pantry", label: "Pantry" },
   { prefix: "/recipes", label: "Recipes" },
@@ -28,6 +29,7 @@ const MOBILE_TITLES: Array<{ prefix: string; label: string }> = [
 
 function getPageTitle(pathname: string | null) {
   const path = pathname ?? "/";
+  if (path === "/") return "Clean Kitchen";
   const match = MOBILE_TITLES.find((entry) => path === entry.prefix || path.startsWith(`${entry.prefix}/`));
   return match?.label ?? "Clean Kitchen";
 }
@@ -40,12 +42,10 @@ export default function TopBar({
   onOpenMobileNav?: () => void;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
   const { openLogin } = useAuthModal();
 
   const [user, setUser] = useState<User | null>(auth.currentUser);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [search, setSearch] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => onAuthStateChanged(auth, (nextUser) => setUser(nextUser)), []);
@@ -54,22 +54,12 @@ export default function TopBar({
     if (!menuOpen) return;
 
     function handleClick(event: MouseEvent) {
-      if (!menuRef.current?.contains(event.target as Node)) {
-        setMenuOpen(false);
-      }
+      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
     }
 
     window.addEventListener("mousedown", handleClick);
     return () => window.removeEventListener("mousedown", handleClick);
   }, [menuOpen]);
-
-  function handleSearch(event: React.FormEvent) {
-    event.preventDefault();
-    const value = search.trim();
-    if (!value) return;
-    router.push(`/recipes?q=${encodeURIComponent(value)}`);
-    setSearch("");
-  }
 
   async function handleSignOut() {
     try {
@@ -85,12 +75,12 @@ export default function TopBar({
   const pageTitle = getPageTitle(pathname);
 
   return (
-    <header className="topbar">
-      <div className="inner">
-        <div className="mobileLead">
+    <header className="ck-topbar">
+      <div className="ck-topbar-inner">
+        <div className="ck-mobile-lead">
           <button
             type="button"
-            className={clsx("menuButton", mobileNavOpen && "menuButton--hidden")}
+            className={clsx("ck-menu-button", mobileNavOpen && "hidden")}
             onClick={onOpenMobileNav}
             aria-expanded={mobileNavOpen}
             aria-label={mobileNavOpen ? "Close navigation menu" : "Open navigation menu"}
@@ -98,59 +88,39 @@ export default function TopBar({
             {mobileNavOpen ? <X size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
           </button>
 
-          <strong className={clsx("mobileTitle", mobileNavOpen && "mobileTitle--hidden")}>{pageTitle}</strong>
+          <strong className={clsx("ck-mobile-title", mobileNavOpen && "hidden")}>{pageTitle}</strong>
         </div>
 
-        <form className={clsx("search", mobileNavOpen && "search--hidden")} onSubmit={handleSearch} role="search">
-          <span className="searchIcon" aria-hidden>
-            <Search size={15} />
-          </span>
-          <input
-            type="search"
-            className="searchInput"
-            placeholder="Search recipes..."
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            aria-label="Search recipes"
-          />
-        </form>
-
-        <div className="actions">
+        <div className="ck-topbar-actions">
           <ExpiryBell />
 
-          <div className="profileWrap" ref={menuRef}>
+          <div className="ck-profile-wrap" ref={menuRef}>
             {user ? (
               <>
                 <button
                   type="button"
-                  className="profileButton"
+                  className="ck-profile-button"
                   onClick={() => setMenuOpen((open) => !open)}
                   aria-haspopup="menu"
                   aria-expanded={menuOpen}
                   aria-label="Account menu"
                 >
                   <Avatar src={user.photoURL ?? undefined} name={profileName} size={30} />
-                  <span className="profileName">{profileName}</span>
+                  <span>{profileName}</span>
                   <ChevronDown size={13} aria-hidden />
                 </button>
 
-                <div className={clsx("profileMenu", menuOpen && "open")} role="menu">
-                  <Link href="/profile" role="menuitem" onClick={() => setMenuOpen(false)}>
-                    Profile
-                  </Link>
-                  <Link href="/settings" role="menuitem" onClick={() => setMenuOpen(false)}>
-                    Settings
-                  </Link>
-                  <Link href="/support" role="menuitem" onClick={() => setMenuOpen(false)}>
-                    Help &amp; Support
-                  </Link>
+                <div className={clsx("ck-profile-menu", menuOpen && "open")} role="menu">
+                  <Link href="/profile" role="menuitem" onClick={() => setMenuOpen(false)}>Profile</Link>
+                  <Link href="/settings" role="menuitem" onClick={() => setMenuOpen(false)}>Settings</Link>
+                  <Link href="/support" role="menuitem" onClick={() => setMenuOpen(false)}>Help &amp; Support</Link>
                   <button type="button" role="menuitem" onClick={handleSignOut}>
                     <LogOut size={13} aria-hidden /> Sign out
                   </button>
                 </div>
               </>
             ) : (
-              <button type="button" className="profileButton" onClick={() => openLogin(pathname ?? "/")}>
+              <button type="button" className="ck-profile-button signin" onClick={() => openLogin(pathname ?? "/")}>
                 Sign in
               </button>
             )}
@@ -158,31 +128,24 @@ export default function TopBar({
         </div>
       </div>
 
-      <style jsx>{`
-        .topbar {
+      <style jsx global>{`
+        .ck-topbar {
           position: sticky;
           top: 0;
-          z-index: 80;
-          width: 100%;
-          padding: 10px 16px 0;
+          z-index: 60;
+          padding: 14px 22px 0;
           background: transparent;
         }
 
-        .inner {
-          width: min(1120px, 100%);
-          min-height: 58px;
-          margin: 0 auto;
-          padding: 0 4px;
+        .ck-topbar-inner {
+          min-height: 50px;
           display: flex;
           align-items: center;
           gap: 14px;
-          border: 0;
-          border-radius: 0;
-          background: transparent;
-          box-shadow: none;
+          width: 100%;
         }
 
-        .mobileLead {
+        .ck-mobile-lead {
           display: none;
           align-items: center;
           gap: 12px;
@@ -190,77 +153,39 @@ export default function TopBar({
           flex: 1;
         }
 
-        .menuButton {
-          width: 40px;
-          height: 40px;
-          border-radius: 12px;
-          border: 1px solid var(--border);
-          background: var(--bg-raised);
-          color: var(--text);
+        .ck-menu-button,
+        .ck-profile-button {
+          border: 0;
+          background: rgba(255, 255, 255, 0.68);
+          color: #171915;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), 0 10px 30px rgba(39,31,18,0.06);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+        }
+
+        .ck-menu-button {
+          width: 42px;
+          height: 42px;
+          border-radius: 14px;
           display: grid;
           place-items: center;
           cursor: pointer;
           flex-shrink: 0;
         }
 
-        .menuButton--hidden {
-          visibility: hidden;
-        }
-
-        .mobileTitle {
+        .ck-mobile-title {
           font-size: 15px;
           line-height: 1.1;
-          color: var(--text);
-          letter-spacing: -0.02em;
+          color: #171915;
+          letter-spacing: -0.03em;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
 
-        .mobileTitle--hidden {
-          visibility: hidden;
-        }
+        .hidden { visibility: hidden; }
 
-        .search {
-          position: relative;
-          flex: 1;
-          max-width: 430px;
-        }
-
-        .searchIcon {
-          position: absolute;
-          left: 12px;
-          top: 50%;
-          transform: translateY(-50%);
-          color: var(--muted);
-          pointer-events: none;
-        }
-
-        .searchInput {
-          width: 100%;
-          height: 42px;
-          padding: 0 14px 0 38px;
-          border-radius: 12px;
-          border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
-          background: color-mix(in oklab, var(--bg) 76%, transparent);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          color: var(--text);
-          font: inherit;
-          font-size: 13px;
-          outline: none;
-        }
-
-        .searchInput::placeholder {
-          color: var(--muted);
-        }
-
-        .searchInput:focus {
-          border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
-          box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 14%, transparent);
-        }
-
-        .actions {
+        .ck-topbar-actions {
           margin-left: auto;
           display: flex;
           align-items: center;
@@ -268,45 +193,39 @@ export default function TopBar({
           flex-shrink: 0;
         }
 
-        .profileWrap {
-          position: relative;
-        }
+        .ck-profile-wrap { position: relative; }
 
-        .profileButton {
-          min-height: 40px;
+        .ck-profile-button {
+          min-height: 42px;
           display: flex;
           align-items: center;
           gap: 8px;
-          padding: 4px 10px 4px 4px;
+          padding: 5px 12px 5px 5px;
           border-radius: 999px;
-          border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
-          background: color-mix(in oklab, var(--bg) 78%, transparent);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          color: var(--text);
           font: inherit;
           font-size: 13px;
-          font-weight: 600;
+          font-weight: 850;
           cursor: pointer;
         }
 
-        .profileName {
+        .ck-profile-button.signin { padding: 0 16px; }
+
+        .ck-profile-button span {
           max-width: 130px;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
 
-        .profileMenu {
+        .ck-profile-menu {
           position: absolute;
           right: 0;
           top: calc(100% + 8px);
-          min-width: 200px;
+          min-width: 210px;
           padding: 8px;
-          border-radius: 16px;
-          border: 1px solid var(--border);
-          background: var(--bg-raised);
-          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.22);
+          border-radius: 18px;
+          background: #fffdf8;
+          box-shadow: 0 24px 70px rgba(39,31,18,0.16);
           display: grid;
           gap: 3px;
           opacity: 0;
@@ -315,100 +234,40 @@ export default function TopBar({
           transition: opacity 0.16s ease, transform 0.16s ease;
         }
 
-        .profileMenu.open {
+        .ck-profile-menu.open {
           opacity: 1;
           pointer-events: auto;
           transform: translateY(0);
         }
 
-        .profileMenu :global(a),
-        .profileMenu button {
+        .ck-profile-menu a,
+        .ck-profile-menu button {
           width: 100%;
           display: flex;
           align-items: center;
           gap: 8px;
           padding: 10px 12px;
           border: 0;
-          border-radius: 10px;
+          border-radius: 12px;
           background: transparent;
-          color: var(--text);
+          color: #171915;
           text-decoration: none;
           font: inherit;
           font-size: 13px;
-          font-weight: 600;
+          font-weight: 750;
           text-align: left;
           cursor: pointer;
         }
 
-        .profileMenu :global(a):hover,
-        .profileMenu button:hover {
-          background: color-mix(in oklab, var(--primary) 8%, transparent);
-        }
+        .ck-profile-menu a:hover,
+        .ck-profile-menu button:hover { background: rgba(216,255,61,0.18); }
 
         @media (max-width: 900px) {
-          .topbar {
-            padding: 8px 12px 0;
-          }
-
-          .inner {
-            display: flex;
-            flex-wrap: wrap;
-            min-height: auto;
-            padding: 0;
-            gap: 8px;
-            align-items: center;
-          }
-
-          .mobileLead {
-            display: flex;
-            min-width: 0;
-            flex: 1;
-            order: 1;
-          }
-
-          .actions {
-            order: 2;
-            margin-left: auto;
-            gap: 8px;
-            flex-shrink: 0;
-          }
-
-          .search {
-            order: 3;
-            width: 100%;
-            flex-basis: 100%;
-            max-width: none;
-          }
-
-          .search--hidden {
-            display: none;
-          }
-
-          .profileName {
-            display: none;
-          }
-
-          .searchInput {
-            height: 40px;
-          }
-        }
-
-        @media (max-width: 480px) {
-          .topbar {
-            padding: 8px 10px 0;
-          }
-
-          .mobileTitle {
-            font-size: 14px;
-          }
-
-          .actions {
-            gap: 6px;
-          }
-
-          .profileButton {
-            padding: 4px 8px 4px 4px;
-          }
+          .ck-topbar { padding: 10px 12px 0; }
+          .ck-topbar-inner { flex-wrap: wrap; min-height: auto; gap: 8px; }
+          .ck-mobile-lead { display: flex; order: 1; }
+          .ck-topbar-actions { order: 2; gap: 8px; }
+          .ck-profile-button span { display: none; }
         }
       `}</style>
     </header>

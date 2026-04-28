@@ -1,6 +1,5 @@
 import { fetchExercises, type ExerciseDbItem } from "@/lib/workouts/exercisedb";
 import { FALLBACK_WORKOUTS } from "@/lib/workouts/fallback";
-import { fetchWgerDescription } from "@/lib/workouts/wger";
 import type { WorkoutContent, WorkoutSearchFilters, WorkoutSearchResponse } from "@/lib/workouts/types";
 
 const perf =
@@ -47,23 +46,33 @@ function fallbackDescription(exercise: ExerciseDbItem): { text: string; html: st
   return { text, html };
 }
 
-function toWorkoutContent(exercise: ExerciseDbItem, description: { text: string; html: string } | null): WorkoutContent {
-  const desc = description ?? fallbackDescription(exercise);
-  const mediaUrl = exercise.gifUrl ? `/api/workouts/gif?src=${encodeURIComponent(exercise.gifUrl)}` : null;
+function buildInstructionsHtml(exercise: ExerciseDbItem): string {
+  if (exercise.instructions?.length) {
+    const items = exercise.instructions.map((step) => `<li>${step}</li>`).join("");
+    return `<ol>${items}</ol>`;
+  }
+  const { text } = fallbackDescription(exercise);
+  return `<p>${text}</p>`;
+}
+
+function toWorkoutContent(exercise: ExerciseDbItem): WorkoutContent {
+  const instructionsHtml = buildInstructionsHtml(exercise);
+  const descText = exercise.description || fallbackDescription(exercise).text;
   return {
     id: String(exercise.id),
     title: titleCase(exercise.name || "Exercise"),
-    mediaUrl,
-    mediaType: mediaUrl?.endsWith(".mp4") ? "mp4" : "gif",
-    previewUrl: mediaUrl,
-    thumbnailUrl: mediaUrl,
-    description: desc.text,
-    instructionsHtml: desc.html,
+    mediaUrl: null,
+    mediaType: "gif",
+    previewUrl: null,
+    thumbnailUrl: null,
+    description: descText,
+    instructionsHtml,
     bodyPart: exercise.bodyPart || null,
     target: exercise.target || null,
     equipment: exercise.equipment || null,
     source: "exerciseDB",
     primaryMuscles: exercise.target ? [exercise.target] : undefined,
+    secondaryMuscles: exercise.secondaryMuscles,
   };
 }
 
@@ -120,26 +129,7 @@ export async function searchWorkouts(options: {
     : raw;
 
   const slice = filtered.slice(0, limit);
-  const results: WorkoutContent[] = [];
-
-  for (const exercise of slice) {
-    let description: { text: string; html: string } | null = null;
-    if (!usedFallback) {
-      try {
-        const enriched = await fetchWgerDescription(exercise.name);
-        if (enriched && enriched.descriptionText) {
-          description = {
-            text: enriched.descriptionText,
-            html: enriched.descriptionHtml,
-          };
-        }
-      } catch (error) {
-        console.warn(`Failed to fetch Wger description for ${exercise.name}:`, error);
-      }
-    }
-
-    results.push(toWorkoutContent(exercise, description));
-  }
+  const results: WorkoutContent[] = slice.map(toWorkoutContent);
 
   const took = perf.now() - started;
   const nextOffset = slice.length === limit ? offset + limit : null;
@@ -151,7 +141,7 @@ export async function searchWorkouts(options: {
       offset,
       nextOffset,
       filters,
-      sources: usedFallback ? ["fallback"] : ["exerciseDB", "wger"],
+      sources: usedFallback ? ["fallback"] : ["exerciseDB"],
       tookMs: Math.round(took),
     },
   };

@@ -1,289 +1,291 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
+import { ArrowRight, ChefHat, Dumbbell, Leaf, Refrigerator, Sparkles, UtensilsCrossed } from "lucide-react";
 import { useAuthModal } from "@/context/AuthModalContext";
 
 const featureCards = [
   {
-    title: "Cook with what you already have",
-    copy: "Find recipe ideas from your pantry, then save the ones you want to make again.",
+    title: "Recipes that make sense",
+    copy: "Search meals, save your favourites, and build a small library of food you actually want to cook.",
     href: "/recipes",
     cta: "Browse recipes",
+    Icon: ChefHat,
   },
   {
-    title: "Keep food and fitness together",
-    copy: "Check workouts, weekly plans, and simple training ideas in the same place as your meals.",
-    href: "/fitness",
-    cta: "Open fitness",
-  },
-  {
-    title: "Know what is in your kitchen",
-    copy: "Track ingredients, catch food before it expires, and plan meals with less guessing.",
+    title: "Pantry without guessing",
+    copy: "Track what you have, what is expiring, and what ingredients can turn into a meal today.",
     href: "/pantry",
-    cta: "View pantry",
+    cta: "Open pantry",
+    Icon: Refrigerator,
   },
+  {
+    title: "Food and fitness together",
+    copy: "Keep meals, weekly planning, and simple training goals in one place instead of jumping between apps.",
+    href: "/fitness",
+    cta: "View training",
+    Icon: Dumbbell,
+  },
+];
+
+const stats = [
+  { label: "Saved recipes", value: "128", hint: "recipes ready" },
+  { label: "Pantry match", value: "82%", hint: "less food waste" },
+  { label: "Weekly plan", value: "7", hint: "days covered" },
 ];
 
 export default function HomePage() {
   const { openLogin, openRegister } = useAuthModal();
 
   return (
-    <div className="home">
-      <section className="hero">
-        <div className="heroCopy">
-          <span className="eyebrow">Clean Kitchen</span>
-          <h1>Plan meals, use your pantry, and stay on track.</h1>
-          <p>
-            Browse recipes, check fitness plans, and see how Clean Kitchen works before you make an
-            account. Sign in only when you want to save your progress or add your own content.
-          </p>
-          <div className="heroActions">
-            <button type="button" className="primaryCta" onClick={() => openRegister("/")}>
-              Create account
-            </button>
-            <button type="button" className="secondaryCta" onClick={() => openLogin("/")}>
-              Sign in
-            </button>
-          </div>
-          <div className="quickLinks">
-            <Link href="/recipes">Recipes</Link>
-            <Link href="/fitness">Fitness</Link>
-            <Link href="/dashboard">Dashboard</Link>
-            <Link href="/pantry">Pantry</Link>
-          </div>
-        </div>
+    <div className="ck-page home-page">
+      <div className="ck-page-pad">
+        <section className="landing-hero">
+          <div className="landing-copy">
+            <p className="ck-eyebrow">Clean Kitchen</p>
+            <h1 className="ck-display">
+              Cook <em>smarter,</em>
+              <br />
+              waste less, and stay on track.
+            </h1>
+            <p className="ck-copy">
+              Clean Kitchen helps users understand exactly what they can do: find recipes, use pantry items before they expire,
+              save favourite meals, and build a weekly plan without confusion.
+            </p>
 
-        <div className="heroArt" aria-hidden>
-          <div className="logoFrame">
-            <Image src="/logo.svg" alt="" width={220} height={220} priority />
+            <div className="landing-actions">
+              <button type="button" className="ck-btn ck-btn-primary" onClick={() => openRegister("/")}>Create account</button>
+              <button type="button" className="ck-btn ck-btn-soft" onClick={() => openLogin("/")}>Sign in</button>
+              <Link href="/dashboard" className="ck-btn ck-btn-dark">
+                Explore first <ArrowRight size={16} />
+              </Link>
+            </div>
           </div>
-          <div className="artCard">
-            <strong>Try it first</strong>
-            <span>Look around before creating an account.</span>
-          </div>
-          <div className="artCard">
-            <strong>Save when ready</strong>
-            <span>Sign in when you want to keep something.</span>
-          </div>
-        </div>
-      </section>
 
-      <section className="featureGrid">
-        {featureCards.map((card) => (
-          <article key={card.href} className="featureCard">
-            <h2>{card.title}</h2>
-            <p>{card.copy}</p>
-            <Link href={card.href}>{card.cta}</Link>
-          </article>
-        ))}
-      </section>
+          <div className="landing-showcase" aria-label="Clean Kitchen preview">
+            <div className="food-orbit" aria-hidden>
+              <span className="plate" />
+              <span className="leaf leaf-one" />
+              <span className="leaf leaf-two" />
+              <span className="crumb crumb-one" />
+              <span className="crumb crumb-two" />
+            </div>
 
-      <section className="ctaBand">
-        <div>
-          <span className="eyebrow">Your account</span>
-          <h2>Create an account when you are ready to save.</h2>
-          <p>Recipes, pantry items, posts, and plans stay connected to your profile.</p>
-        </div>
-        <button type="button" className="secondaryCta" onClick={() => openLogin("/")}>
-          Sign in
-        </button>
-      </section>
+            <div className="showcase-title">
+              <Sparkles size={20} />
+              <span>What users see first</span>
+            </div>
+
+            <div className="showcase-grid">
+              {stats.map((item) => (
+                <article key={item.label} className="mini-stat">
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                  <small>{item.hint}</small>
+                </article>
+              ))}
+            </div>
+
+          </div>
+        </section>
+
+        <section className="landing-section-head">
+          <p className="ck-eyebrow">Simple and clear</p>
+          <h2>Users should instantly understand where to go next.</h2>
+        </section>
+
+        <section className="ck-grid-3">
+          {featureCards.map(({ title, copy, href, cta, Icon }) => (
+            <article key={href} className="ck-card ck-info-card landing-feature">
+              <span className="feature-icon"><Icon size={24} /></span>
+              <h3>{title}</h3>
+              <p>{copy}</p>
+              <Link href={href} className="feature-link">
+                {cta} <ArrowRight size={15} />
+              </Link>
+            </article>
+          ))}
+        </section>
+
+        <section className="landing-band ck-panel">
+          <div>
+            <p className="ck-eyebrow">Built around your sidebar</p>
+            <h2>Same colors, same cards, same rounded premium style across every page.</h2>
+            <p>The theme picker now changes the app surfaces and the sidebar because the design uses shared CSS variables.</p>
+          </div>
+          <Link href="/settings" className="ck-btn ck-btn-primary">
+            Change theme <Leaf size={16} />
+          </Link>
+        </section>
+      </div>
 
       <style jsx>{`
-        .home {
+        .landing-hero {
           display: grid;
-          gap: 28px;
-          width: min(1120px, 100%);
-          margin: 0 auto;
-          padding: 12px 0 24px;
-        }
-        .hero {
-          display: grid;
-          grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
-          gap: 22px;
+          grid-template-columns: minmax(0, 1.05fr) minmax(340px, 0.95fr);
+          gap: clamp(18px, 3vw, 30px);
           align-items: stretch;
         }
-        .heroCopy,
-        .heroArt,
-        .featureCard,
-        .ctaBand {
-          border: 1px solid color-mix(in oklab, var(--border) 78%, transparent);
+
+        .landing-copy,
+        .landing-showcase {
+          border-radius: var(--ck-radius-xl);
+          min-height: 540px;
+        }
+
+        .landing-copy {
+          padding: clamp(30px, 5vw, 58px);
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          gap: 22px;
           background:
-            linear-gradient(145deg, color-mix(in oklab, var(--bg2) 96%, transparent), color-mix(in oklab, var(--bg) 94%, var(--primary) 6%));
-          box-shadow: 0 22px 60px rgba(15, 23, 42, 0.08);
+            radial-gradient(circle at 0% 0%, color-mix(in oklab, var(--ck-accent) 15%, transparent), transparent 40%),
+            color-mix(in oklab, var(--text) 90%, black 10%);
+          color: color-mix(in oklab, var(--bg) 92%, white 8%);
+          box-shadow: var(--ck-soft-shadow);
         }
-        .heroCopy {
-          border-radius: 28px;
-          padding: clamp(28px, 5vw, 48px);
-          display: grid;
-          gap: 18px;
+
+        .landing-copy :global(.ck-display),
+        .landing-copy :global(.ck-copy) {
+          color: inherit;
         }
-        .eyebrow {
-          text-transform: uppercase;
-          letter-spacing: 0.16em;
-          font-size: 0.75rem;
-          font-weight: 800;
-          color: var(--primary);
+
+        .landing-copy :global(.ck-copy) {
+          max-width: 62ch;
+          opacity: .72;
         }
-        .heroCopy h1 {
-          margin: 0;
-          max-width: 12ch;
-          font-size: clamp(36px, 5vw, 58px);
-          line-height: 1.06;
-          letter-spacing: -0.02em;
-        }
-        .heroCopy p {
-          margin: 0;
-          max-width: 56ch;
-          color: var(--muted);
-          line-height: 1.7;
-          font-size: 1rem;
-        }
-        .heroActions,
-        .quickLinks {
+
+        .landing-actions {
           display: flex;
           flex-wrap: wrap;
           gap: 12px;
+          margin-top: 4px;
         }
-        .primaryCta,
-        .secondaryCta,
-        .featureCard :global(a),
-        .quickLinks :global(a) {
-          border-radius: 999px;
-          font-weight: 700;
-          text-decoration: none;
-        }
-        .primaryCta,
-        .secondaryCta {
-          border: 0;
-          cursor: pointer;
-          padding: 12px 18px;
-          font: inherit;
-        }
-        .primaryCta {
-          background: linear-gradient(135deg, #0f766e, #0f172a);
-          color: #fff;
-        }
-        .secondaryCta {
-          background: color-mix(in oklab, var(--bg2) 96%, transparent);
-          color: var(--text);
-          border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
-        }
-        .quickLinks :global(a) {
-          padding: 10px 14px;
-          color: var(--text);
-          background: color-mix(in oklab, var(--bg2) 92%, transparent);
-          border: 1px solid color-mix(in oklab, var(--border) 72%, transparent);
-        }
-        .heroArt {
-          border-radius: 28px;
-          padding: clamp(24px, 4vw, 32px);
-          display: grid;
-          gap: 16px;
-          align-content: center;
-          background:
-            radial-gradient(120% 120% at 10% 10%, color-mix(in oklab, var(--primary) 18%, transparent), transparent 55%),
-            linear-gradient(155deg, color-mix(in oklab, var(--bg2) 92%, transparent), color-mix(in oklab, var(--primary) 10%, var(--bg) 90%));
-        }
-        .logoFrame {
-          min-height: 240px;
-          display: grid;
-          place-items: center;
-          border-radius: 24px;
-          background:
-            radial-gradient(circle at center, rgba(255,255,255,0.16), transparent 60%),
-            linear-gradient(145deg, rgba(15, 23, 42, 0.9), rgba(15, 118, 110, 0.75));
-        }
-        .artCard {
-          display: grid;
-          gap: 4px;
-          padding: 14px 16px;
-          border-radius: 18px;
-          background: color-mix(in oklab, var(--bg2) 94%, transparent);
-          border: 1px solid color-mix(in oklab, var(--border) 72%, transparent);
-        }
-        .artCard span {
-          color: var(--muted);
-        }
-        .featureGrid {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 18px;
-        }
-        .featureCard {
-          border-radius: 24px;
-          padding: 22px;
-          display: grid;
-          gap: 12px;
-        }
-        .featureCard h2,
-        .ctaBand h2 {
-          margin: 0;
-          font-size: 1.35rem;
-        }
-        .featureCard p,
-        .ctaBand p {
-          margin: 0;
-          color: var(--muted);
-          line-height: 1.65;
-        }
-        .featureCard :global(a) {
-          width: fit-content;
-          color: var(--text);
-          padding: 10px 14px;
-          border: 1px solid color-mix(in oklab, var(--border) 75%, transparent);
-          background: color-mix(in oklab, var(--bg2) 94%, transparent);
-        }
-        .ctaBand {
-          border-radius: 28px;
-          padding: 24px;
+
+        .landing-showcase {
+          position: relative;
+          overflow: hidden;
+          padding: clamp(24px, 4vw, 36px);
           display: flex;
-          justify-content: space-between;
-          gap: 16px;
+          flex-direction: column;
+          justify-content: flex-end;
+          gap: 18px;
+          background:
+            radial-gradient(circle at 80% 8%, color-mix(in oklab, var(--ck-accent) 18%, transparent), transparent 30%),
+            linear-gradient(145deg, var(--ck-card), color-mix(in oklab, var(--ck-page-surface) 78%, var(--ck-accent) 22%));
+          box-shadow: var(--ck-soft-shadow);
+        }
+
+        .food-orbit {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+        }
+
+        .plate {
+          position: absolute;
+          right: -50px;
+          top: -45px;
+          width: 220px;
+          height: 220px;
+          border-radius: 999px;
+          border: 28px solid color-mix(in oklab, var(--ck-page-surface) 85%, white 15%);
+          box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--border) 65%, transparent), 0 22px 60px rgba(0,0,0,.10);
+        }
+
+        .leaf,
+        .crumb {
+          position: absolute;
+          display: block;
+        }
+
+        .leaf {
+          width: 42px;
+          height: 18px;
+          border-radius: 100% 0 100% 0;
+          background: color-mix(in oklab, var(--ck-accent) 62%, #5f8e3a 38%);
+        }
+        .leaf-one { right: 124px; top: 114px; transform: rotate(-24deg); }
+        .leaf-two { right: 58px; top: 170px; transform: rotate(28deg); }
+        .crumb { width: 7px; height: 7px; border-radius: 999px; background: color-mix(in oklab, var(--text) 70%, #8a5a2b 30%); }
+        .crumb-one { right: 174px; top: 174px; }
+        .crumb-two { right: 210px; top: 138px; width: 4px; height: 4px; }
+
+        .showcase-title {
+          position: relative;
+          z-index: 1;
+          display: inline-flex;
           align-items: center;
+          gap: 10px;
+          width: fit-content;
+          border-radius: 999px;
+          padding: 10px 13px;
+          background: color-mix(in oklab, var(--ck-accent) 12%, transparent);
+          color: var(--text);
+          font-weight: 900;
         }
-        @media (max-width: 920px) {
-          .hero,
-          .featureGrid {
-            grid-template-columns: minmax(0, 1fr);
-          }
-          .heroArt {
-            display: none;
-          }
-          .ctaBand {
-            flex-direction: column;
-            align-items: flex-start;
-          }
+
+        .showcase-grid {
+          position: relative;
+          z-index: 1;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 14px;
         }
-        @media (max-width: 560px) {
-          .home {
-            gap: 18px;
-            padding-top: 4px;
-          }
-          .heroCopy,
-          .featureCard,
-          .ctaBand {
-            border-radius: 18px;
-          }
-          .heroCopy {
-            padding: 24px 20px;
-          }
-          .heroCopy h1 {
-            max-width: 100%;
-            font-size: 2.35rem;
-          }
-          .heroActions > * {
-            flex: 1 1 150px;
-          }
-          .quickLinks :global(a) {
-            flex: 1 1 calc(50% - 8px);
-            text-align: center;
-          }
-          .featureCard,
-          .ctaBand {
-            padding: 20px;
-          }
+
+        .mini-stat {
+          min-height: 148px;
+          border-radius: 24px;
+          padding: 18px;
+          display: grid;
+          align-content: end;
+          gap: 6px;
+          background: color-mix(in oklab, var(--bg-raised) 90%, white 10%);
+          box-shadow: var(--ck-card-shadow);
+        }
+        .mini-stat span { color: var(--muted); font-size: 13px; font-weight: 800; }
+        .mini-stat strong { color: var(--text); font-family: Georgia, 'Times New Roman', serif; font-size: 46px; letter-spacing: -.08em; line-height: .9; }
+        .mini-stat small { color: var(--muted); font-weight: 700; }
+
+
+        .landing-section-head {
+          margin: 34px 0 18px;
+          display: grid;
+          gap: 8px;
+        }
+        .landing-section-head h2 {
+          margin: 0;
+          max-width: 760px;
+          color: var(--text);
+          font-size: clamp(30px, 4vw, 48px);
+          letter-spacing: -.065em;
+          line-height: 1;
+        }
+        .feature-icon { width: 56px; height: 56px; border-radius: 999px; display: grid; place-items: center; color: var(--ck-accent); background: color-mix(in oklab, var(--ck-accent) 14%, transparent); }
+        .feature-link { width: fit-content; display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; color: var(--text); font-weight: 900; text-decoration: none; }
+        .feature-link:hover { color: var(--ck-accent); text-decoration: none; }
+
+        .landing-band {
+          margin-top: 22px;
+          padding: clamp(22px, 3vw, 32px);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 20px;
+        }
+        .landing-band h2 { margin: 8px 0; max-width: 760px; font-size: clamp(26px, 3vw, 40px); line-height: 1; letter-spacing: -.06em; color: var(--text); }
+        .landing-band p:not(.ck-eyebrow) { max-width: 68ch; color: var(--muted); margin: 0; }
+
+        @media (max-width: 980px) {
+          .landing-hero { grid-template-columns: 1fr; }
+          .landing-copy, .landing-showcase { min-height: auto; }
+          .showcase-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 660px) {
+          .landing-copy { padding: 28px 22px; }
+          .landing-copy :global(.ck-display) { font-size: 46px; }
+          .landing-band { flex-direction: column; align-items: flex-start; }
         }
       `}</style>
     </div>

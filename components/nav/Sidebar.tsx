@@ -4,21 +4,24 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
+  ArrowRight,
   Bookmark,
   Boxes,
   Dumbbell,
   FileText,
   HelpCircle,
   LayoutDashboard,
+  Mail,
+  Search,
   Settings,
   Shield,
+  ShieldAlert,
+  ScrollText,
+  Sparkles,
   UtensilsCrossed,
   Users,
   X,
-  ScrollText,
-  Mail,
   BookOpen,
-  ShieldAlert,
 } from "lucide-react";
 import clsx from "clsx";
 import { useEffect, useState } from "react";
@@ -26,22 +29,24 @@ import { onAuthStateChanged } from "firebase/auth";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { auth, db } from "@/lib/firebas1e";
 import { isAdminUid } from "@/lib/admin";
+import RecipeSearchModal from "@/components/search/RecipeSearchModal";
 
 const navLinks = [
-  { href: "/dashboard", label: "Dashboard", hint: "Overview and progress", Icon: LayoutDashboard },
-  { href: "/pantry", label: "Pantry", hint: "Stock and expiry tracking", Icon: Boxes },
-  { href: "/recipes", label: "Recipes", hint: "Cook and manage meals", Icon: BookOpen },
-  { href: "/saved", label: "Saved", hint: "Your saved ideas", Icon: Bookmark },
-  { href: "/meal-plan", label: "Meal Plan", hint: "Weekly structure", Icon: UtensilsCrossed },
-  { href: "/fitness", label: "Training", hint: "Workouts and goals", Icon: Dumbbell },
-  { href: "/posts", label: "Community", hint: "Posts and comments", Icon: Users },
+  { href: "/dashboard", label: "Home", hint: "Overview", Icon: LayoutDashboard },
+  { href: "/recipes", label: "Recipes", hint: "Cook ideas", Icon: BookOpen },
+  { href: "/pantry", label: "Pantry", hint: "Ingredients", Icon: Boxes },
+  { href: "/saved", label: "Favorites", hint: "Saved picks", Icon: Bookmark },
+  { href: "/meal-plan", label: "Meal Plan", hint: "Weekly plan", Icon: UtensilsCrossed },
+  { href: "/fitness", label: "Training", hint: "Goals", Icon: Dumbbell },
+  { href: "/posts", label: "Community", hint: "People", Icon: Users },
 ];
 
 const supportLinks = [
-  { href: "/privacy", label: "Privacy Policy", Icon: Shield },
-  { href: "/terms", label: "Terms of Service", Icon: ScrollText },
-  { href: "/support", label: "Help & Support", Icon: HelpCircle },
-  { href: "mailto:adriansraitums95@gmail.com", label: "Contact Support", Icon: Mail, external: true },
+  { href: "/support", label: "Help", Icon: HelpCircle },
+  { href: "/settings", label: "Settings", Icon: Settings },
+  { href: "/privacy", label: "Privacy", Icon: Shield },
+  { href: "/terms", label: "Terms", Icon: ScrollText },
+  { href: "mailto:adriansraitums95@gmail.com", label: "Contact", Icon: Mail, external: true },
 ];
 
 export default function Sidebar({
@@ -57,6 +62,7 @@ export default function Sidebar({
   const [myRecipesCount, setMyRecipesCount] = useState(0);
   const [savedCount, setSavedCount] = useState(0);
   const [pantryCount, setPantryCount] = useState(0);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
     return onAuthStateChanged(auth, (u) => {
@@ -71,6 +77,7 @@ export default function Sidebar({
       setMyRecipesCount(0);
       return;
     }
+
     const q = query(collection(db, "recipes"), where("uid", "==", uid));
     return onSnapshot(q, (snap) => setMyRecipesCount(snap.size), () => setMyRecipesCount(0));
   }, [uid]);
@@ -80,6 +87,7 @@ export default function Sidebar({
       setSavedCount(0);
       return;
     }
+
     const q = collection(db, "users", uid, "savedFoods");
     return onSnapshot(q, (snap) => setSavedCount(snap.size), () => setSavedCount(0));
   }, [uid]);
@@ -89,531 +97,573 @@ export default function Sidebar({
       setPantryCount(0);
       return;
     }
+
     const q = query(collection(db, "pantryItems"), where("uid", "==", uid));
     return onSnapshot(q, (snap) => setPantryCount(snap.size), () => setPantryCount(0));
   }, [uid]);
+
+  function openSearch() {
+    onRequestClose?.();
+    setSearchOpen(true);
+  }
 
   return (
     <>
       <button
         type="button"
-        className={clsx("sidebar-backdrop", mobileOpen && "open")}
+        className={clsx("ck-sidebar-backdrop", mobileOpen && "open")}
         onClick={onRequestClose}
         aria-label="Close navigation drawer"
       />
 
-      <aside className={clsx("ck-sidebar", mobileOpen && "mobile-open")}>
-        <div className="sidebar-brand">
-          <Link href="/dashboard" className="brand-link" aria-label="Clean Kitchen home">
-            <span className="brand-icon">
-              <Image src="/logo.png" alt="" width={24} height={24} className="brand-logo" />
-            </span>
-            <span className="brand-copy">
-              <span className="brand-kicker">Nutrition Platform</span>
-              <span className="brand-name">Clean Kitchen</span>
-            </span>
-          </Link>
+      <aside className={clsx("ck-sidebar", mobileOpen && "mobile-open")}> 
+        <div className="ck-sidebar-bg" aria-hidden />
 
-          <button type="button" className="mobile-close" onClick={onRequestClose} aria-label="Close navigation drawer">
-            <X size={18} aria-hidden />
+        <div className="ck-sidebar-scroll">
+          <div className="ck-sidebar-brand">
+            <Link href="/dashboard" className="ck-brand-link" onClick={onRequestClose} aria-label="Clean Kitchen home">
+              <span className="ck-brand-logo-box">
+                <Image src="/logo.png" alt="" width={22} height={22} className="ck-brand-logo" />
+              </span>
+              <span className="ck-brand-text">Clean Kitchen</span>
+            </Link>
+
+            <button type="button" className="ck-mobile-close" onClick={onRequestClose} aria-label="Close navigation">
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="ck-brand-hero">
+            <h2>
+              Cook
+              <br />
+              <em>smarter</em>
+            </h2>
+            <span />
+          </div>
+
+          <button type="button" className="ck-sidebar-search" onClick={openSearch} aria-label="Search recipes">
+            <Search size={18} />
+            <span>Search recipes, ingredients...</span>
           </button>
-        </div>
 
-        <div className="sidebar-scroll">
-          <nav className="sidebar-nav" aria-label="Primary">
-            <span className="nav-section-label">Main</span>
-
+          <nav className="ck-sidebar-nav" aria-label="Primary navigation">
             {navLinks.map(({ href, label, hint, Icon }) => {
               const active = pathname === href || (href !== "/dashboard" && pathname?.startsWith(href));
+
               return (
                 <Link
                   key={href}
                   href={href}
-                  className={clsx("sidebar-link", active && "active")}
+                  className={clsx("ck-sidebar-link", active && "active")}
                   aria-current={active ? "page" : undefined}
                   onClick={onRequestClose}
                 >
-                  <span className="link-icon">
-                    <Icon size={18} strokeWidth={1.8} aria-hidden />
-                  </span>
-
-                  <span className="link-copy">
-                    <span className="link-label">{label}</span>
-                    <span className="link-hint">{hint}</span>
+                  {active && <span className="ck-active-bar" aria-hidden />}
+                  <Icon size={22} strokeWidth={1.9} />
+                  <span className="ck-link-copy">
+                    <strong>{label}</strong>
+                    <small>{hint}</small>
                   </span>
                 </Link>
               );
             })}
 
-            {isAdmin ? (
+            {isAdmin && (
               <Link
                 href="/admin"
-                className={clsx("sidebar-link admin-link", pathname?.startsWith("/admin") && "active")}
+                className={clsx("ck-sidebar-link", "ck-admin-link", pathname?.startsWith("/admin") && "active")}
                 onClick={onRequestClose}
               >
-                <span className="link-icon">
-                  <ShieldAlert size={18} strokeWidth={1.8} aria-hidden />
-                </span>
-                <span className="link-copy">
-                  <span className="link-label">Admin Panel</span>
-                  <span className="link-hint">Moderation and controls</span>
+                {pathname?.startsWith("/admin") && <span className="ck-active-bar" aria-hidden />}
+                <ShieldAlert size={22} strokeWidth={1.9} />
+                <span className="ck-link-copy">
+                  <strong>Admin</strong>
+                  <small>Controls</small>
                 </span>
               </Link>
-            ) : null}
+            )}
           </nav>
 
-          <div className="kitchen-section">
-            <span className="kitchen-label">Library</span>
+          <section className="ck-collections">
+            <h3>Library</h3>
 
-            <Link href="/recipes" className="kitchen-item" onClick={onRequestClose}>
+            <Link href="/recipes" className="ck-collection-item" onClick={onRequestClose}>
               <FileText size={15} aria-hidden />
-              <span className="kitchen-text">My Recipes</span>
-              <span className="kitchen-count">{myRecipesCount}</span>
+              <span>My Recipes</span>
+              <b>{myRecipesCount}</b>
             </Link>
 
-            <Link href="/saved" className="kitchen-item" onClick={onRequestClose}>
+            <Link href="/saved" className="ck-collection-item" onClick={onRequestClose}>
               <Bookmark size={15} aria-hidden />
-              <span className="kitchen-text">Saved Recipes</span>
-              <span className="kitchen-count">{savedCount}</span>
+              <span>Saved Recipes</span>
+              <b>{savedCount}</b>
             </Link>
 
-            <Link href="/pantry" className="kitchen-item" onClick={onRequestClose}>
+            <Link href="/pantry" className="ck-collection-item" onClick={onRequestClose}>
               <Boxes size={15} aria-hidden />
-              <span className="kitchen-text">Pantry Items</span>
-              <span className="kitchen-count">{pantryCount}</span>
+              <span>Pantry Items</span>
+              <b>{pantryCount}</b>
             </Link>
-          </div>
+          </section>
         </div>
 
-        <div className="sidebar-footer">
-          <span className="nav-section-label footer-title">Support</span>
-
-          <Link href="/settings" className="footer-link" onClick={onRequestClose}>
-            <Settings size={15} aria-hidden />
-            <span>Settings</span>
+        <div className="ck-sidebar-bottom">
+          <Link href="/meal-plan" className="ck-idea-card" onClick={onRequestClose}>
+            <span className="ck-idea-shine" />
+            <Sparkles size={18} className="ck-idea-icon" />
+            <span className="ck-idea-copy">
+              Plan a clean meal
+              <br />
+              in minutes
+            </span>
+            <span className="ck-idea-button">
+              Open idea
+              <ArrowRight size={14} />
+            </span>
           </Link>
 
-          {supportLinks.map(({ href, label, Icon, external }) => (
-            <Link
-              key={href}
-              href={href}
-              className="footer-link"
-              onClick={onRequestClose}
-              target={external ? "_blank" : undefined}
-              rel={external ? "noopener noreferrer" : undefined}
-            >
-              <Icon size={15} aria-hidden />
-              <span>{label}</span>
-            </Link>
-          ))}
+          <div className="ck-footer-links">
+            {supportLinks.map(({ href, label, Icon, external }) => (
+              <Link
+                key={href}
+                href={href}
+                className="ck-footer-link"
+                onClick={onRequestClose}
+                target={external ? "_blank" : undefined}
+                rel={external ? "noopener noreferrer" : undefined}
+              >
+                <Icon size={16} />
+                <span>{label}</span>
+              </Link>
+            ))}
+          </div>
         </div>
-
-        <style jsx>{`
-          /* ── sidebar shell ── */
-          .ck-sidebar {
-            width: 272px;
-            height: 100dvh;
-            position: fixed;
-            top: 0;
-            left: 0;
-            display: flex;
-            flex-direction: column;
-            padding: 16px 12px 12px;
-            background: var(--bg-raised);
-            border-right: 1px solid var(--border);
-            overflow: hidden;
-            z-index: 70;
-            color: var(--text);
-          }
-
-          .sidebar-backdrop { display: none; }
-
-          /* ── brand ── */
-          .sidebar-brand {
-            padding: 4px 4px 16px;
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            border-bottom: 1px solid var(--border);
-            flex-shrink: 0;
-          }
-
-          .brand-link {
-            display: flex;
-            align-items: center;
-            gap: 11px;
-            min-width: 0;
-            text-decoration: none;
-            color: var(--text);
-          }
-
-          .brand-link:hover { text-decoration: none; }
-
-          .brand-icon {
-            width: 38px;
-            height: 38px;
-            border-radius: 11px;
-            background: var(--primary);
-            box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 22%, transparent);
-            display: grid;
-            place-items: center;
-            overflow: hidden;
-            flex-shrink: 0;
-          }
-
-          .brand-logo {
-            width: 22px;
-            height: 22px;
-            object-fit: contain;
-          }
-
-          .brand-copy {
-            display: flex;
-            flex-direction: column;
-            min-width: 0;
-            gap: 1px;
-          }
-
-          .brand-kicker {
-            font-size: 9.5px;
-            font-weight: 600;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-            color: var(--primary);
-            opacity: 0.85;
-          }
-
-          .brand-name {
-            font-size: 16px;
-            font-weight: 800;
-            line-height: 1.15;
-            letter-spacing: -0.04em;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            color: var(--text);
-          }
-
-          .mobile-close {
-            display: none;
-            width: 34px;
-            height: 34px;
-            border-radius: 10px;
-            border: 1px solid var(--border);
-            background: transparent;
-            color: var(--muted);
-            place-items: center;
-            cursor: pointer;
-            flex-shrink: 0;
-            transition: background 0.12s, color 0.12s;
-          }
-
-          .mobile-close:hover {
-            background: color-mix(in oklab, var(--border) 70%, transparent);
-            color: var(--text);
-          }
-
-          /* ── scroll area ── */
-          .sidebar-scroll {
-            flex: 1;
-            overflow-y: auto;
-            min-height: 0;
-            scrollbar-width: none;
-          }
-          .sidebar-scroll::-webkit-scrollbar { display: none; }
-
-          /* ── section labels ── */
-          .nav-section-label,
-          .kitchen-label {
-            display: flex;
-            align-items: center;
-            gap: 7px;
-            padding: 0 4px 8px;
-            font-size: 10.5px;
-            font-weight: 600;
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
-            color: var(--muted);
-          }
-
-          .nav-section-label::before,
-          .kitchen-label::before {
-            content: '';
-            display: inline-block;
-            width: 5px;
-            height: 5px;
-            border-radius: 50%;
-            background: var(--primary);
-            opacity: 0.7;
-            flex-shrink: 0;
-          }
-
-          /* ── nav ── */
-          .sidebar-nav,
-          .kitchen-section {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-          }
-
-          .sidebar-link {
-            display: flex;
-            align-items: center;
-            gap: 11px;
-            padding: 8px 10px;
-            border-radius: 11px;
-            color: var(--muted);
-            text-decoration: none;
-            transition: background 0.14s, color 0.14s;
-          }
-
-          .sidebar-link:hover {
-            color: var(--text);
-            background: color-mix(in oklab, var(--border) 70%, transparent);
-            text-decoration: none;
-          }
-
-          .sidebar-link.active {
-            color: var(--text);
-            background: color-mix(in oklab, var(--primary) 12%, var(--bg-raised));
-          }
-
-          .admin-link { margin-top: 4px; }
-
-          /* ── link icon box ── */
-          .link-icon {
-            width: 36px;
-            height: 36px;
-            border-radius: 9px;
-            display: grid;
-            place-items: center;
-            flex-shrink: 0;
-            color: var(--muted);
-            background: color-mix(in oklab, var(--border) 65%, transparent);
-            transition: background 0.14s, color 0.14s;
-          }
-
-          .sidebar-link.active .link-icon {
-            background: color-mix(in oklab, var(--primary) 16%, var(--bg));
-            color: var(--primary);
-          }
-
-          .sidebar-link:hover .link-icon {
-            color: var(--text);
-          }
-
-          /* ── link text ── */
-          .link-copy {
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 1px;
-          }
-
-          .link-label {
-            font-size: 14px;
-            font-weight: 600;
-            line-height: 1.2;
-            letter-spacing: -0.02em;
-            color: inherit;
-          }
-
-          .sidebar-link.active .link-label {
-            font-weight: 700;
-            color: var(--text);
-          }
-
-          .link-hint {
-            font-size: 11px;
-            line-height: 1.25;
-            color: color-mix(in oklab, var(--muted) 85%, transparent);
-            letter-spacing: 0;
-          }
-
-          .sidebar-link.active .link-hint {
-            color: color-mix(in oklab, var(--muted) 75%, var(--text));
-          }
-
-          /* ── library section ── */
-          .kitchen-section {
-            margin-top: 16px;
-            padding-top: 16px;
-            border-top: 1px solid var(--border);
-            margin-bottom: 4px;
-          }
-
-          .kitchen-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 7px 10px;
-            border-radius: 9px;
-            color: var(--muted);
-            text-decoration: none;
-            font-size: 13px;
-            font-weight: 500;
-            transition: background 0.13s, color 0.13s;
-          }
-
-          .kitchen-item:hover {
-            color: var(--text);
-            background: color-mix(in oklab, var(--border) 70%, transparent);
-            text-decoration: none;
-          }
-
-          .kitchen-item :global(svg) {
-            flex-shrink: 0;
-            color: var(--muted);
-          }
-
-          .kitchen-text {
-            flex: 1;
-            line-height: 1.2;
-          }
-
-          .kitchen-count {
-            padding: 2px 7px;
-            border-radius: 999px;
-            font-size: 10.5px;
-            font-weight: 700;
-            color: var(--primary);
-            background: color-mix(in oklab, var(--primary) 12%, transparent);
-          }
-
-          /* ── footer ── */
-          .sidebar-footer {
-            display: flex;
-            flex-direction: column;
-            gap: 1px;
-            flex-shrink: 0;
-            padding-top: 12px;
-            border-top: 1px solid var(--border);
-          }
-
-          .footer-title { padding-bottom: 6px; }
-
-          .footer-link {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 10px;
-            border-radius: 8px;
-            color: var(--muted);
-            text-decoration: none;
-            font-size: 12.5px;
-            font-weight: 500;
-            transition: background 0.12s, color 0.12s;
-          }
-
-          .footer-link:hover {
-            color: var(--text);
-            background: color-mix(in oklab, var(--border) 70%, transparent);
-            text-decoration: none;
-          }
-
-          .footer-link :global(svg) { flex-shrink: 0; opacity: 0.7; }
-
-          /* ── mobile ── */
-          @media (max-width: 768px) {
-            .sidebar-backdrop {
-              display: none;
-              position: fixed;
-              inset: 0;
-              width: 100vw;
-              height: 100dvh;
-              min-width: 0;
-              min-height: 0;
-              border: 0;
-              padding: 0;
-              margin: 0;
-              appearance: none;
-              -webkit-appearance: none;
-              border-radius: 0;
-              outline: none;
-              background: transparent;
-              color: transparent;
-              font-size: 0;
-              line-height: 0;
-              backdrop-filter: blur(6px);
-              opacity: 0;
-              pointer-events: none;
-              transition: opacity 0.22s ease;
-              z-index: 69;
-            }
-
-            .sidebar-backdrop.open {
-              display: block;
-              background: rgba(2, 6, 23, 0.5);
-              opacity: 1;
-              pointer-events: auto;
-            }
-
-            .ck-sidebar {
-              width: min(78vw, 260px);
-              padding: 12px 10px;
-              transform: translateX(calc(-100% - 20px));
-              transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
-            }
-
-            .ck-sidebar.mobile-open { transform: translateX(0); }
-
-            .mobile-close { display: grid; }
-
-            .sidebar-brand {
-              padding: 2px 2px 12px;
-              margin-bottom: 6px;
-            }
-
-            .brand-icon { width: 32px; height: 32px; border-radius: 9px; }
-            .brand-logo { width: 18px; height: 18px; }
-            .brand-name { font-size: 14px; }
-            .brand-kicker { font-size: 8.5px; }
-
-            .nav-section-label,
-            .kitchen-label {
-              font-size: 9.5px;
-              padding-bottom: 6px;
-            }
-
-            .sidebar-nav,
-            .kitchen-section,
-            .sidebar-footer { gap: 1px; }
-
-            .sidebar-link {
-              padding: 7px 8px;
-              border-radius: 9px;
-              gap: 9px;
-            }
-
-            .link-icon {
-              width: 30px;
-              height: 30px;
-              border-radius: 8px;
-            }
-
-            .link-label { font-size: 13px; }
-            .link-hint { font-size: 10.5px; }
-
-            .kitchen-section {
-              margin-top: 12px;
-              padding-top: 12px;
-              margin-bottom: 2px;
-            }
-
-            .kitchen-item { padding: 6px 8px; font-size: 12.5px; }
-            .footer-link { padding: 5px 8px; font-size: 12px; }
-            .footer-link :global(svg) { width: 13px; height: 13px; }
-          }
-
-          @media (max-width: 380px) {
-            .ck-sidebar { width: 82vw; padding: 10px 8px; }
-            .link-icon { width: 28px; height: 28px; }
-            .link-label { font-size: 12.5px; }
-          }
-        `}</style>
       </aside>
+
+      <RecipeSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
+
+      <style jsx global>{`
+        .ck-sidebar {
+          width: 324px;
+          height: 100dvh;
+          position: fixed;
+          inset: 0 auto 0 0;
+          z-index: 70;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          padding: 30px 26px 22px;
+          color: color-mix(in oklab, var(--text) 12%, white 88%);
+          background: color-mix(in oklab, var(--bg) 82%, black 18%);
+          box-shadow: 24px 0 80px rgba(0, 0, 0, 0.35);
+        }
+
+        .ck-sidebar-bg {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          background:
+            radial-gradient(circle at 8% 3%, color-mix(in oklab, var(--primary) 22%, transparent), transparent 28%),
+            radial-gradient(circle at 0% 54%, color-mix(in oklab, var(--ring) 20%, transparent), transparent 36%),
+            linear-gradient(90deg, rgba(255, 255, 255, 0.045), transparent 22%),
+            linear-gradient(180deg, color-mix(in oklab, var(--bg) 62%, black 38%), color-mix(in oklab, var(--bg) 78%, black 22%));
+        }
+
+        .ck-sidebar-backdrop { display: none; }
+
+        .ck-sidebar-scroll {
+          position: relative;
+          z-index: 1;
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
+          padding-right: 2px;
+          scrollbar-width: none;
+        }
+
+        .ck-sidebar-scroll::-webkit-scrollbar { display: none; }
+
+        .ck-sidebar-brand {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 34px;
+        }
+
+        .ck-brand-link {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-width: 0;
+          color: #fff;
+          text-decoration: none;
+        }
+
+        .ck-brand-link:hover { text-decoration: none; }
+
+        .ck-brand-logo-box {
+          width: 38px;
+          height: 38px;
+          display: grid;
+          place-items: center;
+          border-radius: 14px;
+          background: var(--primary);
+          color: var(--primary-contrast);
+          box-shadow: 0 16px 40px color-mix(in oklab, var(--primary) 24%, transparent);
+          overflow: hidden;
+        }
+
+        .ck-brand-logo {
+          width: 23px;
+          height: 23px;
+          object-fit: contain;
+        }
+
+        .ck-brand-text {
+          font-size: 20px;
+          font-weight: 760;
+          letter-spacing: -0.045em;
+          white-space: nowrap;
+        }
+
+        .ck-mobile-close {
+          display: none;
+          width: 38px;
+          height: 38px;
+          border: 0;
+          border-radius: 14px;
+          place-items: center;
+          color: rgba(255, 255, 255, 0.72);
+          background: rgba(255, 255, 255, 0.07);
+          cursor: pointer;
+        }
+
+        .ck-brand-hero { margin-bottom: 28px; }
+
+        .ck-brand-hero h2 {
+          margin: 0;
+          font-family: Georgia, "Times New Roman", serif;
+          font-size: 54px;
+          line-height: 0.88;
+          letter-spacing: -0.075em;
+          font-weight: 500;
+          color: #fff;
+        }
+
+        .ck-brand-hero em {
+          color: var(--primary);
+          font-style: italic;
+        }
+
+        .ck-brand-hero span {
+          display: block;
+          width: 82px;
+          height: 3px;
+          margin-top: 17px;
+          border-radius: 999px;
+          background: var(--primary);
+          box-shadow: 0 0 22px color-mix(in oklab, var(--primary) 55%, transparent);
+        }
+
+        .ck-sidebar-search {
+          width: 100%;
+          min-height: 56px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 30px;
+          padding: 0 16px;
+          border: 0;
+          border-radius: 18px;
+          color: rgba(255, 255, 255, 0.68);
+          background: rgba(255, 255, 255, 0.085);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+          text-decoration: none;
+          transition: background 0.18s ease, transform 0.18s ease, color 0.18s ease;
+          cursor: pointer;
+          text-align: left;
+          font: inherit;
+        }
+
+        .ck-sidebar-search:hover {
+          color: #fff;
+          background: rgba(255, 255, 255, 0.12);
+          transform: translateY(-1px);
+        }
+
+        .ck-sidebar-search span {
+          min-width: 0;
+          font-size: 15px;
+          font-weight: 650;
+          overflow: hidden;
+          white-space: nowrap;
+          text-overflow: ellipsis;
+        }
+
+        .ck-sidebar-nav {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          margin-bottom: 30px;
+        }
+
+        .ck-sidebar-link {
+          position: relative;
+          min-height: 56px;
+          display: flex;
+          align-items: center;
+          gap: 15px;
+          padding: 10px 16px;
+          border-radius: 18px;
+          color: rgba(255, 255, 255, 0.76);
+          text-decoration: none;
+          transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .ck-sidebar-link:hover {
+          color: #fff;
+          background: rgba(255, 255, 255, 0.055);
+          transform: translateX(4px);
+          text-decoration: none;
+        }
+
+        .ck-sidebar-link.active {
+          color: #fff;
+          background: rgba(255, 255, 255, 0.105);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 18px 44px rgba(0, 0, 0, 0.22);
+        }
+
+        .ck-active-bar {
+          position: absolute;
+          left: -13px;
+          top: 9px;
+          bottom: 9px;
+          width: 4px;
+          border-radius: 999px;
+          background: var(--primary);
+          box-shadow: 0 0 24px color-mix(in oklab, var(--primary) 75%, transparent);
+        }
+
+        .ck-link-copy {
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .ck-sidebar-link strong {
+          font-size: 16px;
+          font-weight: 760;
+          line-height: 1.05;
+          letter-spacing: -0.035em;
+        }
+
+        .ck-sidebar-link small {
+          margin-top: 3px;
+          font-size: 11px;
+          font-weight: 650;
+          color: rgba(255, 255, 255, 0.34);
+        }
+
+        .ck-sidebar-link.active small { color: rgba(255, 255, 255, 0.48); }
+
+        .ck-collections { padding: 0 2px 20px; }
+
+        .ck-collections h3 {
+          margin: 0 0 15px;
+          padding: 0 8px;
+          color: var(--primary);
+          font-size: 13px;
+          font-weight: 950;
+          text-transform: uppercase;
+          letter-spacing: 0.18em;
+        }
+
+        .ck-collection-item {
+          display: grid;
+          grid-template-columns: auto minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 10px;
+          padding: 9px 8px;
+          border-radius: 12px;
+          color: rgba(255, 255, 255, 0.84);
+          text-decoration: none;
+          font-size: 15px;
+          font-weight: 550;
+          transition: background 0.18s ease, transform 0.18s ease, color 0.18s ease;
+        }
+
+        .ck-collection-item:hover {
+          color: #fff;
+          background: rgba(255, 255, 255, 0.045);
+          transform: translateX(3px);
+          text-decoration: none;
+        }
+
+        .ck-collection-item b {
+          font-size: 14px;
+          font-weight: 800;
+          color: rgba(255, 255, 255, 0.74);
+        }
+
+        .ck-sidebar-bottom {
+          position: relative;
+          z-index: 1;
+          flex-shrink: 0;
+        }
+
+        .ck-idea-card {
+          position: relative;
+          display: block;
+          min-height: 184px;
+          margin-bottom: 20px;
+          padding: 20px;
+          overflow: hidden;
+          border-radius: 20px;
+          border: 1px solid color-mix(in oklab, var(--primary) 26%, transparent);
+          background:
+            radial-gradient(circle at 94% 70%, color-mix(in oklab, var(--primary) 45%, #f0a24b 55%) 0 18%, transparent 19%),
+            radial-gradient(circle at 82% 58%, color-mix(in oklab, var(--primary) 65%, #6c9d44 35%) 0 5%, transparent 6%),
+            linear-gradient(135deg, color-mix(in oklab, var(--primary) 10%, transparent), rgba(255, 255, 255, 0.035)),
+            color-mix(in oklab, var(--bg) 72%, black 28%);
+          color: #fff;
+          text-decoration: none;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+          transition: transform 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .ck-idea-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 28px 80px rgba(0, 0, 0, 0.34);
+          text-decoration: none;
+        }
+
+        .ck-idea-shine {
+          position: absolute;
+          right: -42px;
+          bottom: -34px;
+          width: 150px;
+          height: 150px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.08);
+          filter: blur(2px);
+        }
+
+        .ck-idea-icon {
+          position: relative;
+          z-index: 1;
+          margin-bottom: 18px;
+          color: var(--primary);
+        }
+
+        .ck-idea-copy {
+          position: relative;
+          z-index: 1;
+          display: block;
+          max-width: 160px;
+          font-family: Georgia, "Times New Roman", serif;
+          font-size: 24px;
+          line-height: 1.08;
+          letter-spacing: -0.06em;
+        }
+
+        .ck-idea-button {
+          position: relative;
+          z-index: 1;
+          width: fit-content;
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          margin-top: 18px;
+          padding: 11px 15px;
+          border-radius: 10px;
+          background: var(--primary);
+          color: var(--primary-contrast);
+          font-size: 14px;
+          font-weight: 850;
+        }
+
+        .ck-footer-links {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          padding-top: 16px;
+          border-top: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .ck-footer-link {
+          flex: 1 1 calc(50% - 6px);
+          min-width: 0;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 7px;
+          border-radius: 12px;
+          color: rgba(255, 255, 255, 0.66);
+          text-decoration: none;
+          font-size: 12px;
+          font-weight: 750;
+          transition: background 0.18s ease, color 0.18s ease;
+        }
+
+        .ck-footer-link:hover {
+          color: #fff;
+          background: rgba(255, 255, 255, 0.055);
+          text-decoration: none;
+        }
+
+        .ck-footer-link span {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        @media (max-height: 820px) {
+          .ck-sidebar { padding-top: 22px; }
+          .ck-sidebar-brand { margin-bottom: 22px; }
+          .ck-brand-hero { margin-bottom: 20px; }
+          .ck-brand-hero h2 { font-size: 44px; }
+          .ck-sidebar-search { margin-bottom: 20px; }
+          .ck-sidebar-link { min-height: 48px; }
+          .ck-sidebar-link small { display: none; }
+          .ck-idea-card { min-height: 150px; }
+          .ck-idea-copy { font-size: 20px; }
+        }
+
+        @media (max-width: 768px) {
+          .ck-sidebar-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 69;
+            border: 0;
+            padding: 0;
+            margin: 0;
+            background: rgba(3, 7, 6, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.24s ease;
+          }
+
+          .ck-sidebar-backdrop.open {
+            display: block;
+            opacity: 1;
+            pointer-events: auto;
+          }
+
+          .ck-sidebar {
+            width: min(88vw, 324px);
+            transform: translateX(calc(-100% - 28px));
+            transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+          }
+
+          .ck-sidebar.mobile-open { transform: translateX(0); }
+          .ck-mobile-close { display: grid; }
+        }
+      `}</style>
     </>
   );
 }

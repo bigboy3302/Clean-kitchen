@@ -476,7 +476,7 @@ export default function PantryPage() {
   }, [logs]);
 
   return (
-    <main className="wrap">
+    <main className="wrap ck-page ck-pantry-page">
       <section className="hero">
         <div className="heroInner">
           <div className="heroLeft">

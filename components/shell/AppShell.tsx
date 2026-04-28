@@ -71,7 +71,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
       <style jsx>{`
         .shell-body {
-          margin-left: 278px;
+          margin-left: 324px;
           min-height: 100dvh;
           display: grid;
           grid-template-rows: auto 1fr auto;
