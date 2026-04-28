@@ -26,15 +26,10 @@ function cloudfrontUrlFromId(idRaw: string): string | null {
   return `https://d205bpvrqc9yn1.cloudfront.net/${id}.gif`;
 }
 
-async function pipe(upstream: Response) {
-  if (!upstream.ok || !upstream.body) {
-    const text = await upstream.text().catch(() => "");
-    return NextResponse.json({ error: text || `upstream-${upstream.status}` }, { status: upstream.status || 502 });
-  }
-  const ct = upstream.headers.get("content-type") || "image/gif";
-  return new NextResponse(upstream.body, {
+function redirectTo(url: string) {
+  return NextResponse.redirect(url, {
+    status: 307,
     headers: {
-      "content-type": ct,
       "cache-control": "public, max-age=86400, immutable",
       "cross-origin-resource-policy": "cross-origin",
     },
@@ -50,29 +45,13 @@ export async function GET(req: NextRequest) {
     if (src) {
       const url = normalizeUrl(src);
       if (!url) return NextResponse.json({ error: "bad-src" }, { status: 400 });
-      const res = await fetch(url.toString(), {
-        headers: {
-          Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-          "User-Agent": "Mozilla/5.0 Chrome Safari",
-        },
-        redirect: "follow",
-        cache: "no-store",
-      });
-      return pipe(res);
+      return redirectTo(url.toString());
     }
 
     if (id) {
       const cloud = cloudfrontUrlFromId(id);
       if (!cloud) return NextResponse.json({ error: "invalid-id" }, { status: 400 });
-      const res = await fetch(cloud, {
-        headers: {
-          Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-          "User-Agent": "Mozilla/5.0 Chrome Safari",
-        },
-        redirect: "follow",
-        cache: "no-store",
-      });
-      return pipe(res);
+      return redirectTo(cloud);
     }
 
     return NextResponse.json({ error: "missing-id-or-src" }, { status: 400 });

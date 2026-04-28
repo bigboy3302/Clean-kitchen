@@ -31,16 +31,22 @@ export default function WorkoutModal({ exercise, goal, onClose }: Props) {
     return value.length ? value.charAt(0).toUpperCase() + value.slice(1) : value;
   }
 
+  function toGifProxySrc(value?: string | null) {
+    const src = (value || "").trim();
+    if (!src) return null;
+    if (src.startsWith("/api/workouts/gif")) return src;
+    if (src.startsWith("/")) return src;
+    return `/api/workouts/gif?src=${encodeURIComponent(src)}`;
+  }
+
   const tutorialUrl = getDirectWorkoutVideoUrl(exercise.name, exercise.videoUrl);
   const ytEmbedUrl = getYouTubeEmbedUrl(tutorialUrl);
   const heroSrc =
-    exercise.gifUrl
-      ? `/api/workouts/gif?src=${encodeURIComponent(exercise.gifUrl)}`
-      : exercise.imageThumbnailUrl
-      ? `/api/workouts/gif?src=${encodeURIComponent(exercise.imageThumbnailUrl)}`
-      : exercise.imageUrl
-      ? `/api/workouts/gif?src=${encodeURIComponent(exercise.imageUrl)}`
-      : getYouTubeThumbnailUrl(tutorialUrl) || "/placeholder.png";
+    toGifProxySrc(exercise.gifUrl) ||
+    toGifProxySrc(exercise.imageThumbnailUrl) ||
+    toGifProxySrc(exercise.imageUrl) ||
+    getYouTubeThumbnailUrl(tutorialUrl) ||
+    "/placeholder.png";
 
   const tags = [
     exercise.bodyPart,

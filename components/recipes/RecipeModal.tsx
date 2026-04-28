@@ -88,6 +88,9 @@ export default function RecipeModal({
   const minutes = getMetaNumber(recipe, "minutes") ?? getMetaNumber(recipe, "timeMinutes");
   const servings = getMetaNumber(recipe, "servings");
   const calories = getMetaNumber(recipe, "calories");
+  const sourceLabel = recipe.source === "user" ? "My Recipe" : "Recipe Library";
+  const metaSummary = [recipe.area, recipe.category].filter(Boolean).join(" • ");
+  const authorName = recipe.author?.name?.trim() || null;
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -112,65 +115,52 @@ export default function RecipeModal({
         </button>
 
         <section className="hero">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="heroImage" src={image} alt={recipe.title} />
-          <div className="heroShade" />
-
-          <div className="heroTop">
-            <div className="badges">
-              {recipe.area ? <span className="badge">{recipe.area}</span> : null}
-              {recipe.category ? <span className="badge">{recipe.category}</span> : null}
-              <span className="badge badgeSource">{recipe.source === "user" ? "My Recipe" : "Recipe Library"}</span>
-            </div>
-
-            {canFavorite ? (
-              <button
-                className={`favoriteButton ${isFavorite ? "isActive" : ""}`}
-                onClick={() => onToggleFavorite?.(recipe)}
-                aria-pressed={isFavorite}
-                type="button"
-              >
-                <span aria-hidden="true">{isFavorite ? "★" : "☆"}</span>
-                <span>{isFavorite ? "Saved" : "Save"}</span>
-              </button>
-            ) : null}
+          <div className="coverCard">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="coverImage" src={image} alt={recipe.title} />
           </div>
 
-          <div className="heroBody">
-            <div className="eyebrow">Clean Kitchen Recipe</div>
-            <h2>{recipe.title}</h2>
+          <div className="headCard">
+            <div className="heroTop">
+              <div className="eyebrow">Clean Kitchen Recipe</div>
+              {canFavorite ? (
+                <button
+                  className={`favoriteButton ${isFavorite ? "isActive" : ""}`}
+                  onClick={() => onToggleFavorite?.(recipe)}
+                  aria-pressed={isFavorite}
+                  type="button"
+                >
+                  <span aria-hidden="true">{isFavorite ? "★" : "☆"}</span>
+                  <span>{isFavorite ? "Saved" : "Save"}</span>
+                </button>
+              ) : null}
+            </div>
+
+            <div className="titleWrap">
+              <h2>{recipe.title}</h2>
+              {metaSummary || authorName ? (
+                <p className="heroSummary">
+                  {metaSummary || sourceLabel}
+                  {authorName ? ` • by ${authorName}` : ""}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="metaRow">
+              <div className="badges">
+                <span className="badge badgeSource">{sourceLabel}</span>
+                {recipe.category ? <span className="badge">{recipe.category}</span> : null}
+                {recipe.area ? <span className="badge">{recipe.area}</span> : null}
+              </div>
+            </div>
 
             <div className="metrics">
-              {typeof minutes === "number" ? (
-                <div className="metricCard">
-                  <strong>{minutes}</strong>
-                  <span>Minutes</span>
-                </div>
-              ) : null}
-              {typeof servings === "number" ? (
-                <div className="metricCard">
-                  <strong>{servings}</strong>
-                  <span>Servings</span>
-                </div>
-              ) : null}
-              {typeof calories === "number" ? (
-                <div className="metricCard">
-                  <strong>{calories}</strong>
-                  <span>Calories</span>
-                </div>
-              ) : null}
-              {recipe.vegetarian ? (
-                <div className="metricCard metricTag">
-                  <strong>Veg</strong>
-                  <span>Vegetarian</span>
-                </div>
-              ) : null}
-              {recipe.vegan ? (
-                <div className="metricCard metricTag">
-                  <strong>V+</strong>
-                  <span>Vegan</span>
-                </div>
-              ) : null}
+              {typeof minutes === "number" ? <span className="metricPill">{minutes} min</span> : null}
+              {typeof servings === "number" ? <span className="metricPill">{servings} servings</span> : null}
+              {typeof calories === "number" ? <span className="metricPill">{calories} cal</span> : null}
+              {recipe.vegetarian ? <span className="metricPill">Vegetarian</span> : null}
+              {recipe.vegan ? <span className="metricPill">Vegan</span> : null}
+              <span className="metricPill">{ingredients.length} ingredients</span>
             </div>
           </div>
         </section>
@@ -222,9 +212,9 @@ export default function RecipeModal({
           display: grid;
           place-items: center;
           background:
-            radial-gradient(circle at top, rgba(255, 217, 102, 0.16), transparent 28%),
-            linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(15, 23, 42, 0.88));
-          backdrop-filter: blur(14px);
+            radial-gradient(circle at top, color-mix(in oklab, var(--primary) 18%, transparent), transparent 30%),
+            linear-gradient(180deg, color-mix(in oklab, var(--text) 56%, transparent), color-mix(in oklab, var(--text) 72%, transparent));
+          backdrop-filter: blur(18px) saturate(1.08);
         }
         .modal {
           position: relative;
@@ -233,10 +223,11 @@ export default function RecipeModal({
           overflow: auto;
           border-radius: 30px;
           background:
-            linear-gradient(180deg, color-mix(in oklab, var(--bg2) 92%, #fff4d6) 0%, var(--bg2) 52%, color-mix(in oklab, var(--bg) 92%, #ffffff) 100%);
-          border: 1px solid color-mix(in oklab, var(--border) 80%, rgba(255,255,255,0.24));
+            radial-gradient(circle at top right, color-mix(in oklab, var(--primary) 10%, transparent), transparent 34%),
+            linear-gradient(180deg, color-mix(in oklab, var(--bg-raised) 96%, white 4%) 0%, color-mix(in oklab, var(--bg) 93%, var(--bg-raised) 7%) 100%);
+          border: 1px solid color-mix(in oklab, var(--border) 72%, rgba(255,255,255,0.22));
           box-shadow:
-            0 32px 90px rgba(2, 6, 23, 0.42),
+            0 34px 100px rgba(2, 6, 23, 0.42),
             inset 0 1px 0 rgba(255, 255, 255, 0.35);
         }
         .closeButton {
@@ -249,171 +240,171 @@ export default function RecipeModal({
           place-items: center;
           width: 44px;
           height: 44px;
-          border: 1px solid rgba(255, 255, 255, 0.26);
+          border: 1px solid color-mix(in oklab, var(--border) 40%, rgba(255,255,255,0.28));
           border-radius: 999px;
-          background: rgba(12, 18, 28, 0.58);
-          color: white;
+          background: color-mix(in oklab, var(--bg) 54%, rgba(12,18,28,0.55));
+          color: var(--text);
           backdrop-filter: blur(12px);
           cursor: pointer;
           transform: translate(-18px, 18px);
+          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
         }
         .closeButton span {
           font-size: 1.5rem;
           line-height: 1;
         }
         .hero {
-          position: relative;
-          min-height: 360px;
-          padding: 22px 26px 26px;
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          border-radius: 30px 30px 0 0;
-          overflow: hidden;
-          background: #2b2118;
+          display: grid;
+          grid-template-columns: 1.4fr 1fr;
+          gap: 14px;
+          padding: 18px 18px 0;
+          align-items: stretch;
         }
-        .heroImage,
-        .heroShade {
-          position: absolute;
-          inset: 0;
+        .coverCard,
+        .headCard {
+          border-radius: var(--radius-card, 22px);
+          border: 1px solid color-mix(in oklab, var(--border) 72%, transparent);
+          overflow: hidden;
+          background:
+            radial-gradient(circle at top right, color-mix(in oklab, var(--primary) 8%, transparent), transparent 40%),
+            color-mix(in oklab, var(--bg-raised) 96%, white 4%);
+          box-shadow: 0 16px 42px rgba(15, 23, 42, 0.08);
+        }
+        .coverCard {
+          aspect-ratio: 16 / 10;
+          position: relative;
+          min-height: 260px;
+          background: var(--bg2);
+        }
+        .coverImage {
           width: 100%;
           height: 100%;
-        }
-        .heroImage {
           object-fit: cover;
+          display: block;
         }
-        .heroShade {
-          background:
-            linear-gradient(180deg, rgba(14, 20, 30, 0.2) 0%, rgba(14, 20, 30, 0.42) 32%, rgba(14, 20, 30, 0.82) 100%),
-            linear-gradient(120deg, rgba(245, 158, 11, 0.25), transparent 46%);
-        }
-        .heroTop,
-        .heroBody {
-          position: relative;
-          z-index: 1;
+        .headCard {
+          padding: 22px;
+          display: grid;
+          gap: 14px;
+          align-content: start;
         }
         .heroTop {
           display: flex;
-          gap: 16px;
           justify-content: space-between;
-          align-items: flex-start;
+          align-items: center;
+          gap: 12px;
+        }
+        .metaRow {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          flex-wrap: wrap;
         }
         .badges {
           display: flex;
           gap: 8px;
           flex-wrap: wrap;
-          padding-right: 16px;
         }
         .badge {
           border-radius: 999px;
-          padding: 8px 12px;
-          font-size: 0.76rem;
-          font-weight: 800;
-          letter-spacing: 0.06em;
-          text-transform: uppercase;
-          color: rgba(255, 248, 235, 0.96);
-          background: rgba(255, 255, 255, 0.13);
-          border: 1px solid rgba(255, 255, 255, 0.16);
-          backdrop-filter: blur(12px);
+          padding: 6px 10px;
+          font-size: 12px;
+          font-weight: 700;
+          color: var(--text);
+          background: color-mix(in oklab, var(--bg) 78%, var(--primary) 22% / 16%);
+          border: 1px solid var(--border);
         }
         .badgeSource {
-          background: rgba(246, 211, 101, 0.18);
-          color: #fff3c2;
+          background: color-mix(in oklab, var(--primary) 16%, transparent);
+          color: var(--primary);
+          border-color: color-mix(in oklab, var(--primary) 32%, transparent);
         }
         .favoriteButton {
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          border: 1px solid rgba(255, 255, 255, 0.2);
+          border: 1px solid var(--border);
           border-radius: 999px;
           padding: 10px 14px;
-          background: rgba(12, 18, 28, 0.4);
-          color: white;
+          background: var(--bg2);
+          color: var(--text);
           cursor: pointer;
-          font-weight: 700;
-          backdrop-filter: blur(12px);
+          font-weight: 800;
           flex-shrink: 0;
         }
         .favoriteButton.isActive {
-          background: rgba(246, 211, 101, 0.22);
-          color: #fff2b2;
-          border-color: rgba(246, 211, 101, 0.38);
+          background: color-mix(in oklab, var(--primary) 18%, transparent);
+          color: var(--primary);
+          border-color: color-mix(in oklab, var(--primary) 32%, transparent);
         }
         .eyebrow {
-          margin-bottom: 10px;
-          color: rgba(255, 236, 210, 0.9);
-          font-size: 0.76rem;
-          font-weight: 800;
-          letter-spacing: 0.2em;
-          text-transform: uppercase;
+          color: var(--muted);
+          font-size: 13px;
+          font-weight: 700;
+        }
+        .titleWrap {
+          display: grid;
+          gap: 10px;
         }
         .heroBody h2 {
           margin: 0;
-          max-width: 760px;
-          font-size: clamp(2rem, 4vw, 3.35rem);
+          font-family: Georgia, "Times New Roman", serif;
+          font-size: clamp(24px, 3.4vw, 32px);
           line-height: 0.96;
           letter-spacing: -0.04em;
-          color: white;
-          text-wrap: balance;
+          color: var(--text);
+        }
+        .heroSummary {
+          margin: 0;
+          color: var(--muted);
+          line-height: 1.65;
+          font-size: 0.96rem;
         }
         .metrics {
           display: flex;
-          gap: 12px;
+          gap: 8px;
           flex-wrap: wrap;
-          margin-top: 22px;
         }
-        .metricCard {
-          min-width: 112px;
-          padding: 12px 14px;
-          border-radius: 18px;
-          background: rgba(255, 248, 237, 0.14);
-          border: 1px solid rgba(255, 255, 255, 0.14);
-          backdrop-filter: blur(14px);
-          color: white;
-        }
-        .metricCard strong {
-          display: block;
-          font-size: 1.1rem;
-          letter-spacing: -0.03em;
-        }
-        .metricCard span {
-          display: block;
-          margin-top: 4px;
-          font-size: 0.78rem;
-          color: rgba(255, 239, 216, 0.82);
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-        }
-        .metricTag strong {
-          font-size: 0.98rem;
+        .metricPill {
+          display: inline-flex;
+          align-items: center;
+          border-radius: 999px;
+          padding: 6px 10px;
+          font-size: 12px;
+          font-weight: 700;
+          color: var(--text);
+          border: 1px solid var(--border);
+          background: var(--bg2);
         }
         .content {
           display: grid;
-          grid-template-columns: minmax(290px, 0.95fr) minmax(0, 1.45fr);
-          gap: 0;
+          grid-template-columns: 340px 1fr;
+          gap: 14px;
+          padding: 14px 18px 18px;
         }
         .ingredientsPanel,
         .instructionsPanel {
-          padding: 28px 28px 32px;
+          padding: 22px;
+          border: 1px solid var(--border);
+          border-radius: var(--radius-card, 22px);
+          background: var(--card-bg, var(--bg-raised));
+          box-shadow: var(--shadow, 0 8px 20px rgba(15, 23, 42, 0.08));
         }
         .ingredientsPanel {
-          background:
-            linear-gradient(180deg, color-mix(in oklab, #fff4d6 55%, var(--bg2)) 0%, color-mix(in oklab, #fffaf2 92%, var(--bg2)) 100%);
-          border-right: 1px solid color-mix(in oklab, var(--border) 75%, transparent);
+          position: sticky;
+          top: 14px;
         }
         .sectionLabel {
-          margin-bottom: 10px;
-          color: color-mix(in oklab, var(--muted) 80%, #8b5e00);
-          font-size: 0.74rem;
-          font-weight: 800;
-          letter-spacing: 0.18em;
-          text-transform: uppercase;
+          display: none;
         }
         h3 {
-          margin: 0 0 18px;
+          margin: 0 0 14px;
           color: var(--text);
-          font-size: 1.5rem;
-          letter-spacing: -0.03em;
+          font-size: 18px;
+          font-weight: 900;
+          letter-spacing: -0.01em;
+          font-family: inherit;
         }
         .ingredientList,
         .stepList {
@@ -427,35 +418,32 @@ export default function RecipeModal({
         }
         .stepCard {
           display: grid;
-          grid-template-columns: 58px 1fr;
-          gap: 16px;
+          grid-template-columns: 28px 1fr;
+          gap: 10px;
           align-items: start;
-          padding: 18px;
-          border-radius: 22px;
-          background:
-            linear-gradient(180deg, color-mix(in oklab, var(--card-bg) 86%, #fffdf8) 0%, color-mix(in oklab, var(--bg2) 96%, #ffffff) 100%);
-          border: 1px solid color-mix(in oklab, var(--border) 78%, transparent);
-          box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+          padding: 0;
+          border-radius: 0;
+          background: transparent;
+          border: 0;
+          box-shadow: none;
         }
         .stepIndex {
           display: inline-grid;
           place-items: center;
-          width: 58px;
-          height: 58px;
-          border-radius: 18px;
-          background:
-            linear-gradient(160deg, #ffd76a 0%, #f59e0b 100%);
-          color: #4a2900;
-          font-size: 1rem;
-          font-weight: 900;
-          letter-spacing: -0.03em;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.45);
+          width: 28px;
+          height: 28px;
+          border-radius: 10px;
+          border: 1px solid var(--border);
+          background: var(--bg2);
+          color: var(--text);
+          font-size: 0.9rem;
+          font-weight: 800;
         }
         .stepCard p {
           margin: 0;
           color: var(--text);
-          line-height: 1.72;
-          font-size: 0.98rem;
+          line-height: 1.65;
+          font-size: 0.96rem;
         }
         .muted {
           margin: 0;
@@ -471,16 +459,16 @@ export default function RecipeModal({
             border-radius: 24px;
           }
           .hero {
-            min-height: 310px;
-            padding: 18px 18px 22px;
-            border-radius: 24px 24px 0 0;
+            grid-template-columns: 1fr;
+            padding: 14px 14px 0;
           }
           .content {
             grid-template-columns: 1fr;
+            padding: 14px;
           }
           .ingredientsPanel {
-            border-right: 0;
-            border-bottom: 1px solid color-mix(in oklab, var(--border) 75%, transparent);
+            position: relative;
+            top: auto;
           }
         }
 
@@ -501,43 +489,27 @@ export default function RecipeModal({
             transform: translate(-12px, 12px);
           }
           .hero {
-            min-height: 280px;
-            padding: 14px 14px 18px;
-            border-radius: 28px 28px 0 0;
+            padding: 12px 12px 0;
           }
           .heroTop {
-            align-items: stretch;
+            align-items: flex-start;
             flex-direction: column;
           }
-          .favoriteButton {
-            width: fit-content;
+          .headCard {
+            padding: 16px;
           }
-          .heroBody h2 {
-            font-size: 2rem;
-            line-height: 0.98;
+          .heroSummary {
+            font-size: 0.92rem;
           }
-          .metrics {
-            gap: 10px;
-          }
-          .metricCard {
-            min-width: calc(50% - 5px);
-            flex: 1 1 calc(50% - 5px);
+          .content {
+            padding: 12px;
           }
           .ingredientsPanel,
           .instructionsPanel {
-            padding: 20px 16px 24px;
+            padding: 18px 16px 22px;
           }
           .stepCard {
-            grid-template-columns: 46px 1fr;
-            gap: 12px;
-            padding: 14px;
-            border-radius: 18px;
-          }
-          .stepIndex {
-            width: 46px;
-            height: 46px;
-            border-radius: 14px;
-            font-size: 0.9rem;
+            grid-template-columns: 28px 1fr;
           }
         }
       `}</style>

@@ -110,6 +110,15 @@ const getRecipeServings = (recipe: CommonRecipe): number | null => {
   return safeNumber(record.servings);
 };
 
+const uniqueTerms = (terms: string[]) =>
+  Array.from(
+    new Set(
+      terms
+        .map((term) => term.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
+
 /** Ingredient[] used by your domain types. */
 const normalizeIngredients = (value: unknown): Ingredient[] => {
   if (!Array.isArray(value)) return [];
@@ -590,17 +599,29 @@ export default function RecipesPage() {
 
   /* ---------- pantry picker → AND search ---------- */
   async function runPantrySearch(terms: string[]) {
+    const normalized = uniqueTerms(terms);
+    if (!normalized.length) {
+      setErr("Choose at least one pantry item.");
+      return;
+    }
+    setMode("ingredient");
+    setQ("");
+    setIngredientValue("");
+    setIngredientChips(normalized);
+    setLastIngredientSearch(normalized);
     setErr(null);
     setBusySearch(true);
     setShowPantryPicker(false);
     try {
-      const results = await searchMealsByIngredientsAND(terms, 36, "intersect", {
+      const results = await searchMealsByIngredientsAND(normalized, 36, "intersect", {
         area: areaFilter,
         diet,
         sort: sortBy,
         maxTime,
       });
       setPantryRecipes(results.map(withRecipeMeta));
+      setIngredientOffset(0);
+      setIngredientTotal(results.length);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Pantry search failed.";
       setErr(message);
@@ -692,6 +713,22 @@ export default function RecipesPage() {
     setPantryRecipes(null);
     setIngredientOffset(0);
     setIngredientTotal(0);
+  }
+
+  function applyPantryItemsToIngredientSearch(terms: string[]) {
+    const normalized = uniqueTerms(terms);
+    if (!normalized.length) {
+      setErr("Your pantry is empty.");
+      return;
+    }
+    setErr(null);
+    setMode("ingredient");
+    setQ("");
+    setIngredientValue("");
+    setIngredientChips(normalized);
+    setLastIngredientSearch(normalized);
+    setPantryRecipes(null);
+    void runIngredientSearch(normalized);
   }
 
   function handleRecipeShare(r: { id: string; title: string; source: string }) {
@@ -886,9 +923,6 @@ export default function RecipesPage() {
                 >
                   Filters
                 </button>
-                <Button variant="secondary" onClick={() => setShowPantryPicker(true)}>
-                  Find with my pantry
-                </Button>
                 <Button onClick={() => setShowWizard(true)}>Create recipe</Button>
               </div>
             ) : (
@@ -921,6 +955,18 @@ export default function RecipesPage() {
               >
                 Clear
               </button>
+              {isSignedIn ? (
+                <button
+                  className="btn-base btn--secondary btn--md pantryInlineBtn"
+                  type="button"
+                  onClick={() => {
+                    setMode("ingredient");
+                    setShowPantryPicker(true);
+                  }}
+                >
+                  Pantry items
+                </button>
+              ) : null}
             </div>
           ) : (
             <IngredientSearch
@@ -931,12 +977,42 @@ export default function RecipesPage() {
               onSearch={runIngredientSearch}
               isLoading={busySearch}
               maxIngredients={10}
+              extraAction={
+                isSignedIn ? (
+                  <button
+                    className="btn-base btn--secondary btn--md pantryInlineBtn"
+                    type="button"
+                    onClick={() => setShowPantryPicker(true)}
+                  >
+                    Pantry items
+                  </button>
+                ) : null
+              }
             />
           )}
 
+          {isSignedIn && pantry.length > 0 ? (
+            <div className="pantryQuickRow">
+              <button
+                className="linkBtn pantryQuickBtn"
+                type="button"
+                onClick={() => applyPantryItemsToIngredientSearch(pantry)}
+                disabled={busySearch}
+              >
+                Search with all pantry items
+              </button>
+              <span className="muted small">{pantry.length} pantry item{pantry.length === 1 ? "" : "s"} available</span>
+            </div>
+          ) : null}
+
           {busySearch && <p className="muted small">Searching…</p>}
           {err && <p className="error">{err}</p>}
-          {pantryRecipes && <p className="muted small">Showing suggestions from your pantry.</p>}
+          {pantryRecipes && (
+            <p className="muted small">
+              Showing suggestions from your pantry items
+              {lastIngredientSearch.length ? `: ${lastIngredientSearch.join(", ")}` : ""}.
+            </p>
+          )}
           <div className="resultsBar">
             <div className="resultsCopy">
               <strong>{resultsLabel}</strong>
@@ -1376,6 +1452,13 @@ export default function RecipesPage() {
           .filtersMobile {
             display: inline-flex;
           }
+          .pantryInlineBtn {
+            width: 100%;
+          }
+          .pantryQuickRow {
+            flex-direction: column;
+            align-items: flex-start;
+          }
         }
         .select {
           border: 1px solid var(--border);
@@ -1427,6 +1510,19 @@ export default function RecipesPage() {
           gap: 14px;
           flex-wrap: wrap;
           padding-top: 4px;
+        }
+        .pantryQuickRow {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .pantryQuickBtn[disabled] {
+          opacity: 0.6;
+          cursor: default;
+        }
+        .pantryInlineBtn {
+          white-space: nowrap;
         }
         .resultsCopy {
           display: grid;

@@ -62,7 +62,6 @@ const mediaSrc = (ex: Exercise | null) => {
   if (ex.gifUrl) return `/api/workouts/gif?src=${encodeURIComponent(ex.gifUrl)}`;
   if (ex.imageThumbnailUrl) return `/api/workouts/gif?src=${encodeURIComponent(ex.imageThumbnailUrl)}`;
   if (ex.imageUrl) return `/api/workouts/gif?src=${encodeURIComponent(ex.imageUrl)}`;
-  if (ex.id) return `/api/workouts/gif?id=${encodeURIComponent(ex.id)}`;
   return "/placeholder.png";
 };
 

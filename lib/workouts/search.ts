@@ -55,16 +55,27 @@ function buildInstructionsHtml(exercise: ExerciseDbItem): string {
   return `<p>${text}</p>`;
 }
 
+function buildProxyGifUrl(rawUrl?: string | null): string | null {
+  const trimmedUrl = (rawUrl || "").trim();
+  if (trimmedUrl) {
+    return `/api/workouts/gif?src=${encodeURIComponent(trimmedUrl)}`;
+  }
+
+  return null;
+}
+
 function toWorkoutContent(exercise: ExerciseDbItem): WorkoutContent {
   const instructionsHtml = buildInstructionsHtml(exercise);
   const descText = exercise.description || fallbackDescription(exercise).text;
+  const mediaUrl = buildProxyGifUrl(exercise.gifUrl);
+
   return {
     id: String(exercise.id),
     title: titleCase(exercise.name || "Exercise"),
-    mediaUrl: null,
+    mediaUrl,
     mediaType: "gif",
-    previewUrl: null,
-    thumbnailUrl: null,
+    previewUrl: mediaUrl,
+    thumbnailUrl: mediaUrl,
     description: descText,
     instructionsHtml,
     bodyPart: exercise.bodyPart || null,

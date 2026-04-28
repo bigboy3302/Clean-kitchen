@@ -494,10 +494,11 @@ export default function PantryCard({ item, onSave, onDelete, onConsume }: Props)
         }
         .title {
           margin: 0;
-          font-size: 20px;
+          font-size: 12px;
           font-weight: 900;
           letter-spacing: -0.01em;
           color: var(--text);
+          line-height: 1.2;
         }
         .meta {
           display: flex;
@@ -562,7 +563,7 @@ export default function PantryCard({ item, onSave, onDelete, onConsume }: Props)
         }
         .mTitle {
           font-weight: 900;
-          font-size: 18px;
+          font-size: 10px;
         }
         .mClose {
           border: none;
@@ -698,7 +699,6 @@ export default function PantryCard({ item, onSave, onDelete, onConsume }: Props)
     </>
   );
 }
-
 
 
 

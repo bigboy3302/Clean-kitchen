@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import Container from "@/components/Container";
 import { addExerciseToToday, getMetrics, saveMetrics, type Metrics } from "@/lib/fitness/store";
 import {
@@ -109,6 +110,10 @@ function getExerciseCue(workout: WorkoutContent) {
   return `Focus: ${target}. Equipment: ${equipment}. Move slow, keep control, and stop if the movement hurts.`;
 }
 
+function getTutorialSearchUrl(workout: WorkoutContent) {
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(`${workout.title} exercise tutorial`)}`;
+}
+
 function getLevel(workout: WorkoutContent) {
   const name = workout.title.toLowerCase();
   const equipment = workout.equipment?.toLowerCase() || "";
@@ -151,14 +156,34 @@ function VisualMedia({ workout, large = false }: { workout: WorkoutContent; larg
   }
 
   if (src) {
-    return <img className={large ? "exerciseMedia large" : "exerciseMedia"} src={src} alt={`${workout.title} demonstration`} loading="lazy" />;
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        className={large ? "exerciseMedia large" : "exerciseMedia"}
+        src={src}
+        alt={`${workout.title} demonstration`}
+        loading="lazy"
+        onError={({ currentTarget }) => {
+          if (currentTarget.src.endsWith("/placeholder.png")) return;
+          currentTarget.src = "/placeholder.png";
+        }}
+      />
+    );
   }
 
   return (
     <div className={large ? "exercisePlaceholder large" : "exercisePlaceholder"}>
-      <span>GIF</span>
-      <b>{workout.title.slice(0, 2).toUpperCase()}</b>
-      <small>Connect ExerciseDB to show live movement demo</small>
+      <span>Demo unavailable</span>
+      <strong>{workout.title}</strong>
+      <small>ExerciseDB returned instructions and muscle data, but no animated demo URL for this exercise.</small>
+      <a
+        className="placeholderLink"
+        href={getTutorialSearchUrl(workout)}
+        target="_blank"
+        rel="noreferrer"
+      >
+        Search tutorial
+      </a>
     </div>
   );
 }
@@ -423,6 +448,10 @@ export default function FitnessPage() {
             ))}
           </select>
         </label>
+
+        <Link href="/fitness/day" className="plannerAction">
+          <strong>Open planner</strong>
+        </Link>
       </section>
 
       <section className="quickStart" aria-label="Quick workout filters">
@@ -694,7 +723,7 @@ export default function FitnessPage() {
 
         .searchPanel {
           display: grid;
-          grid-template-columns: minmax(260px, 1fr) minmax(180px, 240px) minmax(180px, 240px);
+          grid-template-columns: minmax(260px, 1fr) minmax(180px, 240px) minmax(180px, 240px) minmax(180px, 220px);
           gap: 12px;
           padding: 16px;
         }
@@ -728,7 +757,132 @@ export default function FitnessPage() {
           font: inherit;
           font-weight: 750;
         }
+        .plannerAction {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 5px;
+  min-height: 100%;
+  overflow: hidden;
+  border-radius: 26px;
+  padding: 16px 20px;
+  text-decoration: none;
+  color: var(--primary-contrast);
+  background:
+    radial-gradient(
+      circle at 88% 18%,
+      color-mix(in oklab, white 34%, transparent),
+      transparent 26%
+    ),
+    linear-gradient(
+      135deg,
+      color-mix(in oklab, var(--primary) 86%, white 14%),
+      color-mix(in oklab, var(--primary) 88%, black 12%)
+    );
+  border: 1px solid color-mix(in oklab, white 22%, transparent);
+  box-shadow:
+    0 20px 46px color-mix(in oklab, var(--primary) 24%, transparent),
+    inset 0 1px 0 color-mix(in oklab, white 38%, transparent),
+    inset 0 -18px 34px color-mix(in oklab, black 9%, transparent);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    filter 0.18s ease;
+}
 
+.plannerAction::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(
+      120deg,
+      transparent 0%,
+      color-mix(in oklab, white 22%, transparent) 42%,
+      transparent 62%
+    );
+  transform: translateX(-120%);
+  opacity: 0;
+  transition:
+    transform 0.55s ease,
+    opacity 0.2s ease;
+}
+
+.plannerAction::after {
+  content: "→";
+  position: absolute;
+  right: 18px;
+  bottom: 15px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--primary-contrast);
+  background: color-mix(in oklab, black 13%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in oklab, white 26%, transparent);
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1;
+  transition:
+    transform 0.18s ease,
+    background 0.18s ease;
+}
+
+.plannerAction:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.03) saturate(1.04);
+  box-shadow:
+    0 26px 56px color-mix(in oklab, var(--primary) 32%, transparent),
+    inset 0 1px 0 color-mix(in oklab, white 44%, transparent),
+    inset 0 -18px 34px color-mix(in oklab, black 10%, transparent);
+}
+
+.plannerAction:hover::before {
+  transform: translateX(120%);
+  opacity: 1;
+}
+
+.plannerAction:hover::after {
+  transform: translateX(3px);
+  background: color-mix(in oklab, black 18%, transparent);
+}
+
+.plannerAction:active {
+  transform: translateY(0);
+  box-shadow:
+    0 16px 34px color-mix(in oklab, var(--primary) 24%, transparent),
+    inset 0 1px 0 color-mix(in oklab, white 34%, transparent);
+}
+
+.plannerAction:focus-visible {
+  outline: 3px solid color-mix(in oklab, var(--primary) 30%, white 40%);
+  outline-offset: 4px;
+}
+
+.plannerAction span {
+  position: relative;
+  z-index: 1;
+  color: color-mix(in oklab, var(--primary-contrast) 72%, transparent);
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.plannerAction strong {
+  position: relative;
+  z-index: 1;
+  max-width: calc(100% - 42px);
+  font-size: 1.08rem;
+  line-height: 1.05;
+  font-weight: 950;
+  letter-spacing: -0.045em;
+}
         .quickStart {
           display: flex;
           align-items: center;
@@ -810,28 +964,65 @@ export default function FitnessPage() {
         }
 
         .exercisePlaceholder {
-          display: grid;
-          place-items: center;
-          gap: 8px;
-          padding: 20px;
+          display: flex;
+          flex-direction: column;
+          align-items: stretch;
+          justify-content: flex-end;
+          gap: 10px;
+          padding: 72px 0 0;
           text-align: center;
           color: var(--muted);
+          background:
+            linear-gradient(180deg, color-mix(in oklab, var(--bg) 8%, transparent) 0%, color-mix(in oklab, var(--bg) 14%, transparent) 48%, color-mix(in oklab, var(--bg) 88%, transparent) 100%);
         }
 
-        .exercisePlaceholder b {
-          display: grid;
-          place-items: center;
-          width: 76px;
-          height: 76px;
-          border-radius: 26px;
-          background: var(--primary);
-          color: var(--primary-contrast);
-          font-size: 24px;
+        .exercisePlaceholder span,
+        .exercisePlaceholder strong,
+        .exercisePlaceholder small,
+        .placeholderLink {
+          display: block;
+        }
+
+        .exercisePlaceholder span,
+        .exercisePlaceholder strong,
+        .exercisePlaceholder small {
+          margin-inline: auto;
+        }
+
+        .exercisePlaceholder span {
+          padding-top: 18px;
+        }
+
+        .exercisePlaceholder strong {
+          max-width: 240px;
+          color: var(--text);
+          font-size: 1rem;
+          line-height: 1.25;
+          letter-spacing: -0.03em;
         }
 
         .exercisePlaceholder small {
-          max-width: 220px;
+          max-width: 260px;
           line-height: 1.5;
+        }
+        .placeholderLink {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 38px;
+          padding: 0 14px;
+          border-radius: 999px;
+          text-decoration: none;
+          color: var(--primary-contrast);
+          background: var(--primary);
+          font-size: 12px;
+          font-weight: 900;
+          letter-spacing: 0.02em;
+          margin: 0 auto 18px;
+        }
+        .exercisePlaceholder :global(*) {
+          position: relative;
+          z-index: 1;
         }
 
         .levelBadge {

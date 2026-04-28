@@ -10,6 +10,7 @@ type Props = {
   onSearch: (ingredients: string[]) => void | Promise<void>;
   isLoading?: boolean;
   maxIngredients?: number;
+  extraAction?: React.ReactNode;
 };
 
 const COMMON = ["chicken", "rice", "tomato", "onion", "garlic", "eggs", "milk", "pasta", "potato"];
@@ -27,6 +28,7 @@ export default function IngredientSearch({
   onSearch,
   isLoading,
   maxIngredients = DEFAULT_MAX,
+  extraAction,
 }: Props) {
   const canSearch = ingredients.length > 0 && !isLoading;
   const atLimit = ingredients.length >= maxIngredients;
@@ -117,6 +119,8 @@ export default function IngredientSearch({
         >
           {label}
         </button>
+
+        {extraAction}
       </div>
 
       {ingredients.length > 0 ? (
