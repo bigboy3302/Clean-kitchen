@@ -5,7 +5,6 @@ export type ExerciseDbItem = {
   target: string;
   equipment: string;
   gifUrl: string;
-  // New fields returned by current API version
   secondaryMuscles?: string[];
   instructions?: string[];
   description?: string;
@@ -13,10 +12,20 @@ export type ExerciseDbItem = {
   category?: string;
 };
 
+function apiBase() {
+  return process.env.RAPIDAPI_EXERCISE_HOST || "exercisedb.p.rapidapi.com";
+}
+
 function headers() {
-  const key = process.env.RAPIDAPI_EXERCISE_KEY!;
-  const host = process.env.RAPIDAPI_EXERCISE_HOST || "exercisedb.p.rapidapi.com";
-  if (!key) throw new Error("Missing RAPIDAPI_EXERCISE_KEY");
+  const key = process.env.RAPIDAPI_EXERCISE_KEY;
+  const host = apiBase();
+
+  if (!key) {
+    throw new Error(
+      "Missing RAPIDAPI_EXERCISE_KEY. Add it to .env.local to load ExerciseDB GIF workout demos."
+    );
+  }
+
   return {
     "X-RapidAPI-Key": key,
     "X-RapidAPI-Host": host,
@@ -24,12 +33,17 @@ function headers() {
 }
 
 async function fetchJSON<T>(path: string): Promise<T> {
-  const base = `https://${process.env.RAPIDAPI_EXERCISE_HOST || "exercisedb.p.rapidapi.com"}`;
-  const res = await fetch(`${base}${path}`, { headers: headers(), cache: "no-store" });
+  const base = `https://${apiBase()}`;
+  const res = await fetch(`${base}${path}`, {
+    headers: headers(),
+    cache: "no-store",
+  });
+
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
     throw new Error(txt || `exerciseDB-${res.status}`);
   }
+
   return (await res.json()) as T;
 }
 
@@ -56,7 +70,6 @@ export async function fetchExercises(options: {
   let list: ExerciseDbItem[];
 
   if (search) {
-   
     list = await fetchJSON<ExerciseDbItem[]>(`/exercises/name/${encodeURIComponent(search)}`);
   } else if (target) {
     list = await fetchJSON<ExerciseDbItem[]>(`/exercises/target/${encodeURIComponent(target)}`);

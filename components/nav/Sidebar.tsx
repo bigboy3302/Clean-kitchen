@@ -4,7 +4,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
-  ArrowRight,
   Bookmark,
   Boxes,
   Dumbbell,
@@ -17,7 +16,6 @@ import {
   Shield,
   ShieldAlert,
   ScrollText,
-  Sparkles,
   UtensilsCrossed,
   Users,
   X,
@@ -209,20 +207,6 @@ export default function Sidebar({
         </div>
 
         <div className="ck-sidebar-bottom">
-          <Link href="/meal-plan" className="ck-idea-card" onClick={onRequestClose}>
-            <span className="ck-idea-shine" />
-            <Sparkles size={18} className="ck-idea-icon" />
-            <span className="ck-idea-copy">
-              Plan a clean meal
-              <br />
-              in minutes
-            </span>
-            <span className="ck-idea-button">
-              Open idea
-              <ArrowRight size={14} />
-            </span>
-          </Link>
-
           <div className="ck-footer-links">
             {supportLinks.map(({ href, label, Icon, external }) => (
               <Link

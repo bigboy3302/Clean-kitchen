@@ -54,8 +54,8 @@ export default function HomePage() {
             </p>
 
             <div className="landing-actions">
-              <button type="button" className="ck-btn ck-btn-primary" onClick={() => openRegister("/")}>Create account</button>
-              <button type="button" className="ck-btn ck-btn-soft" onClick={() => openLogin("/")}>Sign in</button>
+              <button type="button" className="ck-btn ck-btn-primary" onClick={() => openRegister("/recipes")}>Create account</button>
+              <button type="button" className="ck-btn ck-btn-soft" onClick={() => openLogin("/recipes")}>Sign in</button>
               <Link href="/dashboard" className="ck-btn ck-btn-dark">
                 Explore first <ArrowRight size={16} />
               </Link>

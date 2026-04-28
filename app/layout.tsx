@@ -12,6 +12,7 @@ import AuthModal from "@/components/auth/AuthModal";
 import BackgroundPortal from "@/components/background/BackgroundPortal";
 import { MotionSettingsProvider } from "../components/background/MotionSettingsProvider";
 import { AuthModalProvider } from "@/context/AuthModalContext";
+import { GuestThemeSync } from "@/components/theme/GuestThemeSync";
 export const metadata: Metadata = {
   title: "Clean Kitchen",
   description: "Plan, cook, and enjoy.",
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <ThemeProvider>
               <AuthModalProvider>
                 {/* Wait for auth so client SDK calls don't race before user state is known */}
+                <GuestThemeSync />
                 <AuthGate>
                   <EnsureUserDoc />
                   <AppShell>{children}</AppShell>

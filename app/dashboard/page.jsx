@@ -205,16 +205,19 @@ export default function DashboardPage() {
                   <ChefHat size={22} />
                   <strong>Cook from pantry</strong>
                   <span>Use ingredients you already have.</span>
+                  <div className="next-action-btn">Open recipes <ArrowRight size={13} /></div>
                 </Link>
                 <Link href="/meal-plan" className="next-action">
                   <CalendarDays size={22} />
                   <strong>Build this week</strong>
                   <span>Plan meals before shopping.</span>
+                  <div className="next-action-btn">Open plan <ArrowRight size={13} /></div>
                 </Link>
                 <Link href="/fitness" className="next-action">
                   <Flame size={22} />
                   <strong>Match your goals</strong>
                   <span>Keep food and training connected.</span>
+                  <div className="next-action-btn">Open training <ArrowRight size={13} /></div>
                 </Link>
               </div>
             </article>
@@ -237,7 +240,10 @@ export default function DashboardPage() {
                         <strong>{post.title || post.recipeTitle || post.authorName || "Community post"}</strong>
                         <p>{post.content || post.caption || post.body || "Someone shared a new kitchen idea."}</p>
                       </div>
-                      <small>{timeAgo(post.createdAt)}</small>
+                      <div className="post-mini-right">
+                        <small>{timeAgo(post.createdAt)}</small>
+                        <span className="post-mini-arrow"><ArrowRight size={14} /></span>
+                      </div>
                     </Link>
                   ))}
                 </div>
@@ -354,20 +360,23 @@ export default function DashboardPage() {
         .view-link:hover { color: var(--ck-accent); text-decoration: none; }
 
         .next-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-        .next-action { display: grid; gap: 9px; min-height: 156px; align-content: end; padding: 18px; border-radius: 22px; text-decoration: none; color: var(--text); background: color-mix(in oklab, var(--bg-raised) 78%, var(--ck-accent) 22%); }
-        .next-action:hover { transform: translateY(-2px); text-decoration: none; }
+        .next-action { display: grid; gap: 9px; min-height: 170px; align-content: end; padding: 18px; border-radius: 22px; text-decoration: none; color: var(--text); background: color-mix(in oklab, var(--bg-raised) 78%, var(--ck-accent) 22%); border: 1px solid transparent; transition: transform .15s, border-color .15s, box-shadow .15s; }
+        .next-action:hover { transform: translateY(-3px); text-decoration: none; border-color: color-mix(in oklab, var(--ck-accent) 40%, transparent); box-shadow: 0 12px 28px rgba(0,0,0,.10); }
         .next-action :global(svg) { color: var(--ck-accent); }
         .next-action strong { font-size: 18px; line-height: 1.1; letter-spacing: -.045em; }
-        .next-action span { color: var(--muted); font-size: 13px; font-weight: 650; }
+        .next-action > span { color: var(--muted); font-size: 13px; font-weight: 650; }
+        .next-action-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; background: var(--ck-accent); color: var(--ck-accent-contrast, #061006); font-size: 12px; font-weight: 800; width: fit-content; margin-top: 4px; }
 
         .post-list, .expiry-list { display: grid; gap: 10px; }
-        .post-mini, .expiry-item { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 18px; color: var(--text); text-decoration: none; background: color-mix(in oklab, var(--bg-raised) 76%, transparent); }
-        .post-mini:hover, .expiry-item:hover { background: color-mix(in oklab, var(--ck-accent) 10%, var(--bg-raised)); text-decoration: none; }
-        .post-mini > span { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 999px; background: color-mix(in oklab, var(--ck-accent) 13%, transparent); color: var(--ck-accent); flex-shrink: 0; }
+        .post-mini, .expiry-item { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 18px; color: var(--text); text-decoration: none; background: color-mix(in oklab, var(--bg-raised) 76%, transparent); border: 1px solid transparent; transition: background .15s, border-color .15s; }
+        .post-mini:hover, .expiry-item:hover { background: color-mix(in oklab, var(--ck-accent) 10%, var(--bg-raised)); border-color: color-mix(in oklab, var(--ck-accent) 30%, transparent); text-decoration: none; }
+        .post-mini > span:first-child { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 999px; background: color-mix(in oklab, var(--ck-accent) 13%, transparent); color: var(--ck-accent); flex-shrink: 0; }
         .post-mini div { min-width: 0; flex: 1; }
         .post-mini strong { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
         .post-mini p { margin: 2px 0 0; color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-        .post-mini small { color: var(--muted); font-weight: 750; flex-shrink: 0; }
+        .post-mini-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+        .post-mini-right small { color: var(--muted); font-weight: 750; white-space: nowrap; }
+        .post-mini-arrow { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: color-mix(in oklab, var(--ck-accent) 14%, transparent); color: var(--ck-accent); }
 
         .pantry-card p { margin: 0 0 18px; color: var(--muted); line-height: 1.7; }
         .expiry-item { justify-content: space-between; }

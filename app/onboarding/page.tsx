@@ -210,7 +210,7 @@ export default function OnboardingPage() {
         // ignore storage issues
       }
 
-      router.replace("/dashboard");
+      router.replace("/recipes");
     } catch (error) {
       setErr(getErrorMessage(error, "Failed to save profile."));
     } finally {

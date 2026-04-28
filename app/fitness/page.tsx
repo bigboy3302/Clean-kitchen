@@ -2,7 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Container from "@/components/Container";
-import { addExerciseToToday } from "@/lib/fitness/store";
+import { addExerciseToToday, getMetrics, saveMetrics, type Metrics } from "@/lib/fitness/store";
+import {
+  type Activity,
+  type Goal,
+  mifflinStJeor,
+  tdee,
+  targetCalories,
+  macroTargets,
+} from "@/lib/fitness/calc";
 
 type WorkoutMediaType = "gif" | "mp4" | "image";
 
@@ -36,6 +44,38 @@ type QuickFilter = {
   label: string;
   bodyPart?: string;
   q?: string;
+};
+
+type FitnessForm = {
+  sex: "male" | "female";
+  age: number | "";
+  heightCm: number | "";
+  weightKg: number | "";
+  activity: Activity;
+  goal: Goal;
+};
+
+const DEFAULT_FORM: FitnessForm = {
+  sex: "male",
+  age: 24,
+  heightCm: 178,
+  weightKg: 75,
+  activity: "moderate",
+  goal: "maintain",
+};
+
+const ACTIVITY_LABELS: Record<Activity, string> = {
+  sedentary: "Little movement",
+  light: "Light training",
+  moderate: "3–5 workouts/week",
+  active: "Hard training",
+  veryActive: "Athlete level",
+};
+
+const GOAL_LABELS: Record<Goal, string> = {
+  cut: "Lose fat",
+  maintain: "Maintain",
+  bulk: "Build muscle",
 };
 
 const QUICK_FILTERS: QuickFilter[] = [
@@ -77,6 +117,20 @@ function getLevel(workout: WorkoutContent) {
   return "Intermediate";
 }
 
+function getBmiCategory(bmi: number) {
+  if (!bmi) return { label: "Add stats", tone: "neutral", message: "Enter height and weight to calculate BMI." };
+  if (bmi < 18.5) return { label: "Underweight", tone: "caution", message: "You may need a careful calorie surplus and strength plan." };
+  if (bmi < 25) return { label: "Healthy range", tone: "good", message: "Good range. Choose a calorie target based on your goal." };
+  if (bmi < 30) return { label: "Overweight", tone: "caution", message: "A small calorie deficit can support steady fat loss." };
+  return { label: "Higher range", tone: "caution", message: "Start gradually and consider professional guidance if needed." };
+}
+
+function safeNumber(value: string): number | "" {
+  if (value === "") return "";
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : "";
+}
+
 function buildUrl(query: string, bodyPart: string, equipment: string, offset = 0) {
   const params = new URLSearchParams();
   if (query.trim()) params.set("q", query.trim());
@@ -87,27 +141,24 @@ function buildUrl(query: string, bodyPart: string, equipment: string, offset = 0
   return `/api/workouts/search?${params.toString()}`;
 }
 
-const BODY_PART_STYLE: Record<string, { bg: string; emoji: string }> = {
-  chest:       { bg: "linear-gradient(135deg,#e8d5f5,#c4a8e8)", emoji: "💪" },
-  back:        { bg: "linear-gradient(135deg,#d5ecd9,#88c49a)", emoji: "🏋️" },
-  "upper legs":{ bg: "linear-gradient(135deg,#fde8cc,#f5c88a)", emoji: "🦵" },
-  "lower legs":{ bg: "linear-gradient(135deg,#fde8cc,#e8b06a)", emoji: "🦵" },
-  shoulders:   { bg: "linear-gradient(135deg,#cce8f5,#8ac8e8)", emoji: "🤸" },
-  "upper arms":{ bg: "linear-gradient(135deg,#fde0d5,#f5a898)", emoji: "💪" },
-  "lower arms":{ bg: "linear-gradient(135deg,#fde0d5,#e89078)", emoji: "🤜" },
-  waist:       { bg: "linear-gradient(135deg,#f5f0cc,#e8d878)", emoji: "🧘" },
-  cardio:      { bg: "linear-gradient(135deg,#ffd5d5,#f58a8a)", emoji: "🏃" },
-};
+function VisualMedia({ workout, large = false }: { workout: WorkoutContent; large?: boolean }) {
+  const src = workout.mediaUrl || workout.previewUrl || workout.thumbnailUrl || null;
 
-function ExerciseVisual({ workout, large = false }: { workout: WorkoutContent; large?: boolean }) {
-  const part = (workout.bodyPart || "").toLowerCase();
-  const style = BODY_PART_STYLE[part] ?? { bg: "linear-gradient(135deg,#e8ecd5,#bcc8a0)", emoji: "🏅" };
-  const cls = large ? "exerciseVisual large" : "exerciseVisual";
+  if (src && workout.mediaType === "mp4") {
+    return (
+      <video className={large ? "exerciseMedia large" : "exerciseMedia"} src={src} muted loop playsInline controls={large} autoPlay={!large} />
+    );
+  }
+
+  if (src) {
+    return <img className={large ? "exerciseMedia large" : "exerciseMedia"} src={src} alt={`${workout.title} demonstration`} loading="lazy" />;
+  }
+
   return (
-    <div className={cls} style={{ background: style.bg }}>
-      <span className="exerciseEmoji" aria-hidden>{style.emoji}</span>
-      <span className="exerciseBodyLabel">{titleCase(workout.bodyPart)}</span>
-      <span className="exerciseTargetLabel">{titleCase(workout.target)}</span>
+    <div className={large ? "exercisePlaceholder large" : "exercisePlaceholder"}>
+      <span>GIF</span>
+      <b>{workout.title.slice(0, 2).toUpperCase()}</b>
+      <small>Connect ExerciseDB to show live movement demo</small>
     </div>
   );
 }
@@ -123,6 +174,31 @@ export default function FitnessPage() {
   const [nextOffset, setNextOffset] = useState<number | null>(null);
   const [activeWorkout, setActiveWorkout] = useState<WorkoutContent | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [metricsOpen, setMetricsOpen] = useState(false);
+  const [metricsSaving, setMetricsSaving] = useState(false);
+  const [fitnessForm, setFitnessForm] = useState<FitnessForm>(DEFAULT_FORM);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadMetrics() {
+      const metrics = await getMetrics();
+      if (!alive || !metrics) return;
+      setFitnessForm({
+        sex: (metrics.sex ?? DEFAULT_FORM.sex) as FitnessForm["sex"],
+        age: typeof metrics.age === "number" ? metrics.age : DEFAULT_FORM.age,
+        heightCm: typeof metrics.heightCm === "number" ? metrics.heightCm : DEFAULT_FORM.heightCm,
+        weightKg: typeof metrics.weightKg === "number" ? metrics.weightKg : DEFAULT_FORM.weightKg,
+        activity: (metrics.activity ?? DEFAULT_FORM.activity) as Activity,
+        goal: (metrics.goal ?? DEFAULT_FORM.goal) as Goal,
+      });
+    }
+
+    void loadMetrics();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     const id = window.setTimeout(() => setDebouncedQuery(query), 350);
@@ -167,6 +243,52 @@ export default function FitnessPage() {
     const withGif = items.filter((item) => item.mediaUrl || item.previewUrl).length;
     return { visible, withGif };
   }, [items]);
+
+  const numbersReady = fitnessForm.age !== "" && fitnessForm.heightCm !== "" && fitnessForm.weightKg !== "";
+
+  const bmi = useMemo(() => {
+    if (!fitnessForm.heightCm || !fitnessForm.weightKg) return 0;
+    const heightM = Number(fitnessForm.heightCm) / 100;
+    return Number((Number(fitnessForm.weightKg) / (heightM * heightM)).toFixed(1));
+  }, [fitnessForm.heightCm, fitnessForm.weightKg]);
+
+  const bmiInfo = useMemo(() => getBmiCategory(bmi), [bmi]);
+
+  const bmr = useMemo(() => {
+    if (!numbersReady) return 0;
+    return mifflinStJeor(fitnessForm.sex, Number(fitnessForm.age), Number(fitnessForm.heightCm), Number(fitnessForm.weightKg));
+  }, [fitnessForm, numbersReady]);
+
+  const maintenanceCalories = useMemo(() => (bmr ? tdee(bmr, fitnessForm.activity) : 0), [bmr, fitnessForm.activity]);
+  const calorieTarget = useMemo(() => (maintenanceCalories ? targetCalories(maintenanceCalories, fitnessForm.goal) : 0), [maintenanceCalories, fitnessForm.goal]);
+  const macros = useMemo(
+    () => calorieTarget ? macroTargets(Number(fitnessForm.weightKg || 0), fitnessForm.goal, calorieTarget) : { calories: 0, proteinG: 0, fatG: 0, carbsG: 0 },
+    [calorieTarget, fitnessForm.goal, fitnessForm.weightKg]
+  );
+
+  function updateFitnessForm<K extends keyof FitnessForm>(key: K, value: FitnessForm[K]) {
+    setFitnessForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function saveFitnessMetrics(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMetricsSaving(true);
+    try {
+      const payload: Metrics = {
+        sex: fitnessForm.sex,
+        age: Number(fitnessForm.age) || 0,
+        heightCm: Number(fitnessForm.heightCm) || 0,
+        weightKg: Number(fitnessForm.weightKg) || 0,
+        activity: fitnessForm.activity,
+        goal: fitnessForm.goal,
+      };
+      await saveMetrics(payload);
+      setMetricsOpen(false);
+      setToast("Fitness profile updated");
+    } finally {
+      setMetricsSaving(false);
+    }
+  }
 
   async function loadMore() {
     if (nextOffset === null || loading) return;
@@ -236,6 +358,42 @@ export default function FitnessPage() {
         </div>
       </section>
 
+      <section className="nutritionPlanner" aria-label="BMI and nutrition targets">
+        <div className="nutritionMain">
+          <div className="nutritionHeading">
+            <p className="pageEyebrow">BMI + calories</p>
+            <h2>Know what to eat for your goal.</h2>
+            <p>Update your body stats once, then Clean Kitchen shows your BMI, maintenance calories, goal calories, and simple macro targets.</p>
+          </div>
+
+          <div className={`bmiCard ${bmiInfo.tone}`}>
+            <span>BMI</span>
+            <strong>{bmi ? bmi : "—"}</strong>
+            <b>{bmiInfo.label}</b>
+            <small>{bmiInfo.message}</small>
+          </div>
+        </div>
+
+        <div className="nutritionStats">
+          <div className="nutritionStat highlight">
+            <span>Eat around</span>
+            <strong>{macros.calories ? `${macros.calories}` : "—"}</strong>
+            <small>kcal/day for {GOAL_LABELS[fitnessForm.goal].toLowerCase()}</small>
+          </div>
+          <div className="nutritionStat"><span>Maintenance</span><strong>{maintenanceCalories || "—"}</strong><small>kcal/day</small></div>
+          <div className="nutritionStat"><span>Protein</span><strong>{macros.proteinG || "—"}</strong><small>grams/day</small></div>
+          <div className="nutritionStat"><span>Carbs</span><strong>{macros.carbsG || "—"}</strong><small>grams/day</small></div>
+          <div className="nutritionStat"><span>Fat</span><strong>{macros.fatG || "—"}</strong><small>grams/day</small></div>
+        </div>
+
+        <div className="nutritionActions">
+          <button type="button" className="primaryAction" onClick={() => setMetricsOpen(true)}>
+            {numbersReady ? "Edit BMI profile" : "Set up BMI profile"}
+          </button>
+          <p>Current profile: {fitnessForm.age || "—"} yrs · {fitnessForm.heightCm || "—"} cm · {fitnessForm.weightKg || "—"} kg · {ACTIVITY_LABELS[fitnessForm.activity]}</p>
+        </div>
+      </section>
+
       <section className="searchPanel" aria-label="Find workouts">
         <label className="searchBox">
           <span>Search workout</span>
@@ -292,7 +450,7 @@ export default function FitnessPage() {
           : items.map((workout) => (
               <article key={workout.id} className="workoutCard">
                 <div className="mediaWrap">
-                  <ExerciseVisual workout={workout} />
+                  <VisualMedia workout={workout} />
                   <span className="levelBadge">{getLevel(workout)}</span>
                 </div>
 
@@ -340,6 +498,42 @@ export default function FitnessPage() {
         </div>
       ) : null}
 
+      {metricsOpen ? (
+        <div className="detailOverlay" role="dialog" aria-modal="true" aria-label="Edit BMI and calorie profile" onClick={() => setMetricsOpen(false)}>
+          <article className="metricsModal" onClick={(event) => event.stopPropagation()}>
+            <div className="metricsPreview">
+              <p className="pageEyebrow">Your numbers</p>
+              <h2>{bmi ? bmi : "—"}</h2>
+              <p>BMI · {bmiInfo.label}</p>
+              <div className="previewCalories"><span>Goal calories</span><strong>{macros.calories ? `${macros.calories} kcal` : "Add stats"}</strong></div>
+            </div>
+
+            <form className="metricsForm" onSubmit={saveFitnessMetrics}>
+              <div className="modalTitleRow">
+                <div><p className="pageEyebrow">BMI profile</p><h2>Update your stats</h2></div>
+                <button type="button" className="closeModal" onClick={() => setMetricsOpen(false)}>Close</button>
+              </div>
+
+              <fieldset><legend>Sex</legend><div className="metricChips">{(["male", "female"] as const).map((option) => <button key={option} type="button" className={fitnessForm.sex === option ? "metricChip active" : "metricChip"} onClick={() => updateFitnessForm("sex", option)}>{titleCase(option)}</button>)}</div></fieldset>
+
+              <div className="formGrid">
+                <label><span>Age</span><input type="number" inputMode="numeric" value={fitnessForm.age} onChange={(event) => updateFitnessForm("age", safeNumber(event.target.value))} placeholder="24" /></label>
+                <label><span>Height (cm)</span><input type="number" inputMode="decimal" value={fitnessForm.heightCm} onChange={(event) => updateFitnessForm("heightCm", safeNumber(event.target.value))} placeholder="178" /></label>
+                <label><span>Weight (kg)</span><input type="number" inputMode="decimal" value={fitnessForm.weightKg} onChange={(event) => updateFitnessForm("weightKg", safeNumber(event.target.value))} placeholder="75" /></label>
+              </div>
+
+              <label><span>Activity level</span><select value={fitnessForm.activity} onChange={(event) => updateFitnessForm("activity", event.target.value as Activity)}>{Object.entries(ACTIVITY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+
+              <fieldset><legend>Goal</legend><div className="metricChips">{(["cut", "maintain", "bulk"] as const).map((option) => <button key={option} type="button" className={fitnessForm.goal === option ? "metricChip active" : "metricChip"} onClick={() => updateFitnessForm("goal", option)}>{GOAL_LABELS[option]}</button>)}</div></fieldset>
+
+              <div className="modalMacroGrid"><span><b>{macros.proteinG || "—"}g</b> Protein</span><span><b>{macros.carbsG || "—"}g</b> Carbs</span><span><b>{macros.fatG || "—"}g</b> Fat</span></div>
+
+              <button type="submit" className="primaryAction wide" disabled={metricsSaving}>{metricsSaving ? "Saving..." : "Save BMI profile"}</button>
+            </form>
+          </article>
+        </div>
+      ) : null}
+
       {activeWorkout ? (
         <div className="detailOverlay" role="dialog" aria-modal="true" aria-label={`${activeWorkout.title} workout demo`} onClick={() => setActiveWorkout(null)}>
           <article className="detailModal" onClick={(event) => event.stopPropagation()}>
@@ -348,7 +542,7 @@ export default function FitnessPage() {
             </button>
 
             <div className="detailMedia">
-              <ExerciseVisual workout={activeWorkout} large />
+              <VisualMedia workout={activeWorkout} large />
             </div>
 
             <div className="detailContent">
@@ -397,6 +591,7 @@ export default function FitnessPage() {
         }
 
         .fitnessHero,
+        .nutritionPlanner,
         .searchPanel,
         .quickStart,
         .emptyState {
@@ -474,6 +669,28 @@ export default function FitnessPage() {
           text-transform: uppercase;
           letter-spacing: 0.08em;
         }
+
+        .nutritionPlanner {
+          display: grid;
+          gap: 18px;
+          padding: clamp(20px, 2.4vw, 30px);
+        }
+        .nutritionMain { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 240px); gap: 18px; align-items: stretch; }
+        .nutritionHeading h2 { margin: 0; font-size: clamp(1.9rem, 3vw, 3.4rem); line-height: 0.95; letter-spacing: -0.075em; }
+        .nutritionHeading p:not(.pageEyebrow) { margin: 14px 0 0; max-width: 680px; color: var(--muted); line-height: 1.7; }
+        .bmiCard { display: grid; align-content: center; min-height: 190px; border-radius: 28px; padding: 22px; background: radial-gradient(circle at 100% 0%, color-mix(in oklab, var(--primary) 30%, transparent), transparent 36%), color-mix(in oklab, var(--bg) 78%, transparent); border: 1px solid color-mix(in oklab, var(--border) 60%, transparent); }
+        .bmiCard span, .nutritionStat span { color: var(--muted); font-size: 11px; font-weight: 950; text-transform: uppercase; letter-spacing: 0.12em; }
+        .bmiCard strong { margin-top: 8px; font-size: 64px; line-height: 0.9; letter-spacing: -0.08em; }
+        .bmiCard b { margin-top: 8px; color: var(--primary); }
+        .bmiCard small { margin-top: 8px; color: var(--muted); line-height: 1.45; }
+        .nutritionStats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+        .nutritionStat { display: grid; gap: 6px; border-radius: 22px; padding: 16px; background: color-mix(in oklab, var(--bg) 72%, transparent); border: 1px solid color-mix(in oklab, var(--border) 60%, transparent); }
+        .nutritionStat.highlight { background: var(--primary); color: var(--primary-contrast); border-color: transparent; }
+        .nutritionStat.highlight span, .nutritionStat.highlight small { color: color-mix(in oklab, var(--primary-contrast) 78%, transparent); }
+        .nutritionStat strong { font-size: 28px; line-height: 1; letter-spacing: -0.06em; }
+        .nutritionStat small { color: var(--muted); font-size: 12px; font-weight: 750; }
+        .nutritionActions { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+        .nutritionActions p { margin: 0; color: var(--muted); font-size: 0.92rem; }
 
         .searchPanel {
           display: grid;
@@ -584,34 +801,37 @@ export default function FitnessPage() {
             color-mix(in oklab, var(--bg) 82%, #111 18%);
         }
 
-        .exerciseVisual {
+        .exerciseMedia,
+        .exercisePlaceholder {
           width: 100%;
           height: 100%;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-          border-radius: inherit;
+          object-fit: contain;
+          display: block;
         }
 
-        .exerciseEmoji {
-          font-size: 52px;
-          line-height: 1;
-          filter: drop-shadow(0 4px 12px rgba(0,0,0,0.12));
+        .exercisePlaceholder {
+          display: grid;
+          place-items: center;
+          gap: 8px;
+          padding: 20px;
+          text-align: center;
+          color: var(--muted);
         }
 
-        .exerciseBodyLabel {
-          font-size: 13px;
-          font-weight: 800;
-          color: rgba(23,25,21,0.75);
-          letter-spacing: -0.02em;
+        .exercisePlaceholder b {
+          display: grid;
+          place-items: center;
+          width: 76px;
+          height: 76px;
+          border-radius: 26px;
+          background: var(--primary);
+          color: var(--primary-contrast);
+          font-size: 24px;
         }
 
-        .exerciseTargetLabel {
-          font-size: 11px;
-          font-weight: 600;
-          color: rgba(23,25,21,0.5);
+        .exercisePlaceholder small {
+          max-width: 220px;
+          line-height: 1.5;
         }
 
         .levelBadge {
@@ -759,6 +979,28 @@ export default function FitnessPage() {
           cursor: default;
         }
 
+        .metricsModal { width: min(980px, 100%); max-height: 92dvh; overflow: auto; display: grid; grid-template-columns: minmax(260px, 0.8fr) minmax(320px, 1.2fr); border-radius: 34px; background: var(--bg-raised); color: var(--text); box-shadow: 0 36px 120px rgba(0, 0, 0, 0.34); }
+        .metricsPreview { padding: 42px; background: radial-gradient(circle at 70% 0%, color-mix(in oklab, var(--primary) 28%, transparent), transparent 36%), color-mix(in oklab, var(--bg) 74%, #111 8%); display: grid; align-content: center; }
+        .metricsPreview h2 { margin: 0; font-size: clamp(4rem, 10vw, 7rem); line-height: 0.85; letter-spacing: -0.09em; }
+        .metricsPreview p:not(.pageEyebrow) { margin: 14px 0 0; color: var(--muted); font-weight: 900; }
+        .previewCalories { margin-top: 32px; display: grid; gap: 8px; border-radius: 24px; padding: 18px; background: color-mix(in oklab, var(--bg-raised) 82%, transparent); }
+        .previewCalories span { color: var(--muted); font-size: 11px; font-weight: 950; text-transform: uppercase; letter-spacing: 0.12em; }
+        .previewCalories strong { font-size: 1.6rem; letter-spacing: -0.06em; }
+        .metricsForm { display: grid; gap: 18px; padding: 38px; }
+        .modalTitleRow { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+        .modalTitleRow h2 { margin: 0; font-size: clamp(2rem, 4vw, 3.4rem); line-height: 0.95; letter-spacing: -0.08em; }
+        .metricsForm fieldset, .metricsForm label { border: 0; padding: 0; margin: 0; display: grid; gap: 9px; }
+        .metricsForm legend, .metricsForm label span { color: var(--muted); font-size: 11px; font-weight: 950; text-transform: uppercase; letter-spacing: 0.12em; }
+        .formGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        .metricsForm input, .metricsForm select { width: 100%; border: 1px solid color-mix(in oklab, var(--border) 65%, transparent); border-radius: 16px; padding: 13px 14px; background: color-mix(in oklab, var(--bg) 72%, transparent); color: var(--text); font: inherit; font-weight: 800; outline: none; }
+        .metricsForm input:focus, .metricsForm select:focus { border-color: color-mix(in oklab, var(--primary) 70%, transparent); box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 14%, transparent); }
+        .metricChips { display: flex; flex-wrap: wrap; gap: 8px; }
+        .metricChip { border: 1px solid color-mix(in oklab, var(--border) 65%, transparent); border-radius: 999px; padding: 10px 14px; color: var(--text); background: color-mix(in oklab, var(--bg) 72%, transparent); font: inherit; font-weight: 900; cursor: pointer; }
+        .metricChip.active { color: var(--primary-contrast); background: var(--primary); border-color: transparent; }
+        .modalMacroGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .modalMacroGrid span { display: grid; gap: 4px; border-radius: 18px; padding: 14px; background: color-mix(in oklab, var(--bg) 72%, transparent); color: var(--muted); font-size: 12px; font-weight: 800; }
+        .modalMacroGrid b { color: var(--text); font-size: 1.2rem; }
+
         .detailOverlay {
           position: fixed;
           inset: 0;
@@ -802,20 +1044,10 @@ export default function FitnessPage() {
             color-mix(in oklab, var(--bg) 84%, #111 16%);
         }
 
-        .exerciseVisual.large {
+        .exerciseMedia.large,
+        .exercisePlaceholder.large {
           border-radius: 24px;
-        }
-
-        .exerciseVisual.large .exerciseEmoji {
-          font-size: 96px;
-        }
-
-        .exerciseVisual.large .exerciseBodyLabel {
-          font-size: 18px;
-        }
-
-        .exerciseVisual.large .exerciseTargetLabel {
-          font-size: 14px;
+          background: color-mix(in oklab, var(--bg) 82%, #111 18%);
         }
 
         .detailContent {
@@ -900,14 +1132,15 @@ export default function FitnessPage() {
 
         @media (max-width: 1120px) {
           .fitnessHero,
+          .nutritionMain,
           .searchPanel,
           .quickStart,
-          .detailModal {
+          .detailModal,
+          .metricsModal {
             grid-template-columns: 1fr;
           }
-          .heroStats {
-            width: 100%;
-          }
+          .heroStats { width: 100%; }
+          .nutritionStats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
           .workoutGrid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
@@ -922,7 +1155,10 @@ export default function FitnessPage() {
           }
           .workoutGrid,
           .heroStats,
-          .detailFacts {
+          .nutritionStats,
+          .detailFacts,
+          .formGrid,
+          .modalMacroGrid {
             grid-template-columns: 1fr;
           }
           .quickStart {
