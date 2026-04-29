@@ -382,7 +382,7 @@ export default function FitnessPage() {
           </div>
         </div>
       </section>
-
+<br/>
       <section className="nutritionPlanner" aria-label="BMI and nutrition targets">
         <div className="nutritionMain">
           <div className="nutritionHeading">
@@ -418,7 +418,7 @@ export default function FitnessPage() {
           <p>Current profile: {fitnessForm.age || "—"} yrs · {fitnessForm.heightCm || "—"} cm · {fitnessForm.weightKg || "—"} kg · {ACTIVITY_LABELS[fitnessForm.activity]}</p>
         </div>
       </section>
-
+<br />
       <section className="searchPanel" aria-label="Find workouts">
         <label className="searchBox">
           <span>Search workout</span>
@@ -453,7 +453,7 @@ export default function FitnessPage() {
           <strong>Open planner</strong>
         </Link>
       </section>
-
+<br />
       <section className="quickStart" aria-label="Quick workout filters">
         <div>
           <p className="sectionLabel">Start simple</p>
@@ -470,7 +470,7 @@ export default function FitnessPage() {
           })}
         </div>
       </section>
-
+<br/>
       {error ? <div className="errorBox">{error}</div> : null}
 
       <section className="workoutGrid" aria-live="polite">

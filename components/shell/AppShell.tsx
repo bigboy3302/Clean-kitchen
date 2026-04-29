@@ -118,7 +118,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
           .shell-footer {
             padding: 14px 16px 16px;
-            gap: 12px;
+            gap: 100px;
             font-size: 11.5px;
           }
         }
