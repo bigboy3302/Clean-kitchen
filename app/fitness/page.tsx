@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Container from "@/components/Container";
 import { addExerciseToToday, getMetrics, saveMetrics, type Metrics } from "@/lib/fitness/store";
@@ -110,9 +110,6 @@ function getExerciseCue(workout: WorkoutContent) {
   return `Focus: ${target}. Equipment: ${equipment}. Move slow, keep control, and stop if the movement hurts.`;
 }
 
-function getTutorialSearchUrl(workout: WorkoutContent) {
-  return `https://www.youtube.com/results?search_query=${encodeURIComponent(`${workout.title} exercise tutorial`)}`;
-}
 
 function getLevel(workout: WorkoutContent) {
   const name = workout.title.toLowerCase();
@@ -147,20 +144,51 @@ function buildUrl(query: string, bodyPart: string, equipment: string, offset = 0
 }
 
 function VisualMedia({ workout, large = false }: { workout: WorkoutContent; large?: boolean }) {
-  const src = workout.mediaUrl || workout.previewUrl || workout.thumbnailUrl || null;
+  const src0 = workout.mediaUrl || workout.previewUrl || null;
+  const src1 = workout.thumbnailUrl && workout.thumbnailUrl !== src0 ? workout.thumbnailUrl : null;
+  const [frame, setFrame] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  if (src && workout.mediaType === "mp4") {
+  useEffect(() => {
+    if (!src0 || !src1) return;
+    timerRef.current = setInterval(() => setFrame((f) => (f === 0 ? 1 : 0)), large ? 1200 : 1600);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [src0, src1, large]);
+
+  const activeSrc = src1 && frame === 1 ? src1 : src0;
+
+  if (activeSrc && workout.mediaType === "mp4") {
     return (
-      <video className={large ? "exerciseMedia large" : "exerciseMedia"} src={src} muted loop playsInline controls={large} autoPlay={!large} />
+      <video className={large ? "exerciseMedia large" : "exerciseMedia"} src={activeSrc} muted loop playsInline controls={large} autoPlay={!large} />
     );
   }
 
-  if (src) {
+  if (activeSrc && large) {
+    return (
+      <div className="imgFrame">
+        {/* blurred backdrop fills any empty space around portrait/square images */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className="imgBg" src={activeSrc} alt="" aria-hidden />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          className="exerciseMedia large"
+          src={activeSrc}
+          alt={`${workout.title} demonstration`}
+          onError={({ currentTarget }) => {
+            if (currentTarget.src.endsWith("/placeholder.png")) return;
+            currentTarget.src = "/placeholder.png";
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (activeSrc) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        className={large ? "exerciseMedia large" : "exerciseMedia"}
-        src={src}
+        className="exerciseMedia"
+        src={activeSrc}
         alt={`${workout.title} demonstration`}
         loading="lazy"
         onError={({ currentTarget }) => {
@@ -173,17 +201,7 @@ function VisualMedia({ workout, large = false }: { workout: WorkoutContent; larg
 
   return (
     <div className={large ? "exercisePlaceholder large" : "exercisePlaceholder"}>
-      <span>Demo unavailable</span>
-      <strong>{workout.title}</strong>
-      <small>ExerciseDB returned instructions and muscle data, but no animated demo URL for this exercise.</small>
-      <a
-        className="placeholderLink"
-        href={getTutorialSearchUrl(workout)}
-        target="_blank"
-        rel="noreferrer"
-      >
-        Search tutorial
-      </a>
+      <span>{workout.title.charAt(0).toUpperCase()}</span>
     </div>
   );
 }
@@ -566,40 +584,39 @@ export default function FitnessPage() {
       {activeWorkout ? (
         <div className="detailOverlay" role="dialog" aria-modal="true" aria-label={`${activeWorkout.title} workout demo`} onClick={() => setActiveWorkout(null)}>
           <article className="detailModal" onClick={(event) => event.stopPropagation()}>
-            <button type="button" className="closeModal" onClick={() => setActiveWorkout(null)}>
-              Close
-            </button>
+            <button type="button" className="closeModal" onClick={() => setActiveWorkout(null)} aria-label="Close">✕</button>
 
             <div className="detailMedia">
               <VisualMedia workout={activeWorkout} large />
             </div>
 
             <div className="detailContent">
-              <p className="pageEyebrow">Exercise demo</p>
-              <h2>{activeWorkout.title}</h2>
-              <p className="detailDescription">{activeWorkout.description || getExerciseCue(activeWorkout)}</p>
-
-              <div className="detailFacts">
-                <span><b>Body</b>{titleCase(activeWorkout.bodyPart)}</span>
-                <span><b>Muscle</b>{titleCase(activeWorkout.target)}</span>
-                <span><b>Equipment</b>{titleCase(activeWorkout.equipment || "body weight")}</span>
-              </div>
-
-              <div className="coachBox">
-                <h3>How to use this workout</h3>
-                <ol>
-                  <li>Watch the visual demo first so you understand the movement path.</li>
-                  <li>Start with light weight or bodyweight and keep every rep controlled.</li>
-                  <li>Use 2–4 sets of 8–12 reps for strength, or 30–45 seconds for cardio/core.</li>
-                </ol>
-              </div>
-
-              {stripHtml(activeWorkout.instructionsHtml) ? (
-                <div className="instructionsBox">
-                  <h3>Extra instructions</h3>
-                  <p>{stripHtml(activeWorkout.instructionsHtml)}</p>
+              <div className="detailHeader">
+                <div className="detailChips">
+                  {activeWorkout.bodyPart ? <span className="chip chipBody">{titleCase(activeWorkout.bodyPart)}</span> : null}
+                  {activeWorkout.target && activeWorkout.target !== activeWorkout.bodyPart ? <span className="chip chipMuscle">{titleCase(activeWorkout.target)}</span> : null}
+                  {activeWorkout.equipment ? <span className="chip chipEquip">{titleCase(activeWorkout.equipment)}</span> : null}
                 </div>
-              ) : null}
+                <h2>{activeWorkout.title}</h2>
+                {activeWorkout.description ? (
+                  <p className="detailDescription">{activeWorkout.description}</p>
+                ) : null}
+              </div>
+
+              {activeWorkout.instructionsHtml ? (
+                <div className="stepsBox">
+                  <p className="stepsLabel">How to perform</p>
+                  <div
+                    className="stepsList"
+                    dangerouslySetInnerHTML={{ __html: activeWorkout.instructionsHtml }}
+                  />
+                </div>
+              ) : (
+                <div className="stepsBox">
+                  <p className="stepsLabel">How to perform</p>
+                  <p className="detailDescription">{getExerciseCue(activeWorkout)}</p>
+                </div>
+              )}
 
               <button type="button" className="primaryAction wide" onClick={() => void addToToday(activeWorkout)}>
                 Add to today&apos;s planner
@@ -1198,115 +1215,192 @@ export default function FitnessPage() {
           z-index: 1200;
           display: grid;
           place-items: center;
-          padding: 20px;
-          background: rgba(2, 6, 23, 0.62);
-          backdrop-filter: blur(12px);
+          padding: 16px;
+          background: rgba(2, 6, 23, 0.72);
+          backdrop-filter: blur(14px);
         }
 
         .detailModal {
           position: relative;
-          width: min(1060px, 100%);
-          max-height: 92dvh;
-          overflow: auto;
+          width: min(1020px, 100%);
+          max-height: 94dvh;
+          overflow: hidden;
           display: grid;
-          grid-template-columns: minmax(320px, 0.95fr) minmax(320px, 1.05fr);
-          gap: 0;
-          border-radius: 34px;
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+          border-radius: 32px;
           background: var(--bg-raised);
           color: var(--text);
-          box-shadow: 0 36px 120px rgba(0, 0, 0, 0.34);
+          box-shadow: 0 40px 120px rgba(0, 0, 0, 0.5);
         }
 
         .closeModal {
           position: absolute;
-          right: 18px;
-          top: 18px;
-          z-index: 2;
-          padding: 10px 14px;
+          right: 16px;
+          top: 16px;
+          z-index: 10;
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+          background: color-mix(in oklab, var(--bg) 85%, transparent);
           color: var(--text);
-          background: color-mix(in oklab, var(--bg) 82%, transparent);
+          font-size: 1rem;
+          display: grid;
+          place-items: center;
+          cursor: pointer;
+          backdrop-filter: blur(8px);
+          transition: background 0.15s;
         }
+        .closeModal:hover { background: var(--bg); }
 
         .detailMedia {
-          min-height: 560px;
-          padding: 24px;
+          position: relative;
+          min-height: 520px;
           background:
-            radial-gradient(circle at 50% 40%, color-mix(in oklab, var(--primary) 16%, transparent), transparent 38%),
-            color-mix(in oklab, var(--bg) 84%, #111 16%);
+            radial-gradient(circle at 50% 38%, color-mix(in oklab, var(--primary) 18%, transparent), transparent 42%),
+            color-mix(in oklab, var(--bg) 78%, #000 22%);
+          overflow: hidden;
         }
 
-        .exerciseMedia.large,
+        .imgFrame {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          overflow: hidden;
+        }
+        .imgBg {
+          position: absolute;
+          inset: -12px;
+          width: calc(100% + 24px);
+          height: calc(100% + 24px);
+          object-fit: cover;
+          filter: blur(22px) brightness(0.4) saturate(0.6);
+          pointer-events: none;
+        }
+        .exerciseMedia.large {
+          position: relative;
+          z-index: 1;
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          display: block;
+        }
         .exercisePlaceholder.large {
-          border-radius: 24px;
-          background: color-mix(in oklab, var(--bg) 82%, #111 18%);
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 5rem;
+          font-weight: 900;
+          color: var(--muted);
         }
 
         .detailContent {
           display: grid;
           align-content: start;
-          gap: 18px;
-          padding: 42px;
+          gap: 20px;
+          padding: 36px 36px 32px;
+          overflow-y: auto;
+          max-height: 94dvh;
+        }
+
+        .detailHeader { display: grid; gap: 10px; }
+
+        .detailChips {
+          display: flex;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+
+        .chip {
+          border-radius: 999px;
+          padding: 4px 11px;
+          font-size: 0.72rem;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+        }
+        .chipBody {
+          background: color-mix(in oklab, var(--primary) 14%, transparent);
+          color: color-mix(in oklab, var(--primary) 55%, var(--text));
+          border: 1px solid color-mix(in oklab, var(--primary) 28%, transparent);
+        }
+        .chipMuscle {
+          background: color-mix(in oklab, #10b981 12%, transparent);
+          color: color-mix(in oklab, #10b981 60%, var(--text));
+          border: 1px solid color-mix(in oklab, #10b981 26%, transparent);
+        }
+        .chipEquip {
+          background: color-mix(in oklab, var(--border) 55%, transparent);
+          color: var(--muted);
+          border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
         }
 
         .detailContent h2 {
           margin: 0;
-          font-size: clamp(2rem, 4vw, 4rem);
-          line-height: 0.92;
-          letter-spacing: -0.08em;
+          font-size: clamp(1.6rem, 3.5vw, 2.6rem);
+          line-height: 1;
+          letter-spacing: -0.05em;
         }
 
         .detailDescription {
           margin: 0;
           color: var(--muted);
-          line-height: 1.7;
+          line-height: 1.65;
+          font-size: 0.9rem;
         }
 
-        .detailFacts {
+        .stepsBox {
+          border-radius: 20px;
+          padding: 18px 20px;
+          background: color-mix(in oklab, var(--bg) 70%, transparent);
+          border: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
           display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 10px;
+          gap: 12px;
         }
 
-        .detailFacts span {
-          display: grid;
-          gap: 6px;
-          border-radius: 18px;
-          padding: 14px;
-          background: color-mix(in oklab, var(--bg) 72%, transparent);
-        }
-
-        .detailFacts b {
-          color: var(--muted);
-          font-size: 11px;
+        .stepsLabel {
+          margin: 0;
+          font-size: 0.68rem;
+          letter-spacing: 0.14em;
           text-transform: uppercase;
-          letter-spacing: 0.1em;
-        }
-
-        .coachBox,
-        .instructionsBox {
-          border-radius: 24px;
-          padding: 18px;
-          background: color-mix(in oklab, var(--bg) 72%, transparent);
-          border: 1px solid color-mix(in oklab, var(--border) 62%, transparent);
-        }
-
-        .coachBox h3,
-        .instructionsBox h3 {
-          margin: 0 0 10px;
-          letter-spacing: -0.045em;
-        }
-
-        .coachBox ol {
-          margin: 0;
-          padding-left: 20px;
           color: var(--muted);
-          line-height: 1.7;
+          font-weight: 800;
         }
 
-        .instructionsBox p {
+        .stepsList :global(ol) {
           margin: 0;
-          color: var(--muted);
-          line-height: 1.7;
+          padding: 0;
+          list-style: none;
+          display: grid;
+          gap: 10px;
+          counter-reset: steps;
+        }
+
+        .stepsList :global(li) {
+          counter-increment: steps;
+          display: grid;
+          grid-template-columns: 26px 1fr;
+          gap: 10px;
+          align-items: start;
+          line-height: 1.55;
+          font-size: 0.875rem;
+          color: var(--text);
+        }
+
+        .stepsList :global(li)::before {
+          content: counter(steps);
+          width: 26px;
+          height: 26px;
+          border-radius: 50%;
+          background: color-mix(in oklab, var(--primary) 18%, transparent);
+          color: color-mix(in oklab, var(--primary) 60%, var(--text));
+          font-size: 0.7rem;
+          font-weight: 800;
+          display: grid;
+          place-items: center;
+          flex-shrink: 0;
+          margin-top: 1px;
         }
 
         .toast {
@@ -1326,7 +1420,6 @@ export default function FitnessPage() {
           .nutritionMain,
           .searchPanel,
           .quickStart,
-          .detailModal,
           .metricsModal {
             grid-template-columns: 1fr;
           }
@@ -1335,8 +1428,18 @@ export default function FitnessPage() {
           .workoutGrid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
+          .detailModal {
+            grid-template-columns: 1fr;
+            max-width: 520px;
+            overflow-y: auto;
+            max-height: 94dvh;
+          }
           .detailMedia {
-            min-height: 360px;
+            min-height: 280px;
+            max-height: 340px;
+          }
+          .detailContent {
+            max-height: none;
           }
         }
 
@@ -1347,7 +1450,6 @@ export default function FitnessPage() {
           .workoutGrid,
           .heroStats,
           .nutritionStats,
-          .detailFacts,
           .formGrid,
           .modalMacroGrid {
             grid-template-columns: 1fr;
@@ -1362,7 +1464,11 @@ export default function FitnessPage() {
             height: 210px;
           }
           .detailContent {
-            padding: 24px;
+            padding: 22px;
+            gap: 16px;
+          }
+          .detailContent h2 {
+            font-size: 1.5rem;
           }
         }
       `}</style>

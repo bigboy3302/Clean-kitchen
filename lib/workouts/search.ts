@@ -1,6 +1,7 @@
 import { fetchExercises, type ExerciseDbItem } from "@/lib/workouts/exercisedb";
 import { FALLBACK_WORKOUTS } from "@/lib/workouts/fallback";
 import type { WorkoutContent, WorkoutSearchFilters, WorkoutSearchResponse } from "@/lib/workouts/types";
+import { getExerciseImages } from "@/lib/workouts/exercise-images";
 
 const perf =
   typeof performance !== "undefined" && typeof performance.now === "function"
@@ -60,22 +61,27 @@ function buildProxyGifUrl(rawUrl?: string | null): string | null {
   if (trimmedUrl) {
     return `/api/workouts/gif?src=${encodeURIComponent(trimmedUrl)}`;
   }
-
   return null;
 }
 
-function toWorkoutContent(exercise: ExerciseDbItem): WorkoutContent {
+async function toWorkoutContent(exercise: ExerciseDbItem): Promise<WorkoutContent> {
   const instructionsHtml = buildInstructionsHtml(exercise);
   const descText = exercise.description || fallbackDescription(exercise).text;
-  const mediaUrl = buildProxyGifUrl(exercise.gifUrl);
+  const directUrl = (exercise.gifUrl || "").trim() || null;
+  const images = directUrl ? null : await getExerciseImages(exercise.name);
+  const rawMain = directUrl ?? images?.main ?? null;
+  const rawAlt = images?.alt ?? null;
+  const mediaUrl = buildProxyGifUrl(rawMain);
+  const altUrl = buildProxyGifUrl(rawAlt);
+  const mediaType = rawMain?.endsWith(".gif") ? "gif" : "image";
 
   return {
     id: String(exercise.id),
     title: titleCase(exercise.name || "Exercise"),
     mediaUrl,
-    mediaType: "gif",
+    mediaType,
     previewUrl: mediaUrl,
-    thumbnailUrl: mediaUrl,
+    thumbnailUrl: altUrl,
     description: descText,
     instructionsHtml,
     bodyPart: exercise.bodyPart || null,
@@ -140,7 +146,7 @@ export async function searchWorkouts(options: {
     : raw;
 
   const slice = filtered.slice(0, limit);
-  const results: WorkoutContent[] = slice.map(toWorkoutContent);
+  const results: WorkoutContent[] = await Promise.all(slice.map(toWorkoutContent));
 
   const took = perf.now() - started;
   const nextOffset = slice.length === limit ? offset + limit : null;

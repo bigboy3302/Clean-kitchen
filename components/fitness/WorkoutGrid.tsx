@@ -12,7 +12,6 @@ import type {
   WorkoutContent,
   WorkoutSearchFilters,
 } from "@/lib/workouts/types";
-import { getDirectWorkoutVideoUrl, getYouTubeEmbedUrl } from "@/lib/workouts/media";
 import { addExerciseToToday } from "@/lib/fitness/store";
 import { auth } from "@/lib/firebas1e";
 import { uploadWorkoutMedia } from "@/lib/uploads";
@@ -1455,8 +1454,6 @@ function DetailDialog({ item, onClose, onSave, onDelete, onAddToToday, busyId }:
   const panelRef = useRef<HTMLDivElement | null>(null);
   const { workout, saved, community } = item;
   const busy = busyId === workout.id + "public" || busyId === workout.id + "private" || busyId === saved?.id;
-  const tutorialUrl = getDirectWorkoutVideoUrl(workout.title, workout.externalUrl);
-  const ytEmbedUrl = getYouTubeEmbedUrl(tutorialUrl);
   const imageSrc = workout.mediaUrl || workout.thumbnailUrl;
 
   useEffect(() => {
@@ -1553,36 +1550,6 @@ function DetailDialog({ item, onClose, onSave, onDelete, onAddToToday, busyId }:
               <p className="desc">{workout.description}</p>
             ) : null}
 
-            {/* YouTube tutorial */}
-            <div className="ytSection">
-              <p className="ytLabel">Tutorial</p>
-              {ytEmbedUrl ? (
-                <div className="ytEmbed">
-                  <iframe
-                    src={ytEmbedUrl}
-                    title={`${workout.title} tutorial`}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                </div>
-              ) : tutorialUrl ? (
-                <a
-                  href={tutorialUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="ytSearch"
-                >
-                  <svg aria-hidden="true" viewBox="0 0 24 24" className="ytIcon">
-                    <path fill="#fff" d="M22.54 6.42a2.78 2.78 0 0 0-1.94-1.96C18.88 4 12 4 12 4s-6.88 0-8.6.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.94 1.97C5.12 20 12 20 12 20s6.88 0 8.6-.45a2.78 2.78 0 0 0 1.94-1.97A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z" />
-                    <polygon fill="#ff0000" points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" />
-                  </svg>
-                  Watch on YouTube
-                  <span className="ytQuery">Open the full tutorial video</span>
-                </a>
-              ) : (
-                <p className="ytUnavailable">Tutorial video unavailable for this workout.</p>
-              )}
-            </div>
           </div>
         </div>
 

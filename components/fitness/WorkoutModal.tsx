@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import type { Goal } from "@/lib/fitness/calc";
-import { getDirectWorkoutVideoUrl, getYouTubeEmbedUrl, getYouTubeThumbnailUrl } from "@/lib/workouts/media";
 
 type Exercise = {
   id: string | number;
@@ -39,13 +38,10 @@ export default function WorkoutModal({ exercise, goal, onClose }: Props) {
     return `/api/workouts/gif?src=${encodeURIComponent(src)}`;
   }
 
-  const tutorialUrl = getDirectWorkoutVideoUrl(exercise.name, exercise.videoUrl);
-  const ytEmbedUrl = getYouTubeEmbedUrl(tutorialUrl);
   const heroSrc =
     toGifProxySrc(exercise.gifUrl) ||
     toGifProxySrc(exercise.imageThumbnailUrl) ||
     toGifProxySrc(exercise.imageUrl) ||
-    getYouTubeThumbnailUrl(tutorialUrl) ||
     "/placeholder.png";
 
   const tags = [
@@ -99,30 +95,6 @@ export default function WorkoutModal({ exercise, goal, onClose }: Props) {
             <p className="muted">No description available.</p>
           )}
 
-          <div className="ytSection">
-            <p className="ytLabel">Tutorial</p>
-            {ytEmbedUrl ? (
-              <div className="ytEmbed">
-                <iframe
-                  src={ytEmbedUrl}
-                  title={`${exercise.name} tutorial`}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              </div>
-            ) : tutorialUrl ? (
-              <a href={tutorialUrl} target="_blank" rel="noopener noreferrer" className="ytSearch">
-                <svg aria-hidden="true" viewBox="0 0 24 24" className="ytIcon">
-                  <path fill="#fff" d="M22.54 6.42a2.78 2.78 0 0 0-1.94-1.96C18.88 4 12 4 12 4s-6.88 0-8.6.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.94 1.97C5.12 20 12 20 12 20s6.88 0 8.6-.45a2.78 2.78 0 0 0 1.94-1.97A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z" />
-                  <polygon fill="#ff0000" points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" />
-                </svg>
-                Watch on YouTube
-                <span className="ytQuery">Open the full tutorial video</span>
-              </a>
-            ) : (
-              <p className="muted">Tutorial video unavailable.</p>
-            )}
-          </div>
         </div>
       </div>
 
