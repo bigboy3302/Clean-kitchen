@@ -115,6 +115,12 @@ function fromMealDbDetail(item: MealDbDetail): CommonRecipe {
   };
 }
 
+export async function searchMealsByArea(area: string, limit = 50): Promise<CommonRecipe[]> {
+  const params = new URLSearchParams({ area, number: String(limit), offset: "0" });
+  const data = await j<SearchResponse>(`/api/recipes/search?${params.toString()}`);
+  return Array.isArray(data?.results) ? data.results.map(fromSearchItem) : [];
+}
+
 export async function getRandomMeals(n = 12): Promise<CommonRecipe[]> {
   const data = await j<ApiResponse>(`/api/recipes?random=${encodeURIComponent(String(n))}`);
   return ensureOk(data);

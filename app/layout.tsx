@@ -6,6 +6,7 @@ import type { Metadata, Viewport } from "next";
 import ThemeScript from "@/components/theme/ThemeScript";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import EnsureUserDoc from "@/components/auth/EnsureUserDoc";
+import ProfileCompletionModal from "@/components/auth/ProfileCompletionModal";
 import AuthGate from "@/components/auth/AuthGate";
 import AppShell from "@/components/shell/AppShell";
 import AuthModal from "@/components/auth/AuthModal";
@@ -41,6 +42,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 <GuestThemeSync />
                 <AuthGate>
                   <EnsureUserDoc />
+                  <ProfileCompletionModal />
                   <AppShell>{children}</AppShell>
                 </AuthGate>
                 <AuthModal />

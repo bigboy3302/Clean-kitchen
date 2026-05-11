@@ -77,6 +77,16 @@ service cloud.firestore {
       return (arr is list) && arr.size() > 0 && arr.size() <= maxLen && arr.hasOnly(allowed);
     }
 
+    function validPublicProfileWrite() {
+      let d = request.resource.data;
+      return
+        (!('uid'         in d) || d.uid         == request.auth.uid) &&
+        (!('username'    in d) || d.username    == null || d.username.matches('^[a-z0-9._-]{3,20}$')) &&
+        (!('firstName'   in d) || d.firstName   == null || (d.firstName  is string && d.firstName.size()  <= 100)) &&
+        (!('lastName'    in d) || d.lastName    == null || (d.lastName   is string && d.lastName.size()   <= 100)) &&
+        (!('displayName' in d) || d.displayName == null || (d.displayName is string && d.displayName.size() <= 200));
+    }
+
     function validUserWrite() {
       let new = request.resource.data;
 
@@ -131,7 +141,12 @@ service cloud.firestore {
     /* -------- public profile facade -------- */
     match /usersPublic/{uid} {
       allow read: if true;
-      allow create, update, delete: if (isSignedIn() && request.auth.uid == uid) || isAdmin();
+      allow create, update: if isAdmin() || (
+        isSignedIn() &&
+        request.auth.uid == uid &&
+        validPublicProfileWrite()
+      );
+      allow delete: if (isSignedIn() && request.auth.uid == uid) || isAdmin();
     }
 
     /* -------- users (private) -------- */

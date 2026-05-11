@@ -227,13 +227,16 @@ export default function EditorClient({ initial }: { initial: RecipeDoc | null })
         <div className="ek-topTitle">Edit Recipe</div>
         <div className="ek-topActions">
           {saved && <span className="ek-savedBadge">✓ Saved</span>}
+          <button className="ek-btn ek-btnGhost ek-btnDanger" type="button" onClick={() => setConfirmOpen(true)} disabled={isBusy || deleting}>
+            Delete recipe
+          </button>
           <button className="ek-btn ek-btnPrimary" onClick={save} disabled={isBusy}>
             {saving ? "Saving…" : "Save changes"}
           </button>
         </div>
       </div>
 
-      {err && <div className="ek-err">{err}</div>}
+      {(err || deleteErr) && <div className="ek-err">{err || deleteErr}</div>}
 
       <div className="ek-layout">
         {/* LEFT: image + basic info */}
@@ -366,19 +369,6 @@ export default function EditorClient({ initial }: { initial: RecipeDoc | null })
         </div>
       </div>
 
-      {/* sticky bottom bar */}
-      <div className="ek-bottomBar">
-        {(err || deleteErr) && <span className="ek-errInline">{err || deleteErr}</span>}
-        {saved && <span className="ek-savedBadge">✓ Saved</span>}
-        <div style={{ flex: 1 }} />
-        <button className="ek-btn ek-btnGhost ek-btnDanger" type="button" onClick={() => setConfirmOpen(true)} disabled={isBusy || deleting}>
-          Delete recipe
-        </button>
-        <button className="ek-btn ek-btnPrimary" type="button" onClick={save} disabled={isBusy}>
-          {saving ? "Saving…" : "Save changes"}
-        </button>
-      </div>
-
       <ConfirmDialog
         open={confirmOpen}
         title="Delete this recipe?"
@@ -399,7 +389,7 @@ const css = `
   .ek-shell {
     max-width: 1140px;
     margin: 0 auto;
-    padding: 20px 20px 110px;
+    padding: 20px 20px 40px;
     display: grid;
     gap: 16px;
   }
@@ -631,27 +621,10 @@ const css = `
     margin-top: 8px;
   }
 
-  .ek-bottomBar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 24px;
-    background: color-mix(in oklab, var(--bg) 88%, transparent);
-    backdrop-filter: blur(14px);
-    border-top: 1px solid var(--border);
-    z-index: 200;
-  }
-  .ek-errInline { font-size: 13px; font-weight: 600; color: #ef4444; flex: 1; }
-
   @media (max-width: 860px) {
     .ek-layout { grid-template-columns: 1fr; }
-    .ek-shell { padding: 16px 16px 96px; }
+    .ek-shell { padding: 16px 16px 32px; }
     .ek-row2 { grid-template-columns: 1fr; }
-    .ek-bottomBar { padding: 10px 16px; }
     .ek-ingrHeader, .ek-ingrRow { grid-template-columns: 22px 1fr 90px 32px; }
   }
   @media (max-width: 500px) {

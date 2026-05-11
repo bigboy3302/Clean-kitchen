@@ -25,6 +25,7 @@ import SaveRecipeButton from "@/components/recipes/SaveRecipeButton";
 import CreateRecipeWizard from "@/components/recipes/CreateRecipeWizard";
 import {
   getRandomMeals,
+  searchMealsByArea,
   searchMealsByName,
   lookupMealById,
   searchMealsByIngredientsAND,
@@ -33,7 +34,7 @@ import {
 
 /* -------------------------- helpers & type guards -------------------------- */
 
-const INGREDIENT_PAGE_SIZE = 12;
+const INGREDIENT_PAGE_SIZE = 24;
 const DEFAULT_RECIPE_BATCH = 28;
 const NAME_SEARCH_LIMIT = 28;
 
@@ -553,9 +554,20 @@ export default function RecipesPage() {
       setErr(null);
       setPantryRecipes(null);
       if (!q.trim()) {
-        const list = await getRandomMeals(DEFAULT_RECIPE_BATCH);
-        setApiRecipes(list.map(withRecipeMeta));
-        setBusySearch(false);
+        setBusySearch(true);
+        try {
+          if (areaFilter !== "any") {
+            const list = await searchMealsByArea(areaFilter, 50);
+            setApiRecipes(list.map(withRecipeMeta));
+          } else {
+            const list = await getRandomMeals(DEFAULT_RECIPE_BATCH);
+            setApiRecipes(list.map(withRecipeMeta));
+          }
+        } catch {
+          // ignore
+        } finally {
+          setBusySearch(false);
+        }
         return;
       }
       setBusySearch(true);
@@ -638,7 +650,7 @@ export default function RecipesPage() {
       const searchTerms = await translateIngredients(normalized);
       setIngredientChips(searchTerms);
       setLastIngredientSearch(searchTerms);
-      const results = await searchMealsByIngredientsAND(searchTerms, 36, "intersect", {
+      const results = await searchMealsByIngredientsAND(searchTerms, 50, "intersect", {
         area: areaFilter,
         diet,
         sort: sortBy,
@@ -707,8 +719,13 @@ export default function RecipesPage() {
     setBusySearch(true);
     try {
       if (!q.trim()) {
-        const list = await getRandomMeals(DEFAULT_RECIPE_BATCH);
-        setApiRecipes(list.map(withRecipeMeta));
+        if (areaFilter !== "any") {
+          const list = await searchMealsByArea(areaFilter, 50);
+          setApiRecipes(list.map(withRecipeMeta));
+        } else {
+          const list = await getRandomMeals(DEFAULT_RECIPE_BATCH);
+          setApiRecipes(list.map(withRecipeMeta));
+        }
       } else {
         const list = await searchMealsByName(q.trim(), NAME_SEARCH_LIMIT, {
           area: areaFilter,
@@ -810,6 +827,21 @@ export default function RecipesPage() {
     if (areaFilter !== "any") {
       list = list.filter((r) => (r.area || "").toLowerCase() === areaFilter.toLowerCase());
     }
+    if (maxTime !== null) {
+      list = list.filter((r) => {
+        const mins = typeof r.minutes === "number" ? r.minutes : null;
+        return mins === null || mins <= maxTime;
+      });
+    }
+    if (diet !== "any") {
+      list = list.filter((r) => {
+        const cat = (r.category ?? "").toLowerCase();
+        if (diet === "vegetarian") return r.vegetarian === true || cat === "vegetarian";
+        if (diet === "vegan") return r.vegan === true || cat === "vegan";
+        if (diet === "pescetarian") return cat === "seafood";
+        return false;
+      });
+    }
     if (sortBy === "fast") {
       list = [...list].sort((a, b) => {
         const am = typeof a.minutes === "number" ? a.minutes : Number.POSITIVE_INFINITY;
@@ -824,7 +856,7 @@ export default function RecipesPage() {
       });
     }
     return list;
-  }, [combined, areaFilter, sortBy]);
+  }, [combined, areaFilter, sortBy, diet, maxTime]);
 
   const activeFilterPills = useMemo(() => {
     const pills: string[] = [];
@@ -1190,9 +1222,13 @@ export default function RecipesPage() {
         ) : visibleRecipes.length === 0 ? (
           <div className="emptyState">
             <h3>No recipes found</h3>
-            <p>No recipes found — try fewer ingredients.</p>
+            <p>
+              {hasActiveFilters
+                ? "No recipes match the active filters. Some filters (e.g. gluten free, calories) are not supported by the recipe database."
+                : "Try a different search term."}
+            </p>
             <button className="btn-base btn--secondary btn--md" type="button" onClick={clearSearch}>
-              Clear search
+              {hasActiveFilters ? "Reset filters" : "Clear search"}
             </button>
           </div>
         ) : (

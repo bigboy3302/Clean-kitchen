@@ -237,46 +237,55 @@ export default function PostsPage() {
 
   return (
     <main className="wrap ck-page ck-community-page">
+      {/* hero */}
       <section className="hero">
         <div className="heroCopy">
           <span className="eyebrow">Community</span>
           <h1 className="title">Posts</h1>
-          <p className="intro">Share updates, food photos, tips, and see what’s new from the community.</p>
-          <div className="heroMeta">
-            <span className="metaPill">{posts.length} posts</span>
-            <span className="metaPill">{uid ? "Signed in" : "Guest mode"}</span>
-            <span className="metaPill">Live feed</span>
+          <p className="intro">Share updates, food photos, tips, and see what&apos;s cooking in the community.</p>
+        </div>
+        <div className="heroStats">
+          <div className="heroStat">
+            <strong className="heroStatVal">{posts.length}</strong>
+            <span className="heroStatLabel">Posts</span>
+          </div>
+          <div className="heroDivider" />
+          <div className="heroStat">
+            <strong className="heroStatVal"><span className="livePulse" />Live</strong>
+            <span className="heroStatLabel">Feed</span>
+          </div>
+          <div className="heroDivider" />
+          <div className="heroStat">
+            <strong className="heroStatVal">{uid ? "Active" : "Guest"}</strong>
+            <span className="heroStatLabel">Mode</span>
           </div>
         </div>
       </section>
 
-      <section className="composerSection">
-        <div className="sectionCard">
-          <div className="sectionHead">
-            <div>
-              <span className="sectionEyebrow">Create</span>
-              <h2>Start a post</h2>
-            </div>
-            <span className="sectionHint">Share with the community</span>
-          </div>
+      {/* two-column layout */}
+      <div className="layout">
+        {/* left: composer + feed */}
+        <div className="main">
           <PostComposer />
-        </div>
-      </section>
 
-      <section className="feedSection">
-        <div className="sectionCard">
-          <div className="feedHead">
+          <div className="feedBar">
             <div>
-              <span className="sectionEyebrow">Feed</span>
-              <h2>Latest posts</h2>
+              <span className="feedEyebrow">Feed</span>
+              <h2 className="feedTitle">Latest posts</h2>
             </div>
-            <span>{posts.length} total</span>
+            <span className="feedCount">{posts.length} post{posts.length === 1 ? "" : "s"}</span>
           </div>
 
-          <div className="grid">
-            {posts.map((p) => (
-              <div key={p.id} className="post">
+          <div className="feed">
+            {posts.length === 0 ? (
+              <div className="empty">
+                <p className="emptyTitle">No posts yet</p>
+                <p className="emptyText">Be the first to share something with the community.</p>
+              </div>
+            ) : (
+              posts.map((p) => (
                 <PostCard
+                  key={p.id}
                   post={{ ...p, uid: p.uid ?? undefined }}
                   meUid={uid}
                   onEdit={handleEdit}
@@ -287,37 +296,78 @@ export default function PostsPage() {
                   onToggleRepost={handleToggleRepost}
                   onToggleLike={handleToggleLike}
                 />
-              </div>
-            ))}
-            {posts.length === 0 ? <div className="empty">No community posts yet.</div> : null}
+              ))
+            )}
           </div>
         </div>
-      </section>
+
+        {/* sidebar */}
+        <aside className="sidebar">
+          <div className="sideCard">
+            <div className="sideHead">
+              <span className="sideEyebrow">Overview</span>
+              <h3 className="sideTitle">Community</h3>
+            </div>
+            <div className="statList">
+              <div className="statRow">
+                <span className="statLabel">Total posts</span>
+                <strong className="statVal">{posts.length}</strong>
+              </div>
+              <div className="statRow">
+                <span className="statLabel">Feed status</span>
+                <strong className="statVal statLive"><span className="liveDot" />Live</strong>
+              </div>
+              <div className="statRow">
+                <span className="statLabel">Your account</span>
+                <strong className="statVal">{uid ? "Signed in" : "Guest"}</strong>
+              </div>
+            </div>
+          </div>
+
+          <div className="sideCard">
+            <div className="sideHead">
+              <span className="sideEyebrow">Guidelines</span>
+              <h3 className="sideTitle">Community rules</h3>
+            </div>
+            <ul className="ruleList">
+              <li>Be kind and respectful to others</li>
+              <li>Keep content food &amp; fitness related</li>
+              <li>No spam or excessive self-promotion</li>
+              <li>Report content that breaks the rules</li>
+            </ul>
+          </div>
+        </aside>
+      </div>
 
       <style jsx>{`
         .wrap {
-          max-width: 980px;
+          max-width: 1100px;
           margin: 0 auto;
-          padding: 24px 20px 36px;
+          padding: 24px 20px 40px;
           display: grid;
-          gap: 18px;
+          gap: 20px;
         }
+
+        /* ── hero ── */
         .hero {
-          padding: 22px 24px;
-          border-radius: 24px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 24px;
+          flex-wrap: wrap;
+          padding: 28px 32px;
+          border-radius: 28px;
           border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
           background:
-            radial-gradient(circle at top right, color-mix(in oklab, var(--primary) 14%, transparent), transparent 28%),
+            radial-gradient(circle at top right, color-mix(in oklab, var(--primary) 18%, transparent), transparent 35%),
             linear-gradient(135deg, color-mix(in oklab, var(--bg2) 94%, transparent), color-mix(in oklab, var(--bg) 88%, var(--bg2) 12%));
           box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
         }
         .heroCopy {
           display: grid;
-          gap: 10px;
+          gap: 8px;
         }
         .eyebrow {
-          display: inline-block;
-          margin-bottom: 8px;
           font-size: 11px;
           font-weight: 800;
           letter-spacing: 0.16em;
@@ -326,7 +376,8 @@ export default function PostsPage() {
         }
         .title {
           margin: 0;
-          font-size: clamp(30px, 4vw, 38px);
+          font-size: clamp(30px, 4vw, 40px);
+          font-weight: 900;
           letter-spacing: -0.03em;
           color: var(--text);
         }
@@ -334,91 +385,256 @@ export default function PostsPage() {
           margin: 0;
           color: var(--muted);
           font-size: 14px;
+          max-width: 44ch;
         }
-        .heroMeta {
+        .heroStats {
           display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
+          align-items: stretch;
+          border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+          border-radius: 20px;
+          overflow: hidden;
+          background: color-mix(in oklab, var(--bg) 78%, transparent);
+          flex-shrink: 0;
         }
-        .metaPill {
-          display: inline-flex;
+        .heroStat {
+          display: grid;
+          gap: 3px;
+          text-align: center;
+          padding: 14px 22px;
+          min-width: 80px;
+        }
+        .heroStatVal {
+          display: flex;
           align-items: center;
-          min-height: 32px;
-          padding: 0 12px;
-          border-radius: 999px;
-          border: 1px solid color-mix(in oklab, var(--primary) 22%, var(--border));
-          background: color-mix(in oklab, var(--bg) 82%, transparent);
+          justify-content: center;
+          gap: 6px;
+          font-size: 17px;
+          font-weight: 800;
           color: var(--text);
-          font-size: 12px;
-          font-weight: 700;
+          letter-spacing: -0.02em;
         }
-        .composerSection,
-        .feedSection {
+        .heroStatLabel {
+          font-size: 11px;
+          font-weight: 700;
+          color: var(--muted);
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+        }
+        .heroDivider {
+          width: 1px;
+          background: color-mix(in oklab, var(--border) 75%, transparent);
+          flex-shrink: 0;
+          align-self: stretch;
+        }
+        .livePulse {
+          display: inline-block;
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #22c55e;
+          flex-shrink: 0;
+          animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+          0%   { box-shadow: 0 0 0 0   rgba(34, 197, 94, 0.55); }
+          70%  { box-shadow: 0 0 0 7px rgba(34, 197, 94, 0); }
+          100% { box-shadow: 0 0 0 0   rgba(34, 197, 94, 0); }
+        }
+
+        /* ── two-column layout ── */
+        .layout {
+          display: grid;
+          grid-template-columns: 1fr 288px;
+          gap: 20px;
+          align-items: start;
+        }
+        .main {
+          display: grid;
+          gap: 16px;
+          min-width: 0;
+        }
+
+        /* ── feed header ── */
+        .feedBar {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 0 2px;
+        }
+        .feedEyebrow {
+          display: block;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--muted);
+          margin-bottom: 4px;
+        }
+        .feedTitle {
+          margin: 0;
+          font-size: 19px;
+          font-weight: 800;
+          color: var(--text);
+          letter-spacing: -0.02em;
+        }
+        .feedCount {
+          color: var(--muted);
+          font-size: 13px;
+          font-weight: 600;
+          padding-bottom: 2px;
+        }
+
+        /* ── feed ── */
+        .feed {
           display: grid;
           gap: 14px;
         }
-        .sectionCard {
-          display: grid;
-          gap: 16px;
-          padding: 18px;
-          border-radius: 24px;
-          border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
-          background:
-            linear-gradient(180deg, color-mix(in oklab, var(--bg2) 96%, transparent), color-mix(in oklab, var(--bg) 90%, var(--bg2) 10%));
-          box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+        .empty {
+          padding: 40px 24px;
+          border-radius: 22px;
+          border: 1px dashed color-mix(in oklab, var(--border) 80%, transparent);
+          text-align: center;
+          background: color-mix(in oklab, var(--bg2) 55%, transparent);
         }
-        .sectionHead,
-        .feedHead {
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-          align-items: end;
-          flex-wrap: wrap;
-        }
-        .sectionEyebrow {
-          display: inline-block;
-          margin-bottom: 6px;
-          font-size: 11px;
+        .emptyTitle {
+          margin: 0 0 8px;
+          font-size: 17px;
           font-weight: 800;
-          letter-spacing: 0.16em;
+          color: var(--text);
+        }
+        .emptyText {
+          margin: 0;
+          font-size: 14px;
+          color: var(--muted);
+        }
+
+        /* ── sidebar ── */
+        .sidebar {
+          display: grid;
+          gap: 14px;
+          position: sticky;
+          top: 80px;
+        }
+        .sideCard {
+          display: grid;
+          gap: 14px;
+          padding: 18px 20px;
+          border-radius: 22px;
+          border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
+          background: linear-gradient(180deg,
+            color-mix(in oklab, var(--bg2) 96%, transparent),
+            color-mix(in oklab, var(--bg) 90%, var(--bg2) 10%)
+          );
+          box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+        }
+        .sideHead {
+          display: grid;
+          gap: 3px;
+        }
+        .sideEyebrow {
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.14em;
           text-transform: uppercase;
           color: var(--muted);
         }
-        .sectionHead h2,
-        .feedHead h2 {
+        .sideTitle {
           margin: 0;
+          font-size: 16px;
+          font-weight: 800;
           color: var(--text);
-          font-size: 20px;
           letter-spacing: -0.02em;
         }
-        .sectionHint,
-        .feedHead span {
-          color: var(--muted);
+        .statList {
+          border: 1px solid color-mix(in oklab, var(--border) 78%, transparent);
+          border-radius: 14px;
+          overflow: hidden;
+        }
+        .statRow {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 10px 14px;
+          border-bottom: 1px solid color-mix(in oklab, var(--border) 68%, transparent);
+        }
+        .statRow:last-child {
+          border-bottom: none;
+        }
+        .statLabel {
           font-size: 13px;
-        }
-        .grid {
-          display: grid;
-          gap: 16px;
-        }
-        .empty {
-          padding: 18px;
-          border-radius: 16px;
-          border: 1px dashed var(--border);
           color: var(--muted);
-          text-align: center;
-          background: var(--bg-raised);
         }
-        @media (max-width: 768px) {
+        .statVal {
+          font-size: 13px;
+          font-weight: 700;
+          color: var(--text);
+        }
+        .statLive {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .liveDot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: #22c55e;
+          flex-shrink: 0;
+        }
+        .ruleList {
+          margin: 0;
+          padding: 0;
+          list-style: none;
+          display: grid;
+          gap: 9px;
+        }
+        .ruleList li {
+          font-size: 13px;
+          color: var(--muted);
+          padding-left: 18px;
+          position: relative;
+          line-height: 1.45;
+        }
+        .ruleList li::before {
+          content: "→";
+          position: absolute;
+          left: 0;
+          color: var(--primary);
+          font-size: 11px;
+          font-weight: 800;
+          top: 1px;
+        }
+
+        /* ── responsive ── */
+        @media (max-width: 900px) {
+          .layout {
+            grid-template-columns: 1fr;
+          }
+          .sidebar {
+            position: static;
+            display: none;
+          }
+          .heroStats {
+            width: 100%;
+          }
+          .heroStat {
+            flex: 1;
+            padding: 12px 16px;
+            min-width: 0;
+          }
+        }
+        @media (max-width: 720px) {
           .wrap {
-            padding: 18px 16px 28px;
+            padding: 18px 16px 32px;
           }
           .hero {
-            padding: 18px;
-            border-radius: 20px;
+            padding: 20px;
+            border-radius: 22px;
+            gap: 16px;
           }
-          .sectionCard {
-            padding: 14px;
-            border-radius: 20px;
+          .heroStats {
+            border-radius: 16px;
           }
         }
       `}</style>
