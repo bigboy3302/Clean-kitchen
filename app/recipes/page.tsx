@@ -597,6 +597,30 @@ export default function RecipesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, ingredientChips]);
 
+  /* ---------- translate pantry terms to English (safe fallback) ---------- */
+  async function translateIngredients(terms: string[]): Promise<string[]> {
+    try {
+      const resp = await fetch("/api/translate-ingredients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ terms }),
+      });
+      if (!resp.ok) return terms;
+      const data = (await resp.json()) as unknown;
+      if (
+        data &&
+        typeof data === "object" &&
+        Array.isArray((data as Record<string, unknown>).translations) &&
+        ((data as { translations: unknown[] }).translations).length === terms.length
+      ) {
+        return (data as { translations: string[] }).translations;
+      }
+      return terms;
+    } catch {
+      return terms;
+    }
+  }
+
   /* ---------- pantry picker → AND search ---------- */
   async function runPantrySearch(terms: string[]) {
     const normalized = uniqueTerms(terms);
@@ -607,13 +631,14 @@ export default function RecipesPage() {
     setMode("ingredient");
     setQ("");
     setIngredientValue("");
-    setIngredientChips(normalized);
-    setLastIngredientSearch(normalized);
     setErr(null);
     setBusySearch(true);
     setShowPantryPicker(false);
     try {
-      const results = await searchMealsByIngredientsAND(normalized, 36, "intersect", {
+      const searchTerms = await translateIngredients(normalized);
+      setIngredientChips(searchTerms);
+      setLastIngredientSearch(searchTerms);
+      const results = await searchMealsByIngredientsAND(searchTerms, 36, "intersect", {
         area: areaFilter,
         diet,
         sort: sortBy,
@@ -715,20 +740,26 @@ export default function RecipesPage() {
     setIngredientTotal(0);
   }
 
-  function applyPantryItemsToIngredientSearch(terms: string[]) {
+  async function applyPantryItemsToIngredientSearch(terms: string[]) {
     const normalized = uniqueTerms(terms);
     if (!normalized.length) {
       setErr("Your pantry is empty.");
       return;
     }
     setErr(null);
+    setBusySearch(true);
     setMode("ingredient");
     setQ("");
     setIngredientValue("");
-    setIngredientChips(normalized);
-    setLastIngredientSearch(normalized);
     setPantryRecipes(null);
-    void runIngredientSearch(normalized);
+    try {
+      const searchTerms = await translateIngredients(normalized);
+      setIngredientChips(searchTerms);
+      setLastIngredientSearch(searchTerms);
+      await runIngredientSearch(searchTerms);
+    } catch {
+      await runIngredientSearch(normalized);
+    }
   }
 
   function handleRecipeShare(r: { id: string; title: string; source: string }) {

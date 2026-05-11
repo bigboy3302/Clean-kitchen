@@ -7,6 +7,8 @@ import { format, parseISO } from "date-fns";
 import Container from "@/components/Container";
 import PageHeader from "@/components/PageHeader";
 import Button from "@/components/ui/Button";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebas1e";
 import {
   getWeekPlan,
   upsertDayItem,
@@ -14,6 +16,7 @@ import {
   removeDayItem,
   getMetrics,
   getOrCreateDailyMeals,
+  getCurrentUserId,
   type WeekPlan,
   type WorkoutItem,
   type DayKey,
@@ -22,6 +25,20 @@ import {
 import RecipeModal from "@/components/recipes/RecipeModal";
 import { lookupMealById } from "@/lib/recipesApi";
 import type { CommonRecipe } from "@/components/recipes/types";
+
+function getMealPlanWeekKey(): string {
+  const now = new Date();
+  const d = new Date(now);
+  const day = d.getDay();
+  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
+  d.setHours(0, 0, 0, 0);
+  const utc = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = utc.getUTCDay() || 7;
+  utc.setUTCDate(utc.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil(((utc.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${utc.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
+}
 
 type Exercise = {
   id: string;
@@ -122,7 +139,14 @@ export default function DayPlannerPage() {
   const [goal, setGoal] = useState<"bulk" | "cut" | "maintain">("maintain");
   const [exByItem, setExByItem] = useState<Record<string, Exercise | null>>({});
   const [recipes, setRecipes] = useState<SuggestedMeal[]>([]);
+  const [mealPlanDays, setMealPlanDays] = useState<Record<string, { type?: string; calories?: string; meals?: string[] }>>({});
   const [openRecipe, setOpenRecipe] = useState<CommonRecipe | null>(null);
+
+  // meals from the meal planner for the currently selected day
+  const mealPlanItems = useMemo(() => {
+    const fullName = dayNames[day]; // "Monday", "Tuesday", etc.
+    return (mealPlanDays[fullName]?.meals ?? []).filter(Boolean);
+  }, [mealPlanDays, day]);
   const readModeFromHash = () =>
     typeof window !== "undefined" && window.location.hash.toLowerCase() === "#meals" ? "meals" : "workouts";
   const [viewMode, setViewMode] = useState<PlannerView>(() => readModeFromHash());
@@ -139,8 +163,23 @@ export default function DayPlannerPage() {
         const freshPlan = await getWeekPlan();
         if (!ignore) setPlan(freshPlan);
 
-        const todaysMeals = await getOrCreateDailyMeals(undefined, metrics?.goal ?? "maintain", 3);
-        if (!ignore) setRecipes(todaysMeals.slice(0, 3));
+        const todaysMeals = await getOrCreateDailyMeals(undefined, metrics?.goal ?? "maintain", 6);
+        if (!ignore) setRecipes(todaysMeals);
+
+        // load this week's meal plan (all days)
+        try {
+          const uid = await getCurrentUserId();
+          if (uid) {
+            const weekKey = getMealPlanWeekKey();
+            const snap = await getDoc(doc(db, "mealPlans", `${uid}_${weekKey}`));
+            if (snap.exists()) {
+              const data = snap.data() as { days?: Record<string, { type?: string; calories?: string; meals?: string[] }> };
+              if (!ignore) setMealPlanDays(data.days ?? {});
+            }
+          }
+        } catch {
+          // ignore — meal plan section will just be empty
+        }
       } catch (error) {
         if (!ignore) setError(getErrorMessage(error, "Unable to load today."));
       } finally {
@@ -362,7 +401,7 @@ export default function DayPlannerPage() {
           </button>
         </div>
         {viewingMeals ? (
-          <p className="modeHint">Meals are shown for today only.</p>
+          <p className="modeHint">Showing meals for <strong>{dayNames[day]}</strong>.</p>
         ) : null}
       </section>
 
@@ -465,35 +504,66 @@ export default function DayPlannerPage() {
       <section className="sectionCard mealsCard" id="meals">
         <div className="sectionHead">
           <div>
-            <h2 className="sectionTitle">Today&apos;s meals</h2>
-            <p className="muted">Tap a meal to preview ingredients & preparation.</p>
+            <h2 className="sectionTitle">{dayNames[day]}&apos;s meals</h2>
+            <p className="muted">Your planned meals and recipe suggestions for this day.</p>
           </div>
+          <Link href="/meal-plan" className="editPlanLink">Edit meal plan</Link>
         </div>
 
-        <div className="mealGrid">
-          {recipes.map((meal) => (
-            <button
-              key={meal.id}
-              type="button"
-              className="mealCard"
-              onClick={() => openMeal(meal)}
-            >
-              <Image
-                src={meal.image || "/placeholder.png"}
-                alt={meal.title}
-                width={72}
-                height={72}
-                className="mealImg"
-                sizes="72px"
-              />
-              <div className="mealInfo">
-                <div className="mealTitle">{meal.title}</div>
-                <span className="mealLink">Open &gt;</span>
-              </div>
-            </button>
-          ))}
-          {recipes.length === 0 ? <p className="muted noMeals">No recipes saved for today yet.</p> : null}
-        </div>
+        {/* planned meals from meal planner */}
+        {mealPlanItems.length > 0 ? (
+          <div className="mealPlanSection">
+            <div className="mealPlanHeader">
+              <div className="mealPlanLabel">Your planned meals</div>
+              {mealPlanDays[dayNames[day]]?.calories && (
+                <div className="mealPlanCal">{mealPlanDays[dayNames[day]].calories}</div>
+              )}
+            </div>
+            <div className="mealPlanList">
+              {mealPlanItems.map((meal, i) => (
+                <div key={i} className="mealPlanItem">
+                  <span className="mealPlanDot" />
+                  <span>{meal}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="mealPlanEmpty">
+            No meals planned for {dayNames[day]} yet.{" "}
+            <Link href="/meal-plan" className="mealPlanLink">Go to meal planner →</Link>
+          </div>
+        )}
+
+        {/* AI-suggested recipes */}
+        {recipes.length > 0 && (
+          <>
+            <div className="recipeSuggLabel">Recipe suggestions</div>
+            <div className="mealGrid">
+              {recipes.map((meal) => (
+                <button
+                  key={meal.id}
+                  type="button"
+                  className="mealCard"
+                  onClick={() => openMeal(meal)}
+                >
+                  <Image
+                    src={meal.image || "/placeholder.png"}
+                    alt={meal.title}
+                    width={72}
+                    height={72}
+                    className="mealImg"
+                    sizes="72px"
+                  />
+                  <div className="mealInfo">
+                    <div className="mealTitle">{meal.title}</div>
+                    <span className="mealLink">Open &gt;</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </section>
       ) : null}
 
@@ -862,9 +932,84 @@ export default function DayPlannerPage() {
           color: var(--primary);
           white-space: nowrap;
         }
-        .noMeals {
-          grid-column: 1 / -1;
-          text-align: center;
+        .editPlanLink {
+          font-size: 13px;
+          font-weight: 700;
+          color: var(--primary);
+          text-decoration: none;
+          padding: 6px 12px;
+          border: 1px solid color-mix(in oklab, var(--primary) 30%, var(--border));
+          border-radius: 999px;
+          background: color-mix(in oklab, var(--primary) 8%, transparent);
+          white-space: nowrap;
+          transition: background 0.15s;
+        }
+        .editPlanLink:hover { background: color-mix(in oklab, var(--primary) 16%, transparent); }
+        .mealPlanSection {
+          border: 1px solid color-mix(in oklab, var(--primary) 28%, var(--border));
+          border-radius: 16px;
+          padding: 14px 16px;
+          background: color-mix(in oklab, var(--primary) 6%, var(--bg));
+        }
+        .mealPlanHeader {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 12px;
+        }
+        .mealPlanLabel {
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: var(--primary);
+        }
+        .mealPlanCal {
+          font-size: 12px;
+          font-weight: 700;
+          color: var(--muted);
+          background: color-mix(in oklab, var(--primary) 10%, var(--bg2));
+          border-radius: 999px;
+          padding: 3px 10px;
+        }
+        .mealPlanList {
+          display: grid;
+          gap: 8px;
+        }
+        .mealPlanItem {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          font-size: 14px;
+          font-weight: 600;
+          color: var(--text);
+          line-height: 1.4;
+        }
+        .mealPlanDot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: var(--primary);
+          flex-shrink: 0;
+          margin-top: 5px;
+        }
+        .mealPlanEmpty {
+          font-size: 14px;
+          color: var(--muted);
+          padding: 14px 0;
+        }
+        .mealPlanLink {
+          color: var(--primary);
+          font-weight: 700;
+          text-decoration: none;
+        }
+        .recipeSuggLabel {
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: var(--muted);
+          margin-top: 4px;
         }
         @media (max-width: 720px) {
           .plannerShell {

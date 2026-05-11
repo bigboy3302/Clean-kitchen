@@ -7,9 +7,11 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import { deleteObject, listAll, ref as storageRef } from "firebase/storage";
 import { isAdminUid } from "@/lib/admin";
@@ -173,6 +175,13 @@ export async function deleteRecipeAdmin(recipeId: string) {
   }
 
   await deleteDoc(recipeRef);
+}
+
+export async function deleteAllPostsByUser(targetUid: string): Promise<number> {
+  requireAdmin();
+  const snap = await getDocs(query(collection(db, "posts"), where("uid", "==", targetUid)));
+  await Promise.all(snap.docs.map((d) => deletePostAdmin(d.id)));
+  return snap.docs.length;
 }
 
 export async function removePostText(postId: string, replacement = "[Removed by admin]") {

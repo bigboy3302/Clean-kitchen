@@ -284,16 +284,16 @@ service cloud.firestore {
       /* likes */
       match /likes/{uid} {
         allow read: if true;
-        allow create, delete: if canUseCommunity()
+        allow create, delete: if isAdmin() || (canUseCommunity()
                               && request.auth.uid == uid
-                              && exists(/databases/$(database)/documents/posts/$(postId));
+                              && exists(/databases/$(database)/documents/posts/$(postId)));
         allow update: if false;
       }
 
       /* reposts */
       match /reposts/{uid} {
         allow read: if true;
-        allow create, delete: if canUseCommunity() && request.auth.uid == uid;
+        allow create, delete: if isAdmin() || (canUseCommunity() && request.auth.uid == uid);
         allow update: if false;
       }
 
@@ -325,7 +325,7 @@ service cloud.firestore {
 
         match /reposts/{uid} {
           allow read: if true;
-          allow create, delete: if canUseCommunity() && request.auth.uid == uid;
+          allow create, delete: if isAdmin() || (canUseCommunity() && request.auth.uid == uid);
           allow update: if false;
         }
 
@@ -356,7 +356,7 @@ service cloud.firestore {
 
           match /reposts/{uid} {
             allow read: if true;
-            allow create, delete: if canUseCommunity() && request.auth.uid == uid;
+            allow create, delete: if isAdmin() || (canUseCommunity() && request.auth.uid == uid);
             allow update: if false;
           }
         }

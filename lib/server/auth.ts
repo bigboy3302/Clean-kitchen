@@ -51,7 +51,7 @@ export async function requireUser(req: NextRequest): Promise<DecodedIdToken> {
 
   try {
     const auth = await getAdminAuth();
-    return await auth.verifyIdToken(token, true);
+    return await auth.verifyIdToken(token);
   } catch (error) {
     console.error("Failed to verify Firebase ID token", error);
     throw new UnauthorizedError();

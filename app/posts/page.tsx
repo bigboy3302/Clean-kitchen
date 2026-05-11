@@ -75,12 +75,43 @@ export default function PostsPage() {
 
   useEffect(() => {
     const qy = query(collection(db, "posts"), orderBy("createdAt", "desc"));
-    const stop = onSnapshot(qy, (snap) => {
+    const stop = onSnapshot(qy, async (snap) => {
       const rows: PostDoc[] = snap.docs.map((docSnap) => {
         const data = docSnap.data() as Omit<PostDoc, "id">;
         return { id: docSnap.id, ...data };
       });
-      setPosts(rows);
+
+      // fetch current names/avatars from usersPublic so name changes show up immediately
+      const uids = [...new Set(rows.map((r) => r.uid).filter((id): id is string => !!id))];
+      const nameMap: Record<string, { displayName?: string | null; username?: string | null; avatarURL?: string | null }> = {};
+      await Promise.all(
+        uids.map(async (uid) => {
+          try {
+            const pubSnap = await getDoc(doc(db, "usersPublic", uid));
+            if (pubSnap.exists()) {
+              nameMap[uid] = pubSnap.data() as typeof nameMap[string];
+            }
+          } catch {
+            // ignore — fall back to stored value
+          }
+        })
+      );
+
+      const enriched = rows.map((r) => {
+        const pub = r.uid ? nameMap[r.uid] : undefined;
+        if (!pub) return r;
+        return {
+          ...r,
+          author: {
+            ...r.author,
+            ...(pub.displayName !== undefined ? { displayName: pub.displayName } : {}),
+            ...(pub.username !== undefined ? { username: pub.username } : {}),
+            ...(pub.avatarURL !== undefined ? { avatarURL: pub.avatarURL } : {}),
+          },
+        };
+      });
+
+      setPosts(enriched);
     });
     return () => stop();
   }, []);

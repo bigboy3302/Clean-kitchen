@@ -85,6 +85,27 @@ function toTimestamp(value: TSLike | null): Timestamp | null {
   return null;
 }
 
+// Words that are always modifiers — never the core product word.
+// Stripping these leaves the meaningful 1-2 word product name.
+const MODIFIER_WORDS = new Set([
+  // quality/marketing
+  "organic","natural","pure","premium","original","classic","traditional",
+  "authentic","artisan","artisanal","bio","eco","finest","quality","select",
+  "best","special","homemade","handmade","farm",
+  // processing / preparation
+  "unsalted","salted","sweetened","unsweetened",
+  "roasted","toasted","smoked","dried","frozen","chilled","cooked",
+  "sliced","diced","chopped","grated","shredded","crushed","minced",
+  // fat / dairy descriptors
+  "skimmed","semi","whole","full","low","fat","reduced","nonfat","non",
+  "partly","partially","virgin","extra","ultra","super","light","lite",
+  // size / packaging
+  "large","small","medium","big","mini","giant","family",
+  "pack","multipack","portions","serving","servings",
+  // container / origin modifiers
+  "canned","tinned","jarred","free","range","fresh",
+]);
+
 function normalizeProductName(raw: string): string {
   const original = raw || "";
   const s = original
@@ -95,17 +116,14 @@ function normalizeProductName(raw: string): string {
     .trim();
   if (!s) return "";
   if (s.includes("nutella")) return "Nutella";
-  const cat = (out: string, ...keys: string[]) => keys.some(k => s.includes(k)) ? out : null;
-  return (
-    cat("Pasta", "pasta","spaghetti","penne","fusilli","rigatoni","macaroni","farfalle","tagliatelle") ||
-    cat("Rice", "rice","basmati","jasmine","arborio","risotto") ||
-    cat("Milk","milk") || cat("Yogurt","yoghurt","yogurt") || cat("Bread","bread","baguette","loaf") ||
-    cat("Oats","oat","oats","oatmeal","porridge") || cat("Beans","beans","kidney","black","pinto") ||
-    cat("Lentils","lentil","lentils") || cat("Chickpeas","chickpea","garbanzo") ||
-    cat("Sugar","sugar") || cat("Salt","salt","sea salt") || cat("Butter","butter") ||
-    cat("Cheese","cheese") || cat("Eggs","eggs","egg") ||
-    capFirst(s.split(" ").find(Boolean) || original)
-  );
+
+  const words = s.split(" ").filter(Boolean);
+  const core = words.filter((w) => !MODIFIER_WORDS.has(w));
+  // fall back to original words if stripping removed everything
+  const meaningful = core.length > 0 ? core : words;
+  // keep first 2 words — enough to capture compound names like "oat milk", "peanut butter"
+  const name = meaningful.slice(0, 2).join(" ");
+  return capFirst(name || words[0] || original);
 }
 
 function formatRelative(value: TSLike | null): string {

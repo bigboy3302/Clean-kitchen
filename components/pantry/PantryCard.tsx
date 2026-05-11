@@ -232,7 +232,7 @@ export default function PantryCard({ item, onSave, onDelete, onConsume }: Props)
   return (
     <>
       <article className="card">
-        <h3 className="title" title={item.name}>
+        <h3 className="itemName" title={item.name}>
           {item.name}
         </h3>
 
@@ -492,13 +492,18 @@ export default function PantryCard({ item, onSave, onDelete, onConsume }: Props)
           display: grid;
           gap: 12px;
         }
-        .title {
+        .itemName {
           margin: 0;
-          font-size: 12px;
-          font-weight: 900;
+          font-size: clamp(18px, 2vw, 24px);
+          font-weight: 800;
           letter-spacing: -0.01em;
           color: var(--text);
-          line-height: 1.2;
+          line-height: 1.25;
+          overflow: hidden;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          word-break: break-word;
         }
         .meta {
           display: flex;

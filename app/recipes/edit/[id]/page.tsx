@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { db } from "@/lib/firebas1e";
 import { doc, onSnapshot, updateDoc, deleteDoc, type FirestoreError } from "firebase/firestore";
-import { recipePageStyles } from "@/components/recipes/recipePageStyles";
 
-type Ingredient = { name?: string; measure?: string | null; qty?: string; unit?: string };
+type Ingredient = { name: string; amount: string };
 
 type RecipeDoc = {
   id: string;
@@ -21,61 +20,68 @@ type RecipeDoc = {
   servings?: number | null;
   category?: string | null;
   area?: string | null;
-  ingredients?: Ingredient[];
+  ingredients?: Array<{ name?: string; measure?: string | null; qty?: string; unit?: string }>;
   instructions?: string | null;
   steps?: string | null;
 };
 
-function ingredientsToText(list?: Ingredient[]) {
-  if (!Array.isArray(list) || list.length === 0) return "";
-  return list
-    .map((it) => {
-      const name = (it?.name ?? "").trim();
-      const measure =
+function toRows(list?: RecipeDoc["ingredients"]): Ingredient[] {
+  if (!Array.isArray(list) || list.length === 0) return [{ name: "", amount: "" }];
+  const rows = list
+    .map((it) => ({
+      name: (it?.name ?? "").trim(),
+      amount:
         (it?.measure ?? "").trim() ||
-        [it?.qty, it?.unit].filter(Boolean).join(" ").trim();
-      if (!name) return "";
-      return measure ? `${name} - ${measure}` : name;
-    })
-    .filter(Boolean)
-    .join("\n");
+        [it?.qty, it?.unit].filter(Boolean).join(" ").trim(),
+    }))
+    .filter((r) => r.name);
+  return rows.length ? rows : [{ name: "", amount: "" }];
 }
 
-function parseIngredients(text: string): Ingredient[] {
-  return text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [name, measure] = line.split("-").map((part) => part.trim());
-      return { name, measure: measure || null };
-    });
+function fromRows(rows: Ingredient[]) {
+  return rows
+    .filter((r) => r.name.trim())
+    .map((r) => ({ name: r.name.trim(), measure: r.amount.trim() || null }));
 }
+
+function parseSteps(raw: string): string[] {
+  return raw
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+}
+
+const CATEGORIES = [
+  "Beef","Breakfast","Chicken","Dessert","Goat","Lamb","Miscellaneous","Pasta",
+  "Pork","Seafood","Side","Starter","Vegan","Vegetarian",
+];
 
 export default function EditRecipePage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
+  const imgInputRef = useRef<HTMLInputElement>(null);
 
-  const [recipe, setRecipe] = useState<RecipeDoc | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [recipe, setRecipe] = useState<RecipeDoc | null>(null);
 
+  // form fields
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [timeMinutes, setTimeMinutes] = useState<string>("");
-  const [servings, setServings] = useState<string>("");
+  const [timeMinutes, setTimeMinutes] = useState("");
+  const [servings, setServings] = useState("");
   const [category, setCategory] = useState("");
   const [area, setArea] = useState("");
   const [imageURL, setImageURL] = useState("");
-  const [ingredientsText, setIngredientsText] = useState("");
-  const [stepsText, setStepsText] = useState("");
+  const [ingredients, setIngredients] = useState<Ingredient[]>([{ name: "", amount: "" }]);
+  const [steps, setSteps] = useState<string[]>([""]);
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (!id) return;
-
     const ref = doc(db, "recipes", String(id));
     const stop = onSnapshot(
       ref,
@@ -83,14 +89,13 @@ export default function EditRecipePage() {
         setLoading(false);
         if (!snap.exists()) {
           setRecipe(null);
-          setLoadErr("This recipe doesn't exist (or was deleted).");
+          setLoadErr("Recipe not found or was deleted.");
           return;
         }
-        const data = (snap.data() || {}) as Omit<RecipeDoc, "id">;
+        const data = snap.data() as Omit<RecipeDoc, "id">;
         const next: RecipeDoc = { id: snap.id, ...data };
         setRecipe(next);
         setLoadErr(null);
-
         setTitle(next.title ?? "");
         setDescription(next.description ?? "");
         setTimeMinutes(next.timeMinutes != null ? String(next.timeMinutes) : "");
@@ -98,224 +103,515 @@ export default function EditRecipePage() {
         setCategory(next.category ?? "");
         setArea(next.area ?? "");
         setImageURL((next.imageURL ?? next.image ?? "") || "");
-        setIngredientsText(ingredientsToText(next.ingredients));
-        setStepsText((next.instructions ?? next.steps ?? "") || "");
+        setIngredients(toRows(next.ingredients));
+        const rawSteps = (next.instructions ?? next.steps ?? "").trim();
+        setSteps(rawSteps ? parseSteps(rawSteps) : [""]);
       },
-      (error: FirestoreError) => {
+      (e: FirestoreError) => {
         setLoading(false);
-        setLoadErr(error.message || "Could not load recipe.");
+        setLoadErr(e.message || "Could not load recipe.");
       }
     );
-
     return () => stop();
   }, [id]);
 
-  const cover = useMemo(() => imageURL.trim() || null, [imageURL]);
+  /* ── ingredient helpers ── */
+  function updateIngredient(i: number, field: keyof Ingredient, val: string) {
+    setIngredients((prev) => prev.map((row, idx) => (idx === i ? { ...row, [field]: val } : row)));
+  }
+  function addIngredient() {
+    setIngredients((prev) => [...prev, { name: "", amount: "" }]);
+  }
+  function removeIngredient(i: number) {
+    setIngredients((prev) => (prev.length === 1 ? [{ name: "", amount: "" }] : prev.filter((_, idx) => idx !== i)));
+  }
+
+  /* ── step helpers ── */
+  function updateStep(i: number, val: string) {
+    setSteps((prev) => prev.map((s, idx) => (idx === i ? val : s)));
+  }
+  function addStep() {
+    setSteps((prev) => [...prev, ""]);
+  }
+  function removeStep(i: number) {
+    setSteps((prev) => (prev.length === 1 ? [""] : prev.filter((_, idx) => idx !== i)));
+  }
 
   const validate = () => {
-    if (!title.trim()) return "Title is required.";
-    if (!timeMinutes.trim() || Number(timeMinutes) <= 0) return "Time (minutes) is required.";
-    if (!servings.trim() || Number(servings) <= 0) return "Servings is required.";
-    if (!category.trim()) return "Category is required.";
-    if (!area.trim()) return "Area is required.";
+    if (!title.trim()) return "Recipe title is required.";
+    const t = Number(timeMinutes);
+    if (!timeMinutes || isNaN(t) || t <= 0) return "Cooking time must be a positive number.";
+    const s = Number(servings);
+    if (!servings || isNaN(s) || s <= 0) return "Servings must be a positive number.";
     return null;
   };
 
   const onSave = async () => {
-    const message = validate();
-    if (message) {
-      setErr(message);
-      return;
-    }
-
+    const msg = validate();
+    if (msg) { setErr(msg); return; }
     setBusy(true);
     setErr(null);
     try {
-      const ref = doc(db, "recipes", String(id));
-      await updateDoc(ref, {
+      await updateDoc(doc(db, "recipes", String(id)), {
         title: title.trim(),
         description: description.trim() || null,
         timeMinutes: Number(timeMinutes),
         servings: Number(servings),
-        category: category.trim(),
-        area: area.trim(),
+        category: category.trim() || null,
+        area: area.trim() || null,
         imageURL: imageURL.trim() || null,
-        ingredients: parseIngredients(ingredientsText),
-        instructions: stepsText.trim() || null,
+        ingredients: fromRows(ingredients),
+        instructions: steps.filter(Boolean).join("\n") || null,
       });
-
-      router.push(`/recipes/${id}`);
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Failed to save changes.";
-      setErr(message);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed to save changes.");
     } finally {
       setBusy(false);
     }
   };
 
   const onDelete = async () => {
-    if (!window.confirm("Delete this recipe? This cannot be undone.")) return;
+    if (!window.confirm("Delete this recipe permanently? This cannot be undone.")) return;
     setBusy(true);
-    setErr(null);
     try {
       await deleteDoc(doc(db, "recipes", String(id)));
       router.push("/recipes");
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Failed to delete recipe.";
-      setErr(message);
-    } finally {
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed to delete recipe.");
       setBusy(false);
     }
   };
 
-  if (loading) {
-    return (
-      <main className="wrap">
-        <div className="card">Loading...</div>
-        <style jsx>{recipePageStyles}</style>
-      </main>
-    );
-  }
+  /* ── loading / error states ── */
+  if (loading) return (
+    <main className="shell">
+      <div className="loadBox">Loading recipe…</div>
+      <style jsx>{sharedCss}</style>
+    </main>
+  );
+  if (loadErr || !recipe) return (
+    <main className="shell">
+      <div className="errBox">{loadErr || "Recipe not found."}</div>
+      <Link href="/recipes" className="backBtn">← Back to recipes</Link>
+      <style jsx>{sharedCss}</style>
+    </main>
+  );
 
-  if (loadErr || !recipe) {
-    return (
-      <main className="wrap">
-        <div className="card bad">{loadErr || "Recipe not found."}</div>
-        <Link className="btn ghost" href="/recipes">
-          Back to recipes
-        </Link>
-        <style jsx>{recipePageStyles}</style>
-      </main>
-    );
-  }
+  const cover = imageURL.trim() || null;
 
   return (
-    <main className="wrap">
-      <header className="strip">
-        <Link className="btn ghost" href={`/recipes/${id}`}>
-          Back to recipe
-        </Link>
-        <div className="actions">
-          <span className="hint">Edit recipe</span>
+    <main className="shell">
+      {/* top bar */}
+      <div className="topBar">
+        <Link href={`/recipes/${id}`} className="backBtn">← Back to recipe</Link>
+        <div className="topActions">
+          {saved && <span className="savedBadge">✓ Saved</span>}
+          <button className="btn btnPrimary" onClick={onSave} disabled={busy}>
+            {busy ? "Saving…" : "Save changes"}
+          </button>
+          <button className="btn btnGhost btnDanger" onClick={onDelete} disabled={busy}>
+            Delete recipe
+          </button>
         </div>
-      </header>
+      </div>
 
-      {err ? <div className="card bad">{err}</div> : null}
+      {err && <div className="errBox">{err}</div>}
 
-      <section className="hero">
-        <div className="cover">
-          {cover ? (
-            <Image
-              src={cover}
-              alt={title || "Recipe cover"}
-              fill
-              className="coverImg"
-              sizes="(min-width: 900px) 55vw, 100vw"
-            />
-          ) : (
-            <div className="ph" aria-hidden>
-              <span className="muted">Paste an image URL to preview</span>
+      <div className="layout">
+        {/* left column */}
+        <div className="leftCol">
+
+          {/* image preview */}
+          <div className="card">
+            <div className="cardHead">
+              <span className="cardEye">Cover image</span>
+              <h2 className="cardTitle">Photo</h2>
             </div>
-          )}
-        </div>
-
-        <div className="head">
-          <h1 className="title">Edit recipe</h1>
-
-          <div className="stack">
-            <div>
-              <label>Title *</label>
-              <input value={title} onChange={(e) => setTitle(e.currentTarget.value)} />
+            <div className="coverWrap">
+              {cover ? (
+                <Image src={cover} alt={title || "Recipe"} fill className="coverImg" sizes="(min-width:900px) 360px,100vw" />
+              ) : (
+                <div className="coverPh">No image yet</div>
+              )}
             </div>
-
-            <div>
-              <label>Description</label>
-              <textarea
-                rows={3}
-                value={description}
-                onChange={(e) => setDescription(e.currentTarget.value)}
-              />
-            </div>
-
-            <div className="grid-2">
-              <div>
-                <label>Time (minutes) *</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={timeMinutes}
-                  onChange={(e) => setTimeMinutes(e.currentTarget.value)}
-                />
-              </div>
-              <div>
-                <label>Servings *</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={servings}
-                  onChange={(e) => setServings(e.currentTarget.value)}
-                />
-              </div>
-            </div>
-
-            <div className="grid-2">
-              <div>
-                <label>Category *</label>
-                <input value={category} onChange={(e) => setCategory(e.currentTarget.value)} />
-              </div>
-              <div>
-                <label>Area *</label>
-                <input value={area} onChange={(e) => setArea(e.currentTarget.value)} />
-              </div>
-            </div>
-
-            <div>
-              <label>Cover image URL</label>
+            <div className="fieldGroup">
+              <label className="lbl">Image URL</label>
               <input
+                ref={imgInputRef}
+                className="inp"
                 value={imageURL}
-                onChange={(e) => setImageURL(e.currentTarget.value)}
-                placeholder="https://..."
+                onChange={(e) => setImageURL(e.target.value)}
+                placeholder="https://example.com/photo.jpg"
               />
+              <p className="hint">Paste a public image URL — it will preview above.</p>
+            </div>
+          </div>
+
+          {/* basic info */}
+          <div className="card">
+            <div className="cardHead">
+              <span className="cardEye">Required</span>
+              <h2 className="cardTitle">Basic info</h2>
             </div>
 
-            <div className="spaced">
-              <button className="btn primary" type="button" onClick={onSave} disabled={busy}>
-                {busy ? "Saving..." : "Save changes"}
-              </button>
-              <button className="btn" type="button" onClick={onDelete} disabled={busy}>
-                Delete
-              </button>
+            <div className="fieldGroup">
+              <label className="lbl">Recipe title <span className="req">*</span></label>
+              <input className="inp" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Chicken Alfredo" />
+            </div>
+
+            <div className="fieldGroup">
+              <label className="lbl">Description</label>
+              <textarea className="inp inp--ta" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short description shown in the recipe card…" />
+            </div>
+
+            <div className="row2">
+              <div className="fieldGroup">
+                <label className="lbl">Cook time (minutes) <span className="req">*</span></label>
+                <input className="inp" type="number" min={1} value={timeMinutes} onChange={(e) => setTimeMinutes(e.target.value)} placeholder="30" />
+              </div>
+              <div className="fieldGroup">
+                <label className="lbl">Servings <span className="req">*</span></label>
+                <input className="inp" type="number" min={1} value={servings} onChange={(e) => setServings(e.target.value)} placeholder="4" />
+              </div>
+            </div>
+
+            <div className="row2">
+              <div className="fieldGroup">
+                <label className="lbl">Category</label>
+                <select className="inp" value={category} onChange={(e) => setCategory(e.target.value)}>
+                  <option value="">— pick one —</option>
+                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  <option value={category && !CATEGORIES.includes(category) ? category : "__other__"}>Other</option>
+                </select>
+                {category && !CATEGORIES.includes(category) && (
+                  <input className="inp" style={{ marginTop: 6 }} value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Custom category" />
+                )}
+              </div>
+              <div className="fieldGroup">
+                <label className="lbl">Cuisine / area</label>
+                <input className="inp" value={area} onChange={(e) => setArea(e.target.value)} placeholder="e.g. Italian, Mexican…" />
+              </div>
             </div>
           </div>
         </div>
-      </section>
 
-      <section className="grid">
-        <aside className="panel">
-          <div className="panelHead">
-            <span className="dot" /> Ingredients
+        {/* right column */}
+        <div className="rightCol">
+
+          {/* ingredients */}
+          <div className="card">
+            <div className="cardHead">
+              <span className="cardEye">What you need</span>
+              <h2 className="cardTitle">Ingredients</h2>
+            </div>
+            <p className="hint" style={{ marginBottom: 12 }}>Add each ingredient with an optional amount (e.g. "200g" or "2 cups").</p>
+
+            <div className="ingrList">
+              {ingredients.map((row, i) => (
+                <div key={i} className="ingrRow">
+                  <span className="ingrNum">{i + 1}</span>
+                  <input
+                    className="inp ingrName"
+                    value={row.name}
+                    onChange={(e) => updateIngredient(i, "name", e.target.value)}
+                    placeholder="Ingredient name"
+                  />
+                  <input
+                    className="inp ingrAmt"
+                    value={row.amount}
+                    onChange={(e) => updateIngredient(i, "amount", e.target.value)}
+                    placeholder="Amount"
+                  />
+                  <button type="button" className="removeBtn" onClick={() => removeIngredient(i)} title="Remove">×</button>
+                </div>
+              ))}
+            </div>
+            <button type="button" className="addRowBtn" onClick={addIngredient}>+ Add ingredient</button>
           </div>
-          <p className="muted" style={{ marginTop: 0 }}>
-            One per line. Optional: use &quot;-&quot; for quantity (example: &quot;Chicken - 200g&quot;).
-          </p>
-          <textarea
-            rows={12}
-            value={ingredientsText}
-            onChange={(e) => setIngredientsText(e.currentTarget.value)}
-          />
-        </aside>
 
-        <article className="body">
-          <h2 className="h2">Steps</h2>
-          <textarea
-            rows={16}
-            value={stepsText}
-            onChange={(e) => setStepsText(e.currentTarget.value)}
-          />
-        </article>
-      </section>
+          {/* steps */}
+          <div className="card">
+            <div className="cardHead">
+              <span className="cardEye">How to make it</span>
+              <h2 className="cardTitle">Instructions</h2>
+            </div>
+            <p className="hint" style={{ marginBottom: 12 }}>Write each step of the recipe. They will be numbered automatically.</p>
 
-      <style jsx>{recipePageStyles}</style>
+            <div className="stepList">
+              {steps.map((step, i) => (
+                <div key={i} className="stepRow">
+                  <div className="stepNum">{i + 1}</div>
+                  <textarea
+                    className="inp inp--ta stepTa"
+                    rows={2}
+                    value={step}
+                    onChange={(e) => updateStep(i, e.target.value)}
+                    placeholder={`Step ${i + 1}…`}
+                  />
+                  <button type="button" className="removeBtn" onClick={() => removeStep(i)} title="Remove">×</button>
+                </div>
+              ))}
+            </div>
+            <button type="button" className="addRowBtn" onClick={addStep}>+ Add step</button>
+          </div>
+        </div>
+      </div>
+
+      {/* bottom save bar */}
+      <div className="bottomBar">
+        {err && <span className="errInline">{err}</span>}
+        {saved && <span className="savedBadge">✓ Saved</span>}
+        <div style={{ flex: 1 }} />
+        <button className="btn btnGhost btnDanger" onClick={onDelete} disabled={busy}>Delete recipe</button>
+        <button className="btn btnPrimary" onClick={onSave} disabled={busy}>
+          {busy ? "Saving…" : "Save changes"}
+        </button>
+      </div>
+
+      <style jsx>{sharedCss}</style>
     </main>
   );
 }
+
+const sharedCss = `
+  .shell {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 20px 20px 120px;
+    display: grid;
+    gap: 16px;
+  }
+  .loadBox, .errBox {
+    padding: 20px 24px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: var(--bg2);
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .errBox {
+    background: color-mix(in oklab, #ef4444 12%, var(--bg));
+    border-color: color-mix(in oklab, #ef4444 35%, var(--border));
+    color: #7f1d1d;
+  }
+  .topBar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .topActions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .backBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 40px;
+    padding: 0 16px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--bg2);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+  .backBtn:hover { background: color-mix(in oklab, var(--bg2) 70%, var(--primary) 30%); }
+  .btn {
+    height: 40px;
+    padding: 0 18px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, opacity 0.15s;
+  }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btnPrimary { background: var(--primary); color: var(--primary-contrast); border-color: var(--primary); }
+  .btnPrimary:not(:disabled):hover { filter: brightness(1.08); }
+  .btnGhost { background: var(--bg2); color: var(--text); }
+  .btnGhost:not(:disabled):hover { background: color-mix(in oklab, var(--bg2) 70%, var(--primary) 30%); }
+  .btnDanger { color: #ef4444; border-color: color-mix(in oklab, #ef4444 40%, var(--border)); }
+  .btnDanger:not(:disabled):hover { background: color-mix(in oklab, #ef4444 12%, var(--bg2)); }
+  .savedBadge {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: #dcfce7;
+    color: #166534;
+    font-size: 12px;
+    font-weight: 800;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+  .leftCol, .rightCol {
+    display: grid;
+    gap: 16px;
+  }
+  .card {
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 20px;
+    background: var(--card-bg, var(--bg2));
+    box-shadow: 0 4px 18px rgba(0,0,0,.05);
+    display: grid;
+    gap: 14px;
+  }
+  .cardHead { display: grid; gap: 2px; }
+  .cardEye {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--primary);
+  }
+  .cardTitle { margin: 0; font-size: 17px; font-weight: 800; color: var(--text); letter-spacing: -.02em; }
+  .coverWrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .coverImg { object-fit: cover; }
+  .coverPh {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .fieldGroup { display: grid; gap: 6px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .lbl { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .req { color: #ef4444; }
+  .hint { font-size: 12px; color: var(--muted); margin: 0; }
+  .inp {
+    width: 100%;
+    min-height: 42px;
+    padding: 0 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    box-sizing: border-box;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .inp:focus { outline: none; border-color: color-mix(in oklab, var(--primary) 60%, var(--border)); box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 18%, transparent); }
+  .inp--ta { min-height: unset; padding: 10px 12px; resize: vertical; font-family: inherit; line-height: 1.5; }
+  select.inp { cursor: pointer; }
+
+  .ingrList { display: grid; gap: 8px; }
+  .ingrRow {
+    display: grid;
+    grid-template-columns: 22px 1fr 100px 32px;
+    gap: 8px;
+    align-items: center;
+  }
+  .ingrNum { font-size: 12px; font-weight: 700; color: var(--muted); text-align: right; }
+  .ingrName { }
+  .ingrAmt { }
+  .removeBtn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s, color 0.12s;
+    padding: 0;
+  }
+  .removeBtn:hover { background: color-mix(in oklab, #ef4444 14%, var(--bg2)); color: #ef4444; border-color: color-mix(in oklab, #ef4444 40%, var(--border)); }
+  .addRowBtn {
+    align-self: start;
+    padding: 8px 16px;
+    border-radius: 10px;
+    border: 1px dashed var(--border);
+    background: transparent;
+    color: var(--primary);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .addRowBtn:hover { background: color-mix(in oklab, var(--primary) 8%, transparent); border-color: var(--primary); }
+
+  .stepList { display: grid; gap: 10px; }
+  .stepRow {
+    display: grid;
+    grid-template-columns: 28px 1fr 32px;
+    gap: 10px;
+    align-items: start;
+  }
+  .stepNum {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--primary) 18%, var(--bg2));
+    color: var(--primary);
+    font-size: 12px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 8px;
+  }
+  .stepTa { width: 100%; }
+
+  .bottomBar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 24px;
+    background: color-mix(in oklab, var(--bg) 90%, transparent);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border);
+    z-index: 100;
+  }
+  .errInline { font-size: 13px; font-weight: 600; color: #ef4444; }
+
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    .shell { padding: 16px 16px 100px; }
+    .row2 { grid-template-columns: 1fr; }
+    .bottomBar { padding: 10px 16px; }
+    .ingrRow { grid-template-columns: 22px 1fr 80px 32px; }
+  }
+  @media (max-width: 500px) {
+    .ingrRow { grid-template-columns: 1fr 80px 32px; }
+    .ingrNum { display: none; }
+    .stepRow { grid-template-columns: 1fr 32px; }
+    .stepNum { display: none; }
+  }
+`;

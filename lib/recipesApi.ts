@@ -159,7 +159,7 @@ export async function searchMealsByIngredientsAND(
   });
   const data = await j<SearchResponse>(`/api/recipes/search?${params.toString()}`);
   const rows = Array.isArray(data?.results) ? data.results.map(fromSearchItem) : [];
-  if (options?.area) {
+  if (options?.area && options.area !== "any") {
     return rows.filter((recipe) => (recipe.area || "").toLowerCase() === options.area?.toLowerCase());
   }
   return rows;
@@ -178,7 +178,7 @@ export async function searchMealsByIngredientsPaged(
   });
   const data = await j<SearchResponse>(`/api/recipes/search?${params.toString()}`);
   let rows = Array.isArray(data?.results) ? data.results.map(fromSearchItem) : [];
-  if (options?.area) {
+  if (options?.area && options.area !== "any") {
     rows = rows.filter((recipe) => (recipe.area || "").toLowerCase() === options.area?.toLowerCase());
   }
   return {
