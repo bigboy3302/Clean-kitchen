@@ -306,7 +306,7 @@ export default function EditRecipePage() {
               <span className="cardEye">What you need</span>
               <h2 className="cardTitle">Ingredients</h2>
             </div>
-            <p className="hint" style={{ marginBottom: 12 }}>Add each ingredient with an optional amount (e.g. "200g" or "2 cups").</p>
+            <p className="hint" style={{ marginBottom: 12 }}>Add each ingredient with an optional amount (e.g. &quot;200g&quot; or &quot;2 cups&quot;).</p>
 
             <div className="ingrList">
               {ingredients.map((row, i) => (

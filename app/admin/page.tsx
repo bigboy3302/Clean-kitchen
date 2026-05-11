@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   collection,
@@ -15,7 +15,6 @@ import {
   startAfter,
   sum,
   where,
-  type DocumentSnapshot,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";

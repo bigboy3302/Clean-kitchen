@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, ChefHat, Dumbbell, Leaf, Refrigerator, Sparkles, UtensilsCrossed } from "lucide-react";
+import { ArrowRight, ChefHat, Dumbbell, Leaf, Refrigerator, Sparkles } from "lucide-react";
 import { useAuthModal } from "@/context/AuthModalContext";
 
 const featureCards = [

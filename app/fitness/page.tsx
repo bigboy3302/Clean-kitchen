@@ -99,11 +99,6 @@ function titleCase(value?: string | null) {
     .join(" ");
 }
 
-function stripHtml(html?: string | null) {
-  if (!html) return "";
-  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-}
-
 function getExerciseCue(workout: WorkoutContent) {
   const target = workout.target ? titleCase(workout.target) : "target muscle";
   const equipment = workout.equipment ? titleCase(workout.equipment) : "Bodyweight";
